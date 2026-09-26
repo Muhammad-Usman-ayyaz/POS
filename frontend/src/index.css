@@ -1,0 +1,692 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─────────────────────────────────────────────
+   ERP DESIGN SYSTEM — Hakkagoori Mint Palette
+   Source palette → Hakkagoori transformation:
+     primary            #004278 → #147A5F
+     primary-container  #015aa0 → #52CBB0
+     on-primary         #ffffff → #ffffff
+     on-primary-container #b3d1ff → #F2FDF9
+     primary-fixed      #d3e4ff → #A8F0DC
+     primary-fixed-dim  #a3c9ff → #52CBB0
+     secondary          #006c49 → #147A5F  (was already green, stays)
+     secondary-container#6cf8bb → #A8F0DC
+     surface            #f8f9ff → #F2FDF9
+     surface-container-lowest #fff → #ffffff
+     surface-container-low  #eff4ff → #edfaf5
+     surface-container      #e5eeff → #d6f5eb
+     surface-container-high #dce9ff → #c2efde
+     surface-container-highest #d3e4fe→ #a8f0dc
+     background         #f8f9ff → #F2FDF9
+   ───────────────────────────────────────────── */
+
+/* ── Material-style design tokens used by ERP pages ── */
+:root {
+  /* Hakkagoori Mint — Primary scale */
+  --erp-primary:             #147A5F;
+  --erp-primary-container:   #52CBB0;
+  --erp-on-primary:          #ffffff;
+  --erp-on-primary-container:#F2FDF9;
+  --erp-primary-fixed:       #A8F0DC;
+  --erp-primary-fixed-dim:   #52CBB0;
+  --erp-on-primary-fixed:    #012219;
+  --erp-on-primary-fixed-variant: #0d5a44;
+  --erp-inverse-primary:     #52CBB0;
+
+  /* Secondary — deep teal */
+  --erp-secondary:           #147A5F;
+  --erp-secondary-container: #A8F0DC;
+  --erp-on-secondary:        #ffffff;
+  --erp-on-secondary-container: #012219;
+  --erp-secondary-fixed:     #A8F0DC;
+  --erp-secondary-fixed-dim: #52CBB0;
+  --erp-on-secondary-fixed:  #012219;
+  --erp-on-secondary-fixed-variant: #0d5a44;
+
+  /* Tertiary — amber/warm accent (unchanged, for warning/alert contrast) */
+  --erp-tertiary:            #7c4d00;
+  --erp-tertiary-container:  #8a5600;
+  --erp-on-tertiary:         #ffffff;
+  --erp-on-tertiary-container: #ffc47d;
+  --erp-tertiary-fixed:      #ffddb8;
+  --erp-tertiary-fixed-dim:  #ffb95f;
+  --erp-on-tertiary-fixed:   #2a1700;
+  --erp-on-tertiary-fixed-variant: #653e00;
+
+  /* Surface scale — mint tinted */
+  --erp-surface:             #F2FDF9;
+  --erp-surface-bright:      #F2FDF9;
+  --erp-surface-dim:         #c2efde;
+  --erp-background:          #F2FDF9;
+  --erp-surface-container-lowest: #ffffff;
+  --erp-surface-container-low:    #edfaf5;
+  --erp-surface-container:        #d6f5eb;
+  --erp-surface-container-high:   #c2efde;
+  --erp-surface-container-highest:#A8F0DC;
+  --erp-surface-variant:     #c2efde;
+  --erp-surface-tint:        #147A5F;
+
+  /* On-surface */
+  --erp-on-surface:          #0a1f17;
+  --erp-on-surface-variant:  #3a4d43;
+  --erp-on-background:       #0a1f17;
+  --erp-inverse-surface:     #1a332a;
+  --erp-inverse-on-surface:  #edfaf5;
+
+  /* Outline */
+  --erp-outline:             #5a7a6e;
+  --erp-outline-variant:     #a8cbbf;
+
+  /* Error (unchanged) */
+  --erp-error:               #ba1a1a;
+  --erp-error-container:     #ffdad6;
+  --erp-on-error:            #ffffff;
+  --erp-on-error-container:  #93000a;
+
+  /* shadcn compatibility (used by shadcn components) */
+  --background: #F2FDF9;
+  --foreground: #0a1f17;
+  --card: #ffffff;
+  --card-foreground: #0a1f17;
+  --popover: #ffffff;
+  --popover-foreground: #0a1f17;
+  --primary: #147A5F;
+  --primary-foreground: #ffffff;
+  --secondary: #edfaf5;
+  --secondary-foreground: #0a1f17;
+  --muted: #edfaf5;
+  --muted-foreground: #5a7a6e;
+  --accent: #d6f5eb;
+  --accent-foreground: #147A5F;
+  --destructive: #ba1a1a;
+  --border: #a8cbbf;
+  --input: #a8cbbf;
+  --ring: #147A5F;
+  --radius: 0.5rem;
+  --chart-1: #147A5F;
+  --chart-2: #52CBB0;
+  --chart-3: #A8F0DC;
+  --chart-4: #5a7a6e;
+  --chart-5: #c2efde;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0a1f17;
+  --sidebar-primary: #147A5F;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #edfaf5;
+  --sidebar-accent-foreground: #147A5F;
+  --sidebar-border: #a8cbbf;
+  --sidebar-ring: #147A5F;
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: 'Inter', sans-serif;
+
+  --color-brand-primary: #147A5F;
+  --color-brand-neutral: #a8cbbf;
+
+  /* ── ERP colour tokens exposed as Tailwind utilities ── */
+  --color-erp-primary:                    var(--erp-primary);
+  --color-erp-primary-container:          var(--erp-primary-container);
+  --color-erp-on-primary:                 var(--erp-on-primary);
+  --color-erp-on-primary-container:       var(--erp-on-primary-container);
+  --color-erp-primary-fixed:              var(--erp-primary-fixed);
+  --color-erp-primary-fixed-dim:          var(--erp-primary-fixed-dim);
+  --color-erp-on-primary-fixed:           var(--erp-on-primary-fixed);
+  --color-erp-on-primary-fixed-variant:   var(--erp-on-primary-fixed-variant);
+  --color-erp-inverse-primary:            var(--erp-inverse-primary);
+
+  --color-erp-secondary:                  var(--erp-secondary);
+  --color-erp-secondary-container:        var(--erp-secondary-container);
+  --color-erp-on-secondary:              var(--erp-on-secondary);
+  --color-erp-on-secondary-container:    var(--erp-on-secondary-container);
+  --color-erp-secondary-fixed:           var(--erp-secondary-fixed);
+  --color-erp-secondary-fixed-dim:       var(--erp-secondary-fixed-dim);
+  --color-erp-on-secondary-fixed:        var(--erp-on-secondary-fixed);
+  --color-erp-on-secondary-fixed-variant:var(--erp-on-secondary-fixed-variant);
+
+  --color-erp-tertiary:                  var(--erp-tertiary);
+  --color-erp-tertiary-container:        var(--erp-tertiary-container);
+  --color-erp-on-tertiary:               var(--erp-on-tertiary);
+  --color-erp-on-tertiary-container:     var(--erp-on-tertiary-container);
+  --color-erp-tertiary-fixed:            var(--erp-tertiary-fixed);
+  --color-erp-tertiary-fixed-dim:        var(--erp-tertiary-fixed-dim);
+  --color-erp-on-tertiary-fixed:         var(--erp-on-tertiary-fixed);
+  --color-erp-on-tertiary-fixed-variant: var(--erp-on-tertiary-fixed-variant);
+
+  --color-erp-surface:                   var(--erp-surface);
+  --color-erp-surface-bright:            var(--erp-surface-bright);
+  --color-erp-surface-dim:               var(--erp-surface-dim);
+  --color-erp-background:                var(--erp-background);
+  --color-erp-surface-container-lowest:  var(--erp-surface-container-lowest);
+  --color-erp-surface-container-low:     var(--erp-surface-container-low);
+  --color-erp-surface-container:         var(--erp-surface-container);
+  --color-erp-surface-container-high:    var(--erp-surface-container-high);
+  --color-erp-surface-container-highest: var(--erp-surface-container-highest);
+  --color-erp-surface-variant:           var(--erp-surface-variant);
+  --color-erp-surface-tint:              var(--erp-surface-tint);
+
+  --color-erp-on-surface:                var(--erp-on-surface);
+  --color-erp-on-surface-variant:        var(--erp-on-surface-variant);
+  --color-erp-on-background:             var(--erp-on-background);
+  --color-erp-inverse-surface:           var(--erp-inverse-surface);
+  --color-erp-inverse-on-surface:        var(--erp-inverse-on-surface);
+
+  --color-erp-outline:                   var(--erp-outline);
+  --color-erp-outline-variant:           var(--erp-outline-variant);
+
+  --color-erp-error:                     var(--erp-error);
+  --color-erp-error-container:           var(--erp-error-container);
+  --color-erp-on-error:                  var(--erp-on-error);
+  --color-erp-on-error-container:        var(--erp-on-error-container);
+
+  /* Direct utility aliases matching HTML classes */
+  --color-surface:                       var(--erp-surface);
+  --color-surface-bright:                var(--erp-surface-bright);
+  --color-surface-dim:                   var(--erp-surface-dim);
+  --color-surface-container-lowest:      var(--erp-surface-container-lowest);
+  --color-surface-container-low:         var(--erp-surface-container-low);
+  --color-surface-container:             var(--erp-surface-container);
+  --color-surface-container-high:        var(--erp-surface-container-high);
+  --color-surface-container-highest:     var(--erp-surface-container-highest);
+  --color-surface-variant:               var(--erp-surface-variant);
+  --color-surface-tint:                  var(--erp-surface-tint);
+
+  --color-on-surface:                    var(--erp-on-surface);
+  --color-on-surface-variant:            var(--erp-on-surface-variant);
+  --color-outline:                       var(--erp-outline);
+  --color-outline-variant:               var(--erp-outline-variant);
+
+  --color-primary-container:             var(--erp-primary-container);
+  --color-on-primary-container:          var(--erp-on-primary-container);
+  --color-primary-fixed:                 var(--erp-primary-fixed);
+  --color-primary-fixed-dim:             var(--erp-primary-fixed-dim);
+  --color-on-primary-fixed:              var(--erp-on-primary-fixed);
+  --color-on-primary-fixed-variant:      var(--erp-on-primary-fixed-variant);
+  --color-inverse-primary:               var(--erp-inverse-primary);
+
+  --color-secondary-container:           var(--erp-secondary-container);
+  --color-on-secondary-container:         var(--erp-on-secondary-container);
+  --color-secondary-fixed:               var(--erp-secondary-fixed);
+  --color-secondary-fixed-dim:           var(--erp-secondary-fixed-dim);
+  --color-on-secondary-fixed:            var(--erp-on-secondary-fixed);
+  --color-on-secondary-fixed-variant:    var(--erp-on-secondary-fixed-variant);
+
+  --color-tertiary:                      var(--erp-tertiary);
+  --color-tertiary-container:            var(--erp-tertiary-container);
+  --color-on-tertiary:                   var(--erp-on-tertiary);
+  --color-on-tertiary-container:         var(--erp-on-tertiary-container);
+  --color-tertiary-fixed:                var(--erp-tertiary-fixed);
+  --color-tertiary-fixed-dim:            var(--erp-tertiary-fixed-dim);
+  --color-on-tertiary-fixed:             var(--erp-on-tertiary-fixed);
+  --color-on-tertiary-fixed-variant:     var(--erp-on-tertiary-fixed-variant);
+
+  --color-error:                         var(--erp-error);
+  --color-error-container:               var(--erp-error-container);
+  --color-on-error:                      var(--erp-on-error);
+  --color-on-error-container:            var(--erp-on-error-container);
+
+  --color-inverse-surface:               var(--erp-inverse-surface);
+  --color-inverse-on-surface:            var(--erp-inverse-on-surface);
+
+  /* Spacing */
+  --spacing-space-xs:                    0.25rem;
+  --spacing-space-sm:                    0.5rem;
+  --spacing-space-md:                    0.75rem;
+  --spacing-space-lg:                    1rem;
+  --spacing-space-xl:                    1.5rem;
+  --spacing-space-2xl:                   2rem;
+  --spacing-gutter:                      1rem;
+  --spacing-gutter-lg:                   1.5rem;
+  --spacing-margin:                      1rem;
+  --spacing-margin-md:                   1.5rem;
+  --spacing-margin-lg:                   2rem;
+
+  /* Typography */
+  --font-headline-lg:                    'Plus Jakarta Sans', sans-serif;
+  --font-headline-md:                    'Plus Jakarta Sans', sans-serif;
+  --font-headline-sm:                    'Plus Jakarta Sans', sans-serif;
+  --font-display:                        'Plus Jakarta Sans', sans-serif;
+  --font-currency-stat:                  'Plus Jakarta Sans', sans-serif;
+  --font-body-lg:                        'Inter', sans-serif;
+  --font-body-md:                        'Inter', sans-serif;
+  --font-body-sm:                        'Inter', sans-serif;
+  --font-label-lg:                       'Inter', sans-serif;
+  --font-label-md:                       'Inter', sans-serif;
+  --font-label-sm:                       'Inter', sans-serif;
+  --font-currency-cell:                  'Inter', sans-serif;
+
+  --text-body-lg:                        16px;
+  --text-body-sm:                        12px;
+  --text-currency-cell:                  13px;
+  --text-label-lg:                       14px;
+  --text-label-sm:                       11px;
+  --text-body-md:                        14px;
+  --text-headline-lg:                    24px;
+  --text-headline-sm:                    16px;
+  --text-currency-stat:                  22px;
+  --text-label-md:                       12px;
+  --text-headline-md:                    20px;
+  --text-display:                        32px;
+
+  /* shadcn tokens */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+.dark {
+  --background: #0a1f17;
+  --foreground: #F2FDF9;
+  --card: #0d2a1f;
+  --card-foreground: #F2FDF9;
+  --popover: #0d2a1f;
+  --popover-foreground: #F2FDF9;
+  --primary: #52CBB0;
+  --primary-foreground: #012219;
+  --secondary: #1a332a;
+  --secondary-foreground: #F2FDF9;
+  --muted: #1a332a;
+  --muted-foreground: #a8cbbf;
+  --accent: #1a332a;
+  --accent-foreground: #52CBB0;
+  --destructive: #dc2626;
+  --border: #2a4d3d;
+  --input: #2a4d3d;
+  --ring: #52CBB0;
+  --sidebar: #0d2a1f;
+  --sidebar-foreground: #F2FDF9;
+  --sidebar-primary: #52CBB0;
+  --sidebar-primary-foreground: #012219;
+  --sidebar-accent: #1a332a;
+  --sidebar-accent-foreground: #F2FDF9;
+  --sidebar-border: #1a332a;
+  --sidebar-ring: #52CBB0;
+}
+
+/* ── ERP Inline Style Overrides ── */
+/* Remap the HTML's Tailwind custom color classes to Hakkagoori tokens */
+/* The components will use CSS custom property lookups */
+.erp-page {
+  --primary:              var(--erp-primary);
+  --primary-container:    var(--erp-primary-container);
+  --on-primary:           var(--erp-on-primary);
+  --on-primary-container: var(--erp-on-primary-container);
+  --primary-fixed:        var(--erp-primary-fixed);
+  --primary-fixed-dim:    var(--erp-primary-fixed-dim);
+  --on-primary-fixed:     var(--erp-on-primary-fixed);
+  --on-primary-fixed-variant: var(--erp-on-primary-fixed-variant);
+  --secondary:            var(--erp-secondary);
+  --secondary-container:  var(--erp-secondary-container);
+  --on-secondary:         var(--erp-on-secondary);
+  --on-secondary-container: var(--erp-on-secondary-container);
+  --secondary-fixed:      var(--erp-secondary-fixed);
+  --secondary-fixed-dim:  var(--erp-secondary-fixed-dim);
+  --on-secondary-fixed:   var(--erp-on-secondary-fixed);
+  --on-secondary-fixed-variant: var(--erp-on-secondary-fixed-variant);
+  --surface:              var(--erp-surface);
+  --background:           var(--erp-background);
+  --surface-container-lowest: var(--erp-surface-container-lowest);
+  --surface-container-low:    var(--erp-surface-container-low);
+  --surface-container:        var(--erp-surface-container);
+  --surface-container-high:   var(--erp-surface-container-high);
+  --surface-container-highest:var(--erp-surface-container-highest);
+  --on-surface:           var(--erp-on-surface);
+  --on-surface-variant:   var(--erp-on-surface-variant);
+  --outline:              var(--erp-outline);
+  --outline-variant:      var(--erp-outline-variant);
+  --error:                var(--erp-error);
+  --error-container:      var(--erp-error-container);
+  --on-error:             var(--erp-on-error);
+  --on-error-container:   var(--erp-on-error-container);
+}
+
+/* Material Symbols */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar hidden globally for ERP panels */
+.erp-page ::-webkit-scrollbar,
+.erp-scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
+.erp-page,
+.erp-scroll-hidden {
+  scrollbar-width: none;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+  html {
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+/* ─────────────────────────────────────────────
+ * Mint ice
+ * WILLOW MIST #F2FDF9
+ * YOUNG WILLOW #A8F0DC
+ * CLEAR BAMBOO #52CBB0
+ * FOREST TEA #147A5F
+ * ───────────────────────────────────────────── */
+
+.gradient-hakkagoori {
+  position: relative;
+  background: linear-gradient(
+    135deg,
+    #F2FDF9 12.5%,
+    #A8F0DC 37.5%,
+    #52CBB0 62.5%,
+    #147A5F 87.5%
+  );
+
+  background: linear-gradient(
+    135deg in oklab,
+    #F2FDF9 12.5%,
+    #A8F0DC 37.5%,
+    #52CBB0 62.5%,
+    #147A5F 87.5%
+  );
+}
+
+.gradient-hakkagoori::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-size: 256px 256px;
+  image-rendering: pixelated;
+  mix-blend-mode: overlay;
+  opacity: 0.030;
+  pointer-events: none;
+}
+
+/* ─────────────────────────────────────────────
+ * MINT ICE PURPOSEFUL ANIMATIONS & GLASSMORPHISM
+ * High-performance GPU transforms, staggers, and tactile micro-interactions
+ * ───────────────────────────────────────────── */
+
+/* ── 1. Page Entrance Transition (Visible 12px glide over 360ms) ── */
+@keyframes erp-page-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.erp-animate-page {
+  animation: erp-page-enter 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+/* ── 2. Staggered Card & Content Cascade Entrance ── */
+@keyframes erp-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.erp-stagger-item {
+  animation: erp-fade-up 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.erp-stagger-1 { animation-delay: 40ms; }
+.erp-stagger-2 { animation-delay: 80ms; }
+.erp-stagger-3 { animation-delay: 120ms; }
+.erp-stagger-4 { animation-delay: 160ms; }
+.erp-stagger-5 { animation-delay: 200ms; }
+.erp-stagger-6 { animation-delay: 240ms; }
+.erp-stagger-7 { animation-delay: 280ms; }
+.erp-stagger-8 { animation-delay: 320ms; }
+
+/* ── 3. Tactile Button & Interaction Feedback ── */
+.erp-btn-press,
+.erp-btn-interactive {
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+}
+
+.erp-btn-press:hover,
+.erp-btn-interactive:hover {
+  transform: scale(1.02);
+}
+
+.erp-btn-press:active,
+.erp-btn-interactive:active {
+  transform: scale(0.97);
+}
+
+/* ── 4. Interactive Card Elevation ── */
+.erp-card-hover,
+.erp-card-interactive {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease;
+}
+
+.erp-card-hover:hover,
+.erp-card-interactive:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px -4px rgba(20, 122, 95, 0.1), 0 4px 8px -2px rgba(0, 0, 0, 0.04);
+  border-color: rgba(82, 203, 176, 0.5) !important;
+}
+
+.erp-card-hover:active,
+.erp-card-interactive:active {
+  transform: translateY(0px) scale(0.99);
+}
+
+/* ── 5. Dropdown Menu Entrance ── */
+@keyframes erp-dropdown-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.erp-animate-dropdown {
+  animation: erp-dropdown-enter 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top right;
+  will-change: transform, opacity;
+}
+
+/* ── 6. Modal & Dialog Pop ── */
+@keyframes erp-modal-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.erp-animate-pop,
+.erp-modal-anim {
+  animation: erp-modal-enter 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+/* ── 7. Notification & Toast Entrance ── */
+@keyframes erp-toast-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(35px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.erp-toast-anim {
+  animation: erp-toast-enter 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+/* ── 8. POS Cart Item Entrance ── */
+@keyframes erp-cart-slide {
+  0% {
+    opacity: 0;
+    transform: translateX(18px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.erp-cart-item-enter {
+  animation: erp-cart-slide 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+/* ── 9. Micro Badge Bump / Value Pulse ── */
+@keyframes erp-bump {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+
+.erp-animate-bump {
+  animation: erp-bump 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─────────────────────────────────────────────
+ * TASTEFUL MINT ICE GLASSMORPHISM PRIMITIVES
+ * Built directly from #F2FDF9, #A8F0DC, #52CBB0, #147A5F
+ * ───────────────────────────────────────────── */
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(168, 240, 220, 0.6);
+  box-shadow: 0 4px 20px -2px rgba(20, 122, 95, 0.05), 0 1px 3px 0 rgba(0, 0, 0, 0.03);
+}
+
+.glass-header {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(16px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+  border-bottom: 1px solid rgba(168, 240, 220, 0.65) !important;
+  box-shadow: 0 1px 4px 0 rgba(20, 122, 95, 0.04);
+}
+
+.glass-dropdown {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid rgba(168, 240, 220, 0.7) !important;
+  box-shadow: 0 16px 36px -4px rgba(20, 122, 95, 0.14), 0 4px 12px -2px rgba(0, 0, 0, 0.06);
+}
+
+.glass-modal {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(168, 240, 220, 0.75) !important;
+  box-shadow: 0 24px 60px -12px rgba(20, 122, 95, 0.22), 0 0 0 1px rgba(82, 203, 176, 0.2);
+}
+
+.glass-toast {
+  background: rgba(20, 122, 95, 0.94) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(168, 240, 220, 0.5) !important;
+  box-shadow: 0 12px 32px -4px rgba(20, 122, 95, 0.35);
+}
+
+.glass-pill {
+  background: rgba(237, 250, 245, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(168, 240, 220, 0.6);
+}
+
+.glass-toolbar {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(168, 240, 220, 0.55);
+}
+
+/* Accessibility: Respect system reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
