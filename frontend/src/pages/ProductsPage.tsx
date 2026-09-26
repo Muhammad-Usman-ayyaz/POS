@@ -552,17 +552,21 @@ export const ProductsPage: React.FC = () => {
                 <th className="py-space-sm pr-space-md pl-space-xs text-center min-w-[120px]">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-surface-container-low font-body-md text-body-md text-on-surface">
-              {filteredProducts.map((p) => {
+            <tbody
+              key={`${searchQuery}-${selectedCategory}-${selectedBrand}-${selectedStockStatus}`}
+              className="divide-y divide-surface-container-low font-body-md text-body-md text-on-surface"
+            >
+              {filteredProducts.map((p, idx) => {
                 const isSelected = selectedRows.includes(p.id);
                 const isOutOfStock = p.stockStatus === 'Out of Stock';
 
                 return (
                   <tr
                     key={p.id}
-                    className={`hover:bg-surface-container-low/60 transition-colors group ${
+                    className={`table-row-enter hover:bg-surface-container-low/60 transition-colors group ${
                       isOutOfStock ? 'bg-error-container/10' : ''
                     }`}
+                    style={{ animationDelay: `${Math.min(idx, 12) * 25}ms` }}
                   >
                     <td className="py-3 pl-space-md pr-space-xs text-center">
                       <input
@@ -781,7 +785,7 @@ export const ProductsPage: React.FC = () => {
       {/* Operational Insights Bento: Quick Technical Statuses */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-space-md">
         {/* Fast Inventory Turnover */}
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex items-start gap-space-sm">
+        <div className="erp-stagger-item erp-stagger-1 bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex items-start gap-space-sm erp-card-hover">
           <div className="w-10 h-10 rounded-lg bg-secondary-fixed/40 text-on-secondary-fixed-variant flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-[20px]">trending_up</span>
           </div>
@@ -797,7 +801,7 @@ export const ProductsPage: React.FC = () => {
         </div>
 
         {/* Margin Health Card */}
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex items-start gap-space-sm">
+        <div className="erp-stagger-item erp-stagger-2 bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex items-start gap-space-sm erp-card-hover">
           <div className="w-10 h-10 rounded-lg bg-primary-fixed text-primary flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>
           </div>
@@ -816,7 +820,7 @@ export const ProductsPage: React.FC = () => {
         </div>
 
         {/* Expiry Risk Alert Widget */}
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex items-start gap-space-sm">
+        <div className="erp-stagger-item erp-stagger-3 bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex items-start gap-space-sm erp-card-hover">
           <div className="w-10 h-10 rounded-lg bg-tertiary-fixed text-on-tertiary-fixed flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-[20px]">event_busy</span>
           </div>
@@ -840,12 +844,13 @@ export const ProductsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex justify-end">
           {/* Backdrop Scrim */}
           <div
-            className="fixed inset-0 bg-inverse-surface/40 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 bg-inverse-surface/40 backdrop-blur-sm animate-fade-in-up"
+            style={{ animationDuration: '200ms' }}
             onClick={() => setIsModalOpen(false)}
           ></div>
 
           {/* Slide-Over Drawer Container */}
-          <div className="relative w-screen max-w-xl bg-surface-container-lowest shadow-2xl flex flex-col justify-between overflow-y-auto z-10">
+          <div className="relative w-screen max-w-xl glass-modal shadow-2xl flex flex-col justify-between overflow-y-auto z-10 erp-animate-drawer">
             <div>
               {/* Header */}
               <div className="p-space-lg bg-surface-container-low flex items-center justify-between">

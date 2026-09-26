@@ -3,6 +3,24 @@
 import * as React from 'react';
 import { cn } from 'cn';
 
+// Value Bump Hook — flags a brief "erp-animate-bump" pulse whenever a
+// tracked value (cart count, running total, etc.) actually changes.
+export function useBump<T>(value: T, durationMs = 260): boolean {
+  const [bumping, setBumping] = React.useState(false);
+  const prevValue = React.useRef(value);
+
+  React.useEffect(() => {
+    if (prevValue.current !== value) {
+      prevValue.current = value;
+      setBumping(true);
+      const timer = setTimeout(() => setBumping(false), durationMs);
+      return () => clearTimeout(timer);
+    }
+  }, [value, durationMs]);
+
+  return bumping;
+}
+
 // Page Transition Component
 interface PageTransitionProps {
   children: React.ReactNode;

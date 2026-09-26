@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { AnimatedCard, StaggerContainer, AnimatedButton, AnimatedTable } from '@/components/ui/animation';
 import { PageTransition } from '@/components/ui/animation';
 
 export const DashboardPage: React.FC = () => {
@@ -805,6 +804,7 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
     </div>
+    </PageTransition>
   );
 };
 

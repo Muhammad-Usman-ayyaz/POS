@@ -609,6 +609,23 @@
   will-change: transform, opacity;
 }
 
+/* ── 8b. Slide-Over Drawer Entrance (full panel glide from right) ── */
+@keyframes erp-drawer-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.erp-animate-drawer {
+  animation: erp-drawer-enter 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
 /* ── 9. Micro Badge Bump / Value Pulse ── */
 @keyframes erp-bump {
   0% { transform: scale(1); }

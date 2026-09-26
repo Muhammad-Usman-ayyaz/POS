@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useBump } from '@/components/ui/animation';
 
 interface CartItem {
   id: number;
@@ -135,6 +136,10 @@ export const POSPage: React.FC = () => {
   const totalItemCount = cartItems.reduce((acc, curr) => acc + curr.qty, 0);
   const netPayable = Math.max(0, subtotal - (discount || 0));
   const changeDue = (cashReceived || 0) - netPayable;
+
+  const cartCountBump = useBump(cartItems.length);
+  const totalItemBump = useBump(totalItemCount);
+  const netPayableBump = useBump(netPayable);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -373,11 +378,14 @@ export const POSPage: React.FC = () => {
           </div>
 
           {/* Product Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
-            {filteredProducts.map((product) => (
+          <div
+            key={`${selectedCategory}-${searchQuery}`}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-space-md"
+          >
+            {filteredProducts.map((product, idx) => (
               <div
                 key={product.id}
-                className="bg-surface-container-lowest p-space-md rounded-xl shadow-xs flex flex-col justify-between erp-card-hover group relative overflow-hidden border border-transparent hover:border-primary/20"
+                className={`erp-stagger-item erp-stagger-${Math.min(idx + 1, 8)} bg-surface-container-lowest p-space-md rounded-xl shadow-xs flex flex-col justify-between erp-card-hover group relative overflow-hidden border border-transparent hover:border-primary/20`}
               >
                 <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-primary/5 rounded-full pointer-events-none group-hover:scale-125 transition-transform duration-300 ease-out"></div>
                 <div>
@@ -539,7 +547,11 @@ export const POSPage: React.FC = () => {
             <div className="px-space-md py-2.5 bg-surface-container-low flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="font-headline-sm text-headline-sm text-on-surface font-semibold">Current Bill Items</span>
-                <span className="w-5 h-5 rounded-full bg-primary text-on-primary text-[11px] font-bold flex items-center justify-center">
+                <span
+                  className={`w-5 h-5 rounded-full bg-primary text-on-primary text-[11px] font-bold flex items-center justify-center ${
+                    cartCountBump ? 'erp-animate-bump' : ''
+                  }`}
+                >
                   {cartItems.length}
                 </span>
               </div>
@@ -565,7 +577,7 @@ export const POSPage: React.FC = () => {
                 cartItems.map((item, idx) => (
                   <div
                     key={item.id}
-                    className={`py-space-sm flex items-center justify-between gap-space-sm transition-all ${
+                    className={`erp-cart-item-enter py-space-sm flex items-center justify-between gap-space-sm transition-all ${
                       idx % 2 === 1 ? 'bg-surface-container-low/40 rounded-lg px-2 -mx-2' : ''
                     }`}
                   >
@@ -623,7 +635,9 @@ export const POSPage: React.FC = () => {
             {/* Financial Summary Calculation Area */}
             <div className="bg-surface-container-low p-space-md flex flex-col gap-space-xs">
               <div className="flex justify-between items-center text-on-surface-variant font-body-sm text-body-sm">
-                <span>Subtotal ({totalItemCount} items)</span>
+                <span className={totalItemBump ? 'erp-animate-bump inline-block' : 'inline-block'}>
+                  Subtotal ({totalItemCount} items)
+                </span>
                 <span className="font-currency-cell text-currency-cell text-on-surface font-semibold">
                   Rs. {subtotal.toLocaleString()}
                 </span>
@@ -665,7 +679,11 @@ export const POSPage: React.FC = () => {
                   </span>
                   <span className="font-label-sm text-label-sm text-secondary font-medium">Round-off applied</span>
                 </div>
-                <span className="font-display text-display text-primary font-bold tracking-tight">
+                <span
+                  className={`font-display text-display text-primary font-bold tracking-tight inline-block ${
+                    netPayableBump ? 'erp-animate-bump' : ''
+                  }`}
+                >
                   Rs. {netPayable.toLocaleString()}
                 </span>
               </div>
