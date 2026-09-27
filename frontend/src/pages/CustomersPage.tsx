@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { notify } from '@/lib/notify';
 
 interface Farmer {
   id: string;
@@ -43,8 +44,8 @@ const INITIAL_FARMERS: Farmer[] = [
     khataDue: 145000,
     dueText: 'Due in 15 days',
     creditHealth: 'Good Standing',
-    healthBadgeBg: 'bg-[#ECFDF5]',
-    healthBadgeText: 'text-[#065F46]',
+    healthBadgeBg: 'bg-success-soft',
+    healthBadgeText: 'text-success',
   },
   {
     id: '02',
@@ -65,8 +66,8 @@ const INITIAL_FARMERS: Farmer[] = [
     dueText: 'Harvest Linked',
     dueTextColor: 'text-secondary',
     creditHealth: 'Good Standing',
-    healthBadgeBg: 'bg-[#ECFDF5]',
-    healthBadgeText: 'text-[#065F46]',
+    healthBadgeBg: 'bg-success-soft',
+    healthBadgeText: 'text-success',
   },
   {
     id: '03',
@@ -87,8 +88,8 @@ const INITIAL_FARMERS: Farmer[] = [
     dueText: 'Due 38 Days',
     dueTextColor: 'text-tertiary',
     creditHealth: 'Attention - Due',
-    healthBadgeBg: 'bg-[#FFFBEB]',
-    healthBadgeText: 'text-[#92400E]',
+    healthBadgeBg: 'bg-warning-soft',
+    healthBadgeText: 'text-warning',
   },
   {
     id: '04',
@@ -109,8 +110,8 @@ const INITIAL_FARMERS: Farmer[] = [
     dueText: 'Limit: 500,000 (100%)',
     dueTextColor: 'text-outline',
     creditHealth: 'Limit Reached',
-    healthBadgeBg: 'bg-[#FFFBEB]',
-    healthBadgeText: 'text-[#92400E]',
+    healthBadgeBg: 'bg-warning-soft',
+    healthBadgeText: 'text-warning',
   },
   {
     id: '05',
@@ -131,8 +132,8 @@ const INITIAL_FARMERS: Farmer[] = [
     dueText: 'Overdue > 65 days',
     dueTextColor: 'text-error font-semibold',
     creditHealth: 'Overdue Alert',
-    healthBadgeBg: 'bg-[#FEF2F2]',
-    healthBadgeText: 'text-[#991B1B]',
+    healthBadgeBg: 'bg-danger-soft',
+    healthBadgeText: 'text-danger',
   },
   {
     id: '06',
@@ -153,8 +154,8 @@ const INITIAL_FARMERS: Farmer[] = [
     dueText: 'Fully Settled',
     dueTextColor: 'text-secondary',
     creditHealth: 'Cleared / Cash Client',
-    healthBadgeBg: 'bg-[#ECFDF5]',
-    healthBadgeText: 'text-[#065F46]',
+    healthBadgeBg: 'bg-success-soft',
+    healthBadgeText: 'text-success',
   },
 ];
 
@@ -167,7 +168,6 @@ export const CustomersPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [sortFilter, setSortFilter] = useState('highest_balance');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // New Farmer Form State
   const [newFarmer, setNewFarmer] = useState({
@@ -180,10 +180,7 @@ export const CustomersPage: React.FC = () => {
     creditLimit: '300000',
   });
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
+  const showToast = (msg: string) => notify(msg);
 
   const filteredFarmers = useMemo(() => {
     let result = farmers.filter((f) => {
@@ -251,8 +248,8 @@ export const CustomersPage: React.FC = () => {
       khataDue: 0,
       dueText: 'New Client',
       creditHealth: 'Good Standing',
-      healthBadgeBg: 'bg-[#ECFDF5]',
-      healthBadgeText: 'text-[#065F46]',
+      healthBadgeBg: 'bg-success-soft',
+      healthBadgeText: 'text-success',
     };
 
     setFarmers([createdFarmer, ...farmers]);
@@ -297,13 +294,6 @@ export const CustomersPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-space-xl">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-20 right-8 z-50 flex items-center gap-2 px-space-md py-3 rounded-xl bg-on-surface text-surface shadow-xl animate-bounce">
-          <span className="material-symbols-outlined text-secondary text-[20px]">check_circle</span>
-          <span className="font-label-md text-label-md">{toastMessage}</span>
-        </div>
-      )}
 
       {/* Top Navigation & Action Row */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md">
@@ -371,7 +361,7 @@ export const CustomersPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-space-md pt-space-xs flex items-center gap-2">
-            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-[#ECFDF5] text-[#065F46] font-label-sm text-label-sm">
+            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-success-soft text-success font-label-sm text-label-sm">
               <span className="material-symbols-outlined text-[14px]">trending_up</span>
               +24 this Rabi season
             </span>
@@ -424,8 +414,8 @@ export const CustomersPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-space-md pt-space-xs flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FEF2F2] text-[#991B1B] font-label-sm text-label-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#991B1B] animate-pulse"></span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-danger-soft text-danger font-label-sm text-label-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-danger animate-pulse"></span>
               48 Farmers &gt; 60 Days
             </span>
             <span className="font-body-sm text-body-sm text-outline">Action required</span>
@@ -442,7 +432,7 @@ export const CustomersPage: React.FC = () => {
               </span>
               <span className="font-currency-stat text-currency-stat text-on-surface mt-1">78.4%</span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-[#ECFDF5] flex items-center justify-center text-[#065F46] shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-success-soft flex items-center justify-center text-success shrink-0">
               <span className="material-symbols-outlined text-[22px]">savings</span>
             </div>
           </div>

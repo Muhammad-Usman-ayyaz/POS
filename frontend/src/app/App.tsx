@@ -12,7 +12,7 @@ export const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <RouterProvider router={router} />
-        <Toaster richColors position="top-right" />
+        <Toaster richColors position="top-right" offset={{ top: 80, right: 32 }} />
       </TooltipProvider>
     </QueryClientProvider>
   );

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { notify } from '@/lib/notify';
 
 interface Invoice {
   id: string;
@@ -99,12 +100,8 @@ export const InvoicesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'Paid' | 'Khata Linked' | 'Overdue'>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  const [notification, setNotification] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3500);
-  };
+  const showToast = (msg: string) => notify(msg);
 
   const filteredInvoices = useMemo(() => {
     return INVOICES_DATA.filter((inv) => {
@@ -120,13 +117,6 @@ export const InvoicesPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-y-space-xl">
-      {/* Toast Notification */}
-      {notification && (
-        <div className="fixed top-20 right-8 z-50 bg-secondary text-on-secondary px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 erp-animate-pop border border-secondary-container">
-          <span className="material-symbols-outlined text-[20px]">check_circle</span>
-          <span className="font-label-md text-label-md font-medium">{notification}</span>
-        </div>
-      )}
 
       {/* Header Breadcrumb & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-space-md">
@@ -199,7 +189,7 @@ export const InvoicesPage: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="font-display text-display text-on-surface font-bold">268</span>
-            <span className="font-label-sm text-label-sm text-[#065F46] font-medium bg-[#ECFDF5] px-2 py-0.5 rounded-full">
+            <span className="font-label-sm text-label-sm text-success font-medium bg-success-soft px-2 py-0.5 rounded-full">
               78.3% Settled
             </span>
           </div>
@@ -233,7 +223,7 @@ export const InvoicesPage: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="font-display text-display text-error font-bold">10</span>
-            <span className="font-label-sm text-label-sm text-[#991B1B] font-semibold bg-[#FEF2F2] px-2 py-0.5 rounded-full">
+            <span className="font-label-sm text-label-sm text-danger font-semibold bg-danger-soft px-2 py-0.5 rounded-full">
               Action Required
             </span>
           </div>
@@ -405,23 +395,23 @@ export const InvoicesPage: React.FC = () => {
                     <span
                       className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-sm text-label-sm font-semibold ${
                         inv.status === 'Paid'
-                          ? 'bg-[#ECFDF5] text-[#065F46]'
+                          ? 'bg-success-soft text-success'
                           : inv.status === 'Khata Linked'
-                          ? 'bg-[#EFF6FF] text-[#015AA0]'
+                          ? 'bg-info-soft text-info'
                           : inv.status === 'Partial'
-                          ? 'bg-[#FFFBEB] text-[#92400E]'
-                          : 'bg-[#FEF2F2] text-[#991B1B]'
+                          ? 'bg-warning-soft text-warning'
+                          : 'bg-danger-soft text-danger'
                       }`}
                     >
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${
                           inv.status === 'Paid'
-                            ? 'bg-[#065F46]'
+                            ? 'bg-success'
                             : inv.status === 'Khata Linked'
-                            ? 'bg-[#015AA0]'
+                            ? 'bg-info'
                             : inv.status === 'Partial'
-                            ? 'bg-[#92400E]'
-                            : 'bg-[#991B1B]'
+                            ? 'bg-warning'
+                            : 'bg-danger'
                         }`}
                       ></span>
                       {inv.status}
@@ -446,7 +436,7 @@ export const InvoicesPage: React.FC = () => {
                       </Link>
                       <button
                         onClick={() => showToast(`WhatsApp invoice link dispatched to ${inv.customer}!`)}
-                        className="w-8 h-8 rounded-lg bg-[#ECFDF5] hover:bg-[#A7F3D0] text-[#065F46] flex items-center justify-center transition-colors"
+                        className="w-8 h-8 rounded-lg bg-success-soft hover:bg-success-line text-success flex items-center justify-center transition-colors"
                         title="Send WhatsApp Link"
                         type="button"
                       >
@@ -490,8 +480,8 @@ export const InvoicesPage: React.FC = () => {
                 <h3 className="font-headline-sm text-headline-sm text-on-surface font-semibold">
                   Punjab Agriculture Department &amp; FBR E-Invoicing Status
                 </h3>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-[#ECFDF5] text-[#065F46] font-semibold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#065F46]"></span> Live
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-success-soft text-success font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success"></span> Live
                 </span>
               </div>
               <p className="font-body-md text-body-md text-on-surface-variant mt-1">

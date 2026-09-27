@@ -1,26 +1,16 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { notify } from '@/lib/notify';
 
 export const CustomerProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState<'overview' | 'invoices' | 'ledger' | 'payments' | 'agronomy'>('overview');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+  const showToast = (msg: string) => notify(msg, 3000);
 
   return (
     <div className="flex flex-col w-full gap-y-space-lg">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-20 right-8 z-50 flex items-center gap-2 px-space-md py-3 rounded-xl bg-on-surface text-surface shadow-xl animate-bounce">
-          <span className="material-symbols-outlined text-secondary text-[20px]">check_circle</span>
-          <span className="font-label-md text-label-md">{toastMessage}</span>
-        </div>
-      )}
 
       {/* Breadcrumbs & Context Header */}
       <div className="flex flex-wrap items-center justify-between gap-y-space-sm pb-space-xs">

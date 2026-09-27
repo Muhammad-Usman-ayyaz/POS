@@ -30,7 +30,7 @@ const INITIAL_SUPPLIERS: Supplier[] = [
     id: '01',
     name: 'Syngenta Pakistan Ltd',
     initials: 'SY',
-    initialsBg: 'bg-[#006C49]/10',
+    initialsBg: 'bg-primary/10',
     initialsColor: 'text-secondary',
     code: 'SYNG-MUL-992',
     locationDetails: 'Multan Industrial Estate',
@@ -441,7 +441,7 @@ export const SuppliersPage: React.FC = () => {
                   <span className="font-currency-stat text-currency-stat text-on-surface">41,600,000</span>
                 </div>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-[#ECFDF5] flex items-center justify-center text-[#065F46]">
+              <div className="w-10 h-10 rounded-xl bg-success-soft flex items-center justify-center text-success">
                 <span className="material-symbols-outlined text-[22px]">check_circle</span>
               </div>
             </div>
@@ -451,7 +451,7 @@ export const SuppliersPage: React.FC = () => {
                 <span className="text-outline">64 Trans.</span>
               </div>
               <div className="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
-                <div className="bg-[#006C49] h-full rounded-full" style={{ width: '86.2%' }}></div>
+                <div className="bg-primary h-full rounded-full" style={{ width: '86.2%' }}></div>
               </div>
               <span className="font-body-sm text-body-sm text-outline truncate">
                 Banking Transfer, Online Pay Order &amp; Direct Deposit
@@ -477,8 +477,8 @@ export const SuppliersPage: React.FC = () => {
               </div>
             </div>
             <div className="mt-space-md pt-space-xs flex items-center justify-between">
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#FEF2F2] text-[#991B1B]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#991B1B]"></span>
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-danger-soft text-danger">
+                <span className="w-1.5 h-1.5 rounded-full bg-danger"></span>
                 <span className="font-label-sm text-label-sm font-semibold">5 Overdue Invoices</span>
               </div>
               <span className="font-label-sm text-label-sm text-outline">Due this cycle</span>
@@ -676,15 +676,15 @@ export const SuppliersPage: React.FC = () => {
                       <td className="py-4 px-space-md text-right font-currency-cell text-currency-cell text-on-surface">
                         {sup.purchases.toLocaleString()}
                       </td>
-                      <td className="py-4 px-space-md text-right font-currency-cell text-currency-cell text-[#006C49]">
+                      <td className="py-4 px-space-md text-right font-currency-cell text-currency-cell text-primary">
                         {sup.paid.toLocaleString()}
                       </td>
                       <td className="py-4 px-space-md text-right">
                         <div className="flex flex-col items-end">
-                          <span className={`font-currency-cell text-currency-cell font-bold ${sup.balancePayable > 0 ? 'text-error' : 'text-[#006C49]'}`}>
+                          <span className={`font-currency-cell text-currency-cell font-bold ${sup.balancePayable > 0 ? 'text-error' : 'text-primary'}`}>
                             {sup.balancePayable === 0 ? '0.00' : sup.balancePayable.toLocaleString()}
                           </span>
-                          <span className={`font-label-sm text-label-sm ${sup.balancePayable > 0 ? 'text-error' : 'text-[#006C49]'}`}>
+                          <span className={`font-label-sm text-label-sm ${sup.balancePayable > 0 ? 'text-error' : 'text-primary'}`}>
                             {sup.balanceDueText}
                           </span>
                         </div>
@@ -692,16 +692,16 @@ export const SuppliersPage: React.FC = () => {
                       <td className="py-4 px-space-md text-center">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-label-sm text-label-sm font-semibold ${
                           sup.compliance.includes('Pending')
-                            ? 'bg-[#FFFBEB] text-[#92400E]'
-                            : 'bg-[#ECFDF5] text-[#065F46]'
+                            ? 'bg-warning-soft text-warning'
+                            : 'bg-success-soft text-success'
                         }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${sup.compliance.includes('Pending') ? 'bg-[#92400E]' : 'bg-[#065F46]'}`}></span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${sup.compliance.includes('Pending') ? 'bg-warning' : 'bg-success'}`}></span>
                           {sup.compliance}
                         </span>
                       </td>
                       <td className="py-4 px-space-md text-center">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm font-semibold ${
-                          sup.status === 'Active' ? 'bg-[#ECFDF5] text-[#065F46]' : 'bg-[#FFFBEB] text-[#92400E]'
+                          sup.status === 'Active' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'
                         }`}>
                           {sup.status}
                         </span>
@@ -717,7 +717,7 @@ export const SuppliersPage: React.FC = () => {
                             <span className="material-symbols-outlined text-[18px]">account_balance_wallet</span>
                           </button>
                           <button
-                            className="w-8 h-8 rounded-lg bg-surface-container-high text-[#006C49] hover:bg-secondary hover:text-on-secondary transition-colors flex items-center justify-center cursor-pointer"
+                            className="w-8 h-8 rounded-lg bg-surface-container-high text-primary hover:bg-secondary hover:text-on-secondary transition-colors flex items-center justify-center cursor-pointer"
                             onClick={() => alert(`Recording Payment for ${sup.name}...`)}
                             title="Record Payment"
                             type="button"
@@ -833,7 +833,7 @@ export const SuppliersPage: React.FC = () => {
                       </div>
                     </div>
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm font-semibold ${
-                      sup.status === 'Active' ? 'bg-[#ECFDF5] text-[#065F46]' : 'bg-[#FFFBEB] text-[#92400E]'
+                      sup.status === 'Active' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'
                     }`}>
                       {sup.status}
                     </span>
@@ -878,7 +878,7 @@ export const SuppliersPage: React.FC = () => {
                       <span className="material-symbols-outlined text-[18px]">account_balance_wallet</span>
                     </button>
                     <button
-                      className="p-1.5 rounded-lg bg-surface-container text-[#006C49] hover:bg-secondary hover:text-on-secondary transition-colors"
+                      className="p-1.5 rounded-lg bg-surface-container text-primary hover:bg-secondary hover:text-on-secondary transition-colors"
                       title="Record Payment"
                       type="button"
                     >
@@ -1025,7 +1025,7 @@ export const SuppliersPage: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-on-surface/80 via-on-surface/30 to-transparent"></div>
                 <div className="relative z-10 flex items-center justify-between w-full text-surface-container-lowest">
                   <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[#6CF8BB] text-[20px]">warehouse</span>
+                    <span className="material-symbols-outlined text-primary-fixed text-[20px]">warehouse</span>
                     <div>
                       <span className="font-label-md text-label-md font-bold block text-surface">
                         Multan Central Dispatch

@@ -46,7 +46,7 @@ const INVENTORY_ROWS: InventoryItem[] = [
     salePrice: 1850,
     expiryDate: '14 Oct 2026',
     expiryBadge: '24 Mos Healthy',
-    expiryBadgeColor: 'bg-[#ECFDF5] text-[#065F46]',
+    expiryBadgeColor: 'bg-success-soft text-success',
     status: 'In Stock',
     icon: 'bug_report',
     iconBg: 'bg-surface-container',
@@ -70,12 +70,12 @@ const INVENTORY_ROWS: InventoryItem[] = [
     salePrice: 2550,
     expiryDate: '18 Nov 2024',
     expiryBadge: '35 Days - Near Expiry',
-    expiryBadgeColor: 'bg-[#FFFBEB] text-[#92400E]',
+    expiryBadgeColor: 'bg-warning-soft text-warning',
     status: 'Near Expiry',
     icon: 'pest_control_rodent',
-    iconBg: 'bg-[#FEF3C7]',
-    iconColor: 'text-[#92400E]',
-    rowBg: 'bg-[#FFFDF9]',
+    iconBg: 'bg-warning-tint',
+    iconColor: 'text-warning',
+    rowBg: 'bg-surface-container-lowest',
   },
   {
     id: 3,
@@ -95,7 +95,7 @@ const INVENTORY_ROWS: InventoryItem[] = [
     salePrice: 11400,
     expiryDate: '31 Dec 2027',
     expiryBadge: 'Fresh Batch',
-    expiryBadgeColor: 'bg-[#ECFDF5] text-[#065F46]',
+    expiryBadgeColor: 'bg-success-soft text-success',
     status: 'Low Stock',
     icon: 'agriculture',
     iconBg: 'bg-surface-container',
@@ -119,7 +119,7 @@ const INVENTORY_ROWS: InventoryItem[] = [
     salePrice: 3350,
     expiryDate: '11 Mar 2027',
     expiryBadge: '34 Mos Healthy',
-    expiryBadgeColor: 'bg-[#ECFDF5] text-[#065F46]',
+    expiryBadgeColor: 'bg-success-soft text-success',
     status: 'In Stock',
     icon: 'eco',
     iconBg: 'bg-surface-container',
@@ -143,12 +143,12 @@ const INVENTORY_ROWS: InventoryItem[] = [
     salePrice: 1450,
     expiryDate: '02 Sep 2024',
     expiryBadge: 'Expired (Write-off)',
-    expiryBadgeColor: 'bg-[#FEF2F2] text-[#991B1B]',
+    expiryBadgeColor: 'bg-danger-soft text-danger',
     status: 'Quarantined',
     icon: 'dangerous',
-    iconBg: 'bg-[#FEE2E2]',
+    iconBg: 'bg-danger-tint',
     iconColor: 'text-error',
-    rowBg: 'bg-[#FEF2F2]/40',
+    rowBg: 'bg-danger-soft/40',
     isStrikethrough: true,
   },
   {
@@ -169,7 +169,7 @@ const INVENTORY_ROWS: InventoryItem[] = [
     salePrice: 2150,
     expiryDate: '18 Feb 2027',
     expiryBadge: '33 Mos Healthy',
-    expiryBadgeColor: 'bg-[#ECFDF5] text-[#065F46]',
+    expiryBadgeColor: 'bg-success-soft text-success',
     status: 'In Stock',
     icon: 'spa',
     iconBg: 'bg-surface-container',
@@ -193,7 +193,7 @@ const INVENTORY_ROWS: InventoryItem[] = [
     salePrice: 2900,
     expiryDate: '04 Jun 2026',
     expiryBadge: '20 Mos Healthy',
-    expiryBadgeColor: 'bg-[#ECFDF5] text-[#065F46]',
+    expiryBadgeColor: 'bg-success-soft text-success',
     status: 'Low Stock',
     icon: 'pest_control',
     iconBg: 'bg-surface-container',
@@ -217,7 +217,7 @@ const INVENTORY_ROWS: InventoryItem[] = [
     salePrice: 4650,
     expiryDate: '31 Jul 2028',
     expiryBadge: '47 Mos Healthy',
-    expiryBadgeColor: 'bg-[#ECFDF5] text-[#065F46]',
+    expiryBadgeColor: 'bg-success-soft text-success',
     status: 'In Stock',
     icon: 'scatter_plot',
     iconBg: 'bg-surface-container',
@@ -372,7 +372,7 @@ export const InventoryPage: React.FC = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Low Stock</span>
-            <span className="px-2 py-0.5 rounded-full bg-[#FFFBEB] text-[#92400E] font-label-sm text-label-sm font-semibold">
+            <span className="px-2 py-0.5 rounded-full bg-warning-soft text-warning font-label-sm text-label-sm font-semibold">
               14 Alert
             </span>
           </div>
@@ -394,7 +394,7 @@ export const InventoryPage: React.FC = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Near Expiry</span>
-            <span className="px-2 py-0.5 rounded-full bg-[#FFFBEB] text-[#92400E] font-label-sm text-label-sm font-semibold">
+            <span className="px-2 py-0.5 rounded-full bg-warning-soft text-warning font-label-sm text-label-sm font-semibold">
               &lt; 90 Days
             </span>
           </div>
@@ -402,7 +402,7 @@ export const InventoryPage: React.FC = () => {
             <div className="font-headline-lg text-headline-lg text-on-surface font-bold tracking-tight">
               6 <span className="font-label-md text-label-md text-outline font-normal">Batches</span>
             </div>
-            <div className="flex items-center gap-1 mt-1 font-label-sm text-label-sm text-[#92400E] font-medium">
+            <div className="flex items-center gap-1 mt-1 font-label-sm text-label-sm text-warning font-medium">
               <span className="material-symbols-outlined text-[14px]">hourglass_bottom</span>
               <span>Liquidate priority</span>
             </div>
@@ -416,7 +416,7 @@ export const InventoryPage: React.FC = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Quarantine</span>
-            <span className="px-2 py-0.5 rounded-full bg-[#FEF2F2] text-[#991B1B] font-label-sm text-label-sm font-semibold">
+            <span className="px-2 py-0.5 rounded-full bg-danger-soft text-danger font-label-sm text-label-sm font-semibold">
               Immediate
             </span>
           </div>
@@ -534,7 +534,7 @@ export const InventoryPage: React.FC = () => {
               <span className="text-on-surface-variant font-label-sm text-label-sm">Healthy: 228</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-warning-solid"></span>
               <span className="text-on-surface-variant font-label-sm text-label-sm">Attention: 18</span>
             </div>
             <div className="flex items-center gap-2">
@@ -656,7 +656,7 @@ export const InventoryPage: React.FC = () => {
                               row.status === 'Low Stock'
                                 ? 'bg-error'
                                 : row.status === 'Near Expiry'
-                                ? 'bg-[#F59E0B]'
+                                ? 'bg-warning-solid'
                                 : row.status === 'Quarantined'
                                 ? 'bg-error'
                                 : 'bg-secondary'
@@ -669,7 +669,7 @@ export const InventoryPage: React.FC = () => {
                             row.status === 'Low Stock' || row.status === 'Quarantined'
                               ? 'text-error font-medium'
                               : row.status === 'Near Expiry'
-                              ? 'text-[#92400E]'
+                              ? 'text-warning'
                               : 'text-outline'
                           }`}
                         >
@@ -696,7 +696,7 @@ export const InventoryPage: React.FC = () => {
                         <span
                           className={`font-label-md text-label-md font-medium ${
                             row.status === 'Near Expiry'
-                              ? 'text-[#92400E]'
+                              ? 'text-warning'
                               : row.status === 'Quarantined'
                               ? 'text-error font-semibold'
                               : 'text-on-surface'
@@ -712,9 +712,9 @@ export const InventoryPage: React.FC = () => {
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
                               row.status === 'In Stock'
-                                ? 'bg-[#065F46]'
+                                ? 'bg-success'
                                 : row.status === 'Near Expiry'
-                                ? 'bg-[#F59E0B]'
+                                ? 'bg-warning-solid'
                                 : 'bg-error'
                             }`}
                           ></span>
@@ -726,12 +726,12 @@ export const InventoryPage: React.FC = () => {
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm font-semibold ${
                           row.status === 'In Stock'
-                            ? 'bg-[#ECFDF5] text-[#065F46]'
+                            ? 'bg-success-soft text-success'
                             : row.status === 'Near Expiry'
-                            ? 'bg-[#FFFBEB] text-[#92400E]'
+                            ? 'bg-warning-soft text-warning'
                             : row.status === 'Low Stock'
-                            ? 'bg-[#FFFBEB] text-[#92400E]'
-                            : 'bg-[#FEF2F2] text-[#991B1B]'
+                            ? 'bg-warning-soft text-warning'
+                            : 'bg-danger-soft text-danger'
                         }`}
                       >
                         {row.status}
@@ -742,7 +742,7 @@ export const InventoryPage: React.FC = () => {
                         {row.status === 'Quarantined' ? (
                           <>
                             <button
-                              className="p-1.5 rounded-lg bg-[#FEE2E2] text-error hover:bg-error hover:text-white transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg bg-danger-tint text-error hover:bg-error hover:text-white transition-colors cursor-pointer"
                               title="Write-Off Disposal Sheet"
                               type="button"
                               onClick={() => alert(`Write-off sheet for ${row.name}`)}
@@ -760,7 +760,7 @@ export const InventoryPage: React.FC = () => {
                         ) : row.status === 'Near Expiry' ? (
                           <>
                             <button
-                              className="p-1.5 rounded-lg bg-surface-container text-[#92400E] hover:bg-[#FEF3C7] transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg bg-surface-container text-warning hover:bg-warning-tint transition-colors cursor-pointer"
                               title="Liquidate Deal"
                               type="button"
                               onClick={() => alert(`Liquidate promotional deal for ${row.name}`)}
@@ -917,7 +917,7 @@ export const InventoryPage: React.FC = () => {
                   <span className="text-outline">91% Cap (510 / 560 Units)</span>
                 </div>
                 <div className="w-full h-2 bg-surface-container rounded-full overflow-hidden">
-                  <div className="h-full bg-[#F59E0B] rounded-full" style={{ width: '91%' }}></div>
+                  <div className="h-full bg-warning-solid rounded-full" style={{ width: '91%' }}></div>
                 </div>
               </div>
             </div>
@@ -940,7 +940,7 @@ export const InventoryPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-space-sm">
               <h2 className="font-headline-sm text-headline-sm text-on-surface">Urgent Purchase Reorders</h2>
-              <span className="px-2 py-0.5 rounded-full bg-[#FFFBEB] text-[#92400E] font-label-sm text-label-sm font-semibold">
+              <span className="px-2 py-0.5 rounded-full bg-warning-soft text-warning font-label-sm text-label-sm font-semibold">
                 3 Top Triggers
               </span>
             </div>
@@ -975,7 +975,7 @@ export const InventoryPage: React.FC = () => {
               <div className="py-2.5 flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="font-label-md text-label-md font-semibold text-on-surface">Nativo 75 WG (100g)</span>
-                  <span className="font-label-sm text-label-sm text-[#92400E] font-medium">5 Packets remaining (Min 20)</span>
+                  <span className="font-label-sm text-label-sm text-warning font-medium">5 Packets remaining (Min 20)</span>
                 </div>
                 <button
                   className="h-8 px-2.5 rounded-lg bg-surface-container text-primary font-label-sm text-label-sm font-semibold hover:bg-surface-container-high transition-colors cursor-pointer"
@@ -1004,17 +1004,17 @@ export const InventoryPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-space-sm">
               <h2 className="font-headline-sm text-headline-sm text-on-surface">Regulatory Compliance</h2>
-              <span className="p-1 rounded-full bg-[#FEF2F2] text-error">
+              <span className="p-1 rounded-full bg-danger-soft text-error">
                 <span className="material-symbols-outlined text-[18px]">verified_user</span>
               </span>
             </div>
             <p className="font-body-sm text-body-sm text-outline mb-space-md">Pesticide regulatory mandate &amp; environmental safety.</p>
-            <div className="p-space-sm rounded-lg bg-[#FFFBEB] flex flex-col gap-1 mb-space-sm">
-              <div className="flex items-center gap-1.5 font-label-md text-label-md font-bold text-[#92400E]">
+            <div className="p-space-sm rounded-lg bg-warning-soft flex flex-col gap-1 mb-space-sm">
+              <div className="flex items-center gap-1.5 font-label-md text-label-md font-bold text-warning">
                 <span className="material-symbols-outlined text-[18px]">report</span>
                 <span>Batch Disposal Alert</span>
               </div>
-              <p className="font-body-sm text-body-sm text-[#92400E]">
+              <p className="font-body-sm text-body-sm text-warning">
                 Batch <strong>#AAG-GLY-902</strong> (Target Glyphosate) has officially crossed statutory field shelf-life.
                 Sale is strictly blocked under Provincial Agri Law.
               </p>

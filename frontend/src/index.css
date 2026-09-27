@@ -129,6 +129,28 @@
   --color-brand-primary: #147A5F;
   --color-brand-neutral: #a8cbbf;
 
+  /* ── Status + utility colours (kept out of the brand palette on purpose) ── */
+  --color-success:        #065F46;
+  --color-success-soft:   #ECFDF5;
+  --color-success-tint:   #D1FAE5;
+  --color-success-line:   #A7F3D0;
+  --color-warning:        #92400E;
+  --color-warning-solid:  #F59E0B;
+  --color-warning-soft:   #FFFBEB;
+  --color-warning-tint:   #FEF3C7;
+  --color-warning-line:   #FDE68A;
+  --color-danger:         #991B1B;
+  --color-danger-soft:    #FEF2F2;
+  --color-danger-tint:    #FEE2E2;
+  --color-danger-line:    #FECACA;
+  --color-info:           #015AA0;
+  --color-info-soft:      #EFF6FF;
+  --color-info-line:      #BFDBFE;
+  --color-whatsapp:       #25D366;
+  --color-whatsapp-dark:  #075E54;
+  /* Neutral hairline for panel/table borders — mint-tinted, replaces grey #D1D1D1 / #E2E8F0 */
+  --color-line:           var(--erp-surface-container-high);
+
   /* ── ERP colour tokens exposed as Tailwind utilities ── */
   --color-erp-primary:                    var(--erp-primary);
   --color-erp-primary-container:          var(--erp-primary-container);
@@ -295,8 +317,8 @@
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--erp-on-secondary);
+  --color-secondary: var(--erp-secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);

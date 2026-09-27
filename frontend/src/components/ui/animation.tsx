@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from 'react';
-import { cn } from 'cn';
+import { cn } from '@/lib/utils';
 
 // Value Bump Hook — flags a brief "erp-animate-bump" pulse whenever a
 // tracked value (cart count, running total, etc.) actually changes.

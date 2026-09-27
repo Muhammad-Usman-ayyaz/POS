@@ -4,18 +4,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { isAxiosError } from 'axios';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/lib/apiError';
 import { useAuthStore } from './store';
 import { loginApi } from './api';
 import { loginSchema, type LoginFormData } from './schemas';
 
-const loginErrorMessage = (error: unknown): string => {
-  if (isAxiosError(error)) {
-    if (error.response?.status === 401) return 'Incorrect email or password.';
-    if (error.response?.status === 429) return 'Too many attempts. Please wait a minute and try again.';
-    if (!error.response) return 'Cannot reach the server. Check your connection and try again.';
-  }
-  return 'Sign in failed. Please try again.';
-};
+const loginErrorMessage = (error: unknown): string =>
+  isAxiosError(error) && error.response?.status === 401
+    ? 'Incorrect email or password.'
+    : getErrorMessage(error, 'Sign in failed. Please try again.');
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();

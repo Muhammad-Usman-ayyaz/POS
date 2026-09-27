@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { notify } from '@/lib/notify';
 
 interface ReportCard {
   id: string;
@@ -35,7 +36,7 @@ const REPORT_CARDS: ReportCard[] = [
     title: 'Farmer Khata Aging & Delinquency',
     desc: 'Bucketed credit aging schedule (Current, 30, 60, 90+ days), credit ceiling violations, and recovery progress notes.',
     meta: 'Rs. 2.85M flagged',
-    metaColor: 'text-[#BA1A1A]',
+    metaColor: 'text-error',
     lastRun: '14 Oct 2024',
   },
   {
@@ -69,7 +70,7 @@ const REPORT_CARDS: ReportCard[] = [
     title: 'Sales Tax & FBR e-Invoice Register',
     desc: '0% Agri-exempt fertilizer vs. 18% standard chemical split, verified FBR QR verification hashes, Annexure-C export.',
     meta: '100% STRN Compliant',
-    metaColor: 'text-[#006C49]',
+    metaColor: 'text-primary',
     lastRun: '15 Oct 2024',
   },
   {
@@ -97,7 +98,6 @@ export const ReportsPage: React.FC = () => {
   // Modals
   const [activeReportModal, setActiveReportModal] = useState<ReportCard | null>(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
-  const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
   // Filtered reports
   const filteredReports = REPORT_CARDS.filter((card) => {
@@ -109,10 +109,7 @@ export const ReportsPage: React.FC = () => {
     return matchesCategory && matchesSearch;
   });
 
-  const showToast = (msg: string) => {
-    setNotificationMsg(msg);
-    setTimeout(() => setNotificationMsg(null), 3500);
-  };
+  const showToast = (msg: string) => notify(msg);
 
   const exportExcel = () => {
     const rows = [
@@ -133,13 +130,6 @@ export const ReportsPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full text-on-surface">
-      {/* Toast Notification */}
-      {notificationMsg && (
-        <div className="fixed bottom-6 right-6 z-50 bg-primary text-on-primary px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 font-label-md text-label-md animate-in fade-in slide-in-from-bottom-2">
-          <span className="material-symbols-outlined text-[20px]">check_circle</span>
-          <span>{notificationMsg}</span>
-        </div>
-      )}
 
       {/* Top Page Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-space-lg mb-margin-lg">
@@ -162,7 +152,7 @@ export const ReportsPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-space-sm shrink-0">
           <div className="relative inline-flex items-center">
             <button
-              className="h-[38px] px-space-md bg-surface-container-lowest border border-[#D1D1D1] rounded-lg font-label-md text-label-md text-on-surface flex items-center gap-2 hover:bg-surface-container-low transition-colors shadow-sm"
+              className="h-[38px] px-space-md bg-surface-container-lowest border border-line rounded-lg font-label-md text-label-md text-on-surface flex items-center gap-2 hover:bg-surface-container-low transition-colors shadow-sm"
               type="button"
               onClick={() => setSeasonDropdownOpen(!seasonDropdownOpen)}
             >
@@ -171,7 +161,7 @@ export const ReportsPage: React.FC = () => {
               <span className="material-symbols-outlined text-[16px] text-outline">expand_more</span>
             </button>
             {seasonDropdownOpen && (
-              <div className="absolute top-full mt-1.5 left-0 w-72 bg-surface-container-lowest border border-[#D1D1D1] rounded-xl shadow-xl z-30 py-1 font-label-md text-label-md">
+              <div className="absolute top-full mt-1.5 left-0 w-72 bg-surface-container-lowest border border-line rounded-xl shadow-xl z-30 py-1 font-label-md text-label-md">
                 <button
                   className="w-full text-left px-3 py-2 hover:bg-surface-container-low flex items-center justify-between"
                   onClick={() => {
@@ -213,22 +203,22 @@ export const ReportsPage: React.FC = () => {
           </div>
 
           <button
-            className="h-[38px] px-space-sm bg-surface-container-lowest border border-[#D1D1D1] rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-1.5 shadow-sm"
+            className="h-[38px] px-space-sm bg-surface-container-lowest border border-line rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-1.5 shadow-sm"
             title="Download Excel"
             type="button"
             onClick={exportExcel}
           >
-            <span className="material-symbols-outlined text-[18px] text-[#006C49]">table_chart</span>
+            <span className="material-symbols-outlined text-[18px] text-primary">table_chart</span>
             <span>Export Excel</span>
           </button>
 
           <button
-            className="h-[38px] px-space-sm bg-surface-container-lowest border border-[#D1D1D1] rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-1.5 shadow-sm"
+            className="h-[38px] px-space-sm bg-surface-container-lowest border border-line rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-1.5 shadow-sm"
             title="Download Complete Dossier"
             type="button"
             onClick={() => window.print()}
           >
-            <span className="material-symbols-outlined text-[18px] text-[#BA1A1A]">picture_as_pdf</span>
+            <span className="material-symbols-outlined text-[18px] text-error">picture_as_pdf</span>
             <span>PDF Dossier</span>
           </button>
 
@@ -246,7 +236,7 @@ export const ReportsPage: React.FC = () => {
       {/* Analytical KPI Summary Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-lg mb-margin-lg">
         {/* Total Gross Revenue */}
-        <div className="bg-surface-container-lowest border border-[#D1D1D1] rounded-xl p-space-lg shadow-sm flex flex-col justify-between relative overflow-hidden">
+        <div className="bg-surface-container-lowest border border-line rounded-xl p-space-lg shadow-sm flex flex-col justify-between relative overflow-hidden">
           <div className="absolute -right-2 -bottom-2 opacity-5 pointer-events-none">
             <span className="material-symbols-outlined text-[96px] text-primary">payments</span>
           </div>
@@ -255,7 +245,7 @@ export const ReportsPage: React.FC = () => {
               <span className="font-label-sm text-label-sm uppercase tracking-wider text-outline font-semibold">
                 Total Gross Revenue
               </span>
-              <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] font-semibold flex items-center gap-0.5">
+              <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-success-soft text-success border border-success-line font-semibold flex items-center gap-0.5">
                 <span className="material-symbols-outlined text-[12px]">trending_up</span>+18.4%
               </span>
             </div>
@@ -263,14 +253,14 @@ export const ReportsPage: React.FC = () => {
               Rs. 24,850,000
             </div>
           </div>
-          <div className="mt-space-md pt-space-xs border-t border-[#E2E8F0] flex items-center justify-between text-outline">
+          <div className="mt-space-md pt-space-xs border-t border-line flex items-center justify-between text-outline">
             <span className="font-body-sm text-body-sm">Season to Date (Rabi Peak)</span>
             <span className="font-label-sm text-label-sm text-primary font-medium">vs Kharif 2024</span>
           </div>
         </div>
 
         {/* Realized Net Cashflow */}
-        <div className="bg-surface-container-lowest border border-[#D1D1D1] rounded-xl p-space-lg shadow-sm flex flex-col justify-between relative overflow-hidden">
+        <div className="bg-surface-container-lowest border border-line rounded-xl p-space-lg shadow-sm flex flex-col justify-between relative overflow-hidden">
           <div className="absolute -right-2 -bottom-2 opacity-5 pointer-events-none">
             <span className="material-symbols-outlined text-[96px] text-secondary">account_balance_wallet</span>
           </div>
@@ -283,18 +273,18 @@ export const ReportsPage: React.FC = () => {
                 74.1% Liquidity
               </span>
             </div>
-            <div className="font-currency-stat text-currency-stat text-[#006C49] font-bold tracking-tight">
+            <div className="font-currency-stat text-currency-stat text-primary font-bold tracking-tight">
               Rs. 18,420,000
             </div>
           </div>
-          <div className="mt-space-md pt-space-xs border-t border-[#E2E8F0] flex items-center justify-between text-outline">
+          <div className="mt-space-md pt-space-xs border-t border-line flex items-center justify-between text-outline">
             <span className="font-body-sm text-body-sm">Cash, Bank &amp; JazzCash Settlements</span>
             <span className="font-label-sm text-label-sm text-secondary font-medium">High Solvent</span>
           </div>
         </div>
 
         {/* Khata Receivables at Risk */}
-        <div className="bg-surface-container-lowest border border-[#D1D1D1] rounded-xl p-space-lg shadow-sm flex flex-col justify-between relative overflow-hidden">
+        <div className="bg-surface-container-lowest border border-line rounded-xl p-space-lg shadow-sm flex flex-col justify-between relative overflow-hidden">
           <div className="absolute -right-2 -bottom-2 opacity-5 pointer-events-none">
             <span className="material-symbols-outlined text-[96px] text-error">warning</span>
           </div>
@@ -303,19 +293,19 @@ export const ReportsPage: React.FC = () => {
               <span className="font-label-sm text-label-sm uppercase tracking-wider text-outline font-semibold">
                 Receivables at Risk (&gt;45D)
               </span>
-              <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA] font-semibold">
+              <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-danger-soft text-danger border border-danger-line font-semibold">
                 11.5% Exposure
               </span>
             </div>
-            <div className="font-currency-stat text-currency-stat text-[#BA1A1A] font-bold tracking-tight">
+            <div className="font-currency-stat text-currency-stat text-error font-bold tracking-tight">
               Rs. 2,850,000
             </div>
           </div>
-          <div className="mt-space-md pt-space-xs border-t border-[#E2E8F0] flex items-center justify-between text-outline">
+          <div className="mt-space-md pt-space-xs border-t border-line flex items-center justify-between text-outline">
             <span className="font-body-sm text-body-sm">28 Farmer Ledgers overdue</span>
             <button
               onClick={() => navigate('/khata')}
-              className="font-label-sm text-label-sm text-[#BA1A1A] hover:underline font-semibold"
+              className="font-label-sm text-label-sm text-error hover:underline font-semibold"
             >
               View Khata →
             </button>
@@ -323,7 +313,7 @@ export const ReportsPage: React.FC = () => {
         </div>
 
         {/* Inventory Valuation (FIFO) */}
-        <div className="bg-surface-container-lowest border border-[#D1D1D1] rounded-xl p-space-lg shadow-sm flex flex-col justify-between relative overflow-hidden">
+        <div className="bg-surface-container-lowest border border-line rounded-xl p-space-lg shadow-sm flex flex-col justify-between relative overflow-hidden">
           <div className="absolute -right-2 -bottom-2 opacity-5 pointer-events-none">
             <span className="material-symbols-outlined text-[96px] text-primary">inventory_2</span>
           </div>
@@ -340,7 +330,7 @@ export const ReportsPage: React.FC = () => {
               Rs. 14,890,000
             </div>
           </div>
-          <div className="mt-space-md pt-space-xs border-t border-[#E2E8F0] flex items-center justify-between text-outline">
+          <div className="mt-space-md pt-space-xs border-t border-line flex items-center justify-between text-outline">
             <span className="font-body-sm text-body-sm">3,420 Verified Commercial Packs</span>
             <span className="font-label-sm text-label-sm text-primary font-semibold">Reconciled</span>
           </div>
@@ -348,7 +338,7 @@ export const ReportsPage: React.FC = () => {
       </div>
 
       {/* Filter & Categories Matrix Bar */}
-      <div className="bg-surface-container-lowest border border-[#D1D1D1] rounded-xl p-space-md mb-margin-lg shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-space-md">
+      <div className="bg-surface-container-lowest border border-line rounded-xl p-space-md mb-margin-lg shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-space-md">
         {/* Tab Controls */}
         <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0" id="reportTabs">
           <button
@@ -424,7 +414,7 @@ export const ReportsPage: React.FC = () => {
         <div className="relative w-full md:w-72 shrink-0">
           <span className="material-symbols-outlined absolute left-3 top-2.5 text-outline text-[18px]">search</span>
           <input
-            className="w-full h-[36px] pl-9 pr-3 rounded-lg border border-[#D1D1D1] bg-surface font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary"
+            className="w-full h-[36px] pl-9 pr-3 rounded-lg border border-line bg-surface font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary"
             placeholder="Filter reports or statutory codes..."
             type="text"
             value={searchQuery}
@@ -438,14 +428,14 @@ export const ReportsPage: React.FC = () => {
         {/* Left Column (8 cols): Charts & Quick Generation Grid */}
         <div className="lg:col-span-8 flex flex-col gap-space-lg">
           {/* Interactive Seasonal Trajectory Chart */}
-          <div className="bg-surface-container-lowest border border-[#D1D1D1] rounded-xl p-space-lg shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-space-md border-b border-[#E2E8F0] gap-space-sm mb-space-md">
+          <div className="bg-surface-container-lowest border border-line rounded-xl p-space-lg shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-space-md border-b border-line gap-space-sm mb-space-md">
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
                   <span className="font-headline-sm text-headline-sm text-on-surface font-bold">
                     Seasonal Revenue &amp; Margin Trajectory
                   </span>
-                  <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-[#EFF6FF] text-primary border border-[#BFDBFE] font-semibold">
+                  <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-info-soft text-primary border border-info-line font-semibold">
                     October Rabi Pulse
                   </span>
                 </div>
@@ -470,27 +460,27 @@ export const ReportsPage: React.FC = () => {
               <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 760 200">
                 <defs>
                   <linearGradient id="primaryAreaGrad" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#015AA0" stopOpacity="0.22"></stop>
-                    <stop offset="100%" stopColor="#015AA0" stopOpacity="0.01"></stop>
+                    <stop offset="0%" stopColor="var(--erp-primary)" stopOpacity="0.22"></stop>
+                    <stop offset="100%" stopColor="var(--erp-primary)" stopOpacity="0.01"></stop>
                   </linearGradient>
                 </defs>
                 {/* Grid Lines */}
-                <line stroke="#E2E8F0" strokeDasharray="3 3" strokeWidth="1" x1="40" x2="740" y1="30"></line>
-                <line stroke="#E2E8F0" strokeDasharray="3 3" strokeWidth="1" x1="40" x2="740" y1="80"></line>
-                <line stroke="#E2E8F0" strokeDasharray="3 3" strokeWidth="1" x1="40" x2="740" y1="130"></line>
-                <line stroke="#E2E8F0" strokeWidth="1" x1="40" x2="740" y1="175"></line>
+                <line stroke="var(--erp-surface-container-high)" strokeDasharray="3 3" strokeWidth="1" x1="40" x2="740" y1="30"></line>
+                <line stroke="var(--erp-surface-container-high)" strokeDasharray="3 3" strokeWidth="1" x1="40" x2="740" y1="80"></line>
+                <line stroke="var(--erp-surface-container-high)" strokeDasharray="3 3" strokeWidth="1" x1="40" x2="740" y1="130"></line>
+                <line stroke="var(--erp-surface-container-high)" strokeWidth="1" x1="40" x2="740" y1="175"></line>
 
                 {/* Y Axis Labels */}
-                <text fill="#727782" fontFamily="Inter" fontSize="11" textAnchor="end" x="32" y="34">
+                <text fill="var(--erp-outline)" fontFamily="Inter" fontSize="11" textAnchor="end" x="32" y="34">
                   75L
                 </text>
-                <text fill="#727782" fontFamily="Inter" fontSize="11" textAnchor="end" x="32" y="84">
+                <text fill="var(--erp-outline)" fontFamily="Inter" fontSize="11" textAnchor="end" x="32" y="84">
                   50L
                 </text>
-                <text fill="#727782" fontFamily="Inter" fontSize="11" textAnchor="end" x="32" y="134">
+                <text fill="var(--erp-outline)" fontFamily="Inter" fontSize="11" textAnchor="end" x="32" y="134">
                   25L
                 </text>
-                <text fill="#727782" fontFamily="Inter" fontSize="11" textAnchor="end" x="32" y="178">
+                <text fill="var(--erp-outline)" fontFamily="Inter" fontSize="11" textAnchor="end" x="32" y="178">
                   0L
                 </text>
 
@@ -503,7 +493,7 @@ export const ReportsPage: React.FC = () => {
                 <path
                   d="M 60 155 Q 150 140 230 115 T 400 85 T 570 45 T 720 38"
                   fill="none"
-                  stroke="#015AA0"
+                  stroke="var(--erp-primary)"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth="3"
@@ -512,7 +502,7 @@ export const ReportsPage: React.FC = () => {
                 <path
                   d="M 60 130 Q 150 120 230 100 T 400 95 T 570 75 T 720 65"
                   fill="none"
-                  stroke="#006C49"
+                  stroke="var(--erp-primary-container)"
                   strokeDasharray="4 2"
                   strokeLinecap="round"
                   strokeWidth="2.5"
@@ -520,7 +510,7 @@ export const ReportsPage: React.FC = () => {
 
                 {/* Sowing Peak Callout Marker at Week 3 */}
                 <line
-                  stroke="#015AA0"
+                  stroke="var(--erp-primary)"
                   strokeDasharray="2 2"
                   strokeWidth="1.5"
                   x1="570"
@@ -528,23 +518,23 @@ export const ReportsPage: React.FC = () => {
                   y1="20"
                   y2="175"
                 ></line>
-                <circle cx="570" cy="45" fill="#015AA0" r="5" stroke="#FFFFFF" strokeWidth="2"></circle>
-                <circle cx="570" cy="75" fill="#006C49" r="4" stroke="#FFFFFF" strokeWidth="1.5"></circle>
+                <circle cx="570" cy="45" fill="var(--erp-primary)" r="5" stroke="var(--erp-surface-container-lowest)" strokeWidth="2"></circle>
+                <circle cx="570" cy="75" fill="var(--erp-primary-container)" r="4" stroke="var(--erp-surface-container-lowest)" strokeWidth="1.5"></circle>
 
                 {/* X Axis Markers */}
-                <text fill="#414751" fontFamily="Inter" fontSize="11" fontWeight="500" textAnchor="middle" x="60" y="194">
+                <text fill="var(--erp-on-surface-variant)" fontFamily="Inter" fontSize="11" fontWeight="500" textAnchor="middle" x="60" y="194">
                   Week 1 (Oct 01)
                 </text>
-                <text fill="#414751" fontFamily="Inter" fontSize="11" fontWeight="500" textAnchor="middle" x="230" y="194">
+                <text fill="var(--erp-on-surface-variant)" fontFamily="Inter" fontSize="11" fontWeight="500" textAnchor="middle" x="230" y="194">
                   Week 2 (Oct 05)
                 </text>
-                <text fill="#414751" fontFamily="Inter" fontSize="11" fontWeight="500" textAnchor="middle" x="400" y="194">
+                <text fill="var(--erp-on-surface-variant)" fontFamily="Inter" fontSize="11" fontWeight="500" textAnchor="middle" x="400" y="194">
                   Week 3 (Oct 10)
                 </text>
-                <text fill="#015AA0" fontFamily="Inter" fontSize="11" fontWeight="700" textAnchor="middle" x="570" y="194">
+                <text fill="var(--erp-primary)" fontFamily="Inter" fontSize="11" fontWeight="700" textAnchor="middle" x="570" y="194">
                   Peak Wheat Sowing
                 </text>
-                <text fill="#414751" fontFamily="Inter" fontSize="11" fontWeight="500" textAnchor="middle" x="720" y="194">
+                <text fill="var(--erp-on-surface-variant)" fontFamily="Inter" fontSize="11" fontWeight="500" textAnchor="middle" x="720" y="194">
                   Mid Oct (Current)
                 </text>
               </svg>
@@ -573,14 +563,14 @@ export const ReportsPage: React.FC = () => {
               {filteredReports.map((report) => (
                 <div
                   key={report.id}
-                  className="bg-surface-container-lowest border border-[#D1D1D1] rounded-xl p-space-md shadow-sm hover:border-primary transition-all flex flex-col justify-between group"
+                  className="bg-surface-container-lowest border border-line rounded-xl p-space-md shadow-sm hover:border-primary transition-all flex flex-col justify-between group"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div
                         className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                           report.badgeType === 'amber'
-                            ? 'bg-[#FEF2F2] text-[#BA1A1A]'
+                            ? 'bg-danger-soft text-error'
                             : 'bg-surface-container-low text-primary'
                         }`}
                       >
@@ -589,13 +579,13 @@ export const ReportsPage: React.FC = () => {
                       <span
                         className={`font-label-sm text-label-sm px-2 py-0.5 rounded-full font-semibold border ${
                           report.badgeType === 'emerald'
-                            ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
+                            ? 'bg-success-soft text-success border-success-line'
                             : report.badgeType === 'amber'
-                            ? 'bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]'
+                            ? 'bg-warning-soft text-warning border-warning-line'
                             : report.badgeType === 'blue'
-                            ? 'bg-[#EFF6FF] text-primary border-[#BFDBFE]'
+                            ? 'bg-info-soft text-primary border-info-line'
                             : report.badgeType === 'red'
-                            ? 'bg-[#FEF2F2] text-[#991B1B] border-[#FECACA]'
+                            ? 'bg-danger-soft text-danger border-danger-line'
                             : 'bg-surface-container-high text-on-surface-variant border-outline-variant'
                         }`}
                       >
@@ -605,7 +595,7 @@ export const ReportsPage: React.FC = () => {
                     <h3 className="font-label-lg text-label-lg text-on-surface font-bold">{report.title}</h3>
                     <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">{report.desc}</p>
                   </div>
-                  <div className="pt-space-md mt-space-md border-t border-[#E2E8F0] flex items-center justify-between">
+                  <div className="pt-space-md mt-space-md border-t border-line flex items-center justify-between">
                     <span className={`font-label-sm text-label-sm ${report.metaColor || 'text-outline'}`}>
                       {report.meta}
                     </span>
@@ -637,16 +627,16 @@ export const ReportsPage: React.FC = () => {
         {/* Right Column (4 cols): Scheduled Automations & Regulatory Compliance Dossier */}
         <div className="lg:col-span-4 flex flex-col gap-space-lg">
           {/* Regulatory & Audit Compliance Dossier Card */}
-          <div className="bg-surface-container-lowest border border-[#D1D1D1] rounded-xl p-space-lg shadow-sm">
+          <div className="bg-surface-container-lowest border border-line rounded-xl p-space-lg shadow-sm">
             <div className="flex items-center gap-space-sm mb-space-sm">
-              <div className="w-10 h-10 rounded-lg bg-[#ECFDF5] border border-[#A7F3D0] flex items-center justify-center text-[#065F46] shrink-0">
+              <div className="w-10 h-10 rounded-lg bg-success-soft border border-success-line flex items-center justify-center text-success shrink-0">
                 <span className="material-symbols-outlined text-[24px]">verified_user</span>
               </div>
               <div className="flex flex-col">
                 <span className="font-headline-sm text-headline-sm text-on-surface font-bold">
                   Statutory Audit Status
                 </span>
-                <span className="font-label-sm text-label-sm text-[#065F46] font-semibold">
+                <span className="font-label-sm text-label-sm text-success font-semibold">
                   Punjab Pesticide Ordinance 1971
                 </span>
               </div>
@@ -655,7 +645,7 @@ export const ReportsPage: React.FC = () => {
             <div className="space-y-space-sm my-space-md bg-surface-container-low p-space-md rounded-lg text-body-sm text-on-surface-variant">
               <div className="flex items-center justify-between text-body-sm">
                 <span className="text-outline">Formulation Inspection:</span>
-                <span className="font-label-sm text-label-sm text-[#065F46] font-semibold flex items-center gap-1">
+                <span className="font-label-sm text-label-sm text-success font-semibold flex items-center gap-1">
                   <span className="material-symbols-outlined text-[14px]">check_circle</span>
                   <span>PASSED (Sample #PAD-9812)</span>
                 </span>
@@ -670,7 +660,7 @@ export const ReportsPage: React.FC = () => {
               </div>
               <div className="flex items-center justify-between text-body-sm">
                 <span className="text-outline">License Expiry:</span>
-                <span className="font-label-sm text-label-sm text-[#065F46] font-semibold">31 Dec 2025 (Valid)</span>
+                <span className="font-label-sm text-label-sm text-success font-semibold">31 Dec 2025 (Valid)</span>
               </div>
               <div className="flex items-center justify-between text-body-sm">
                 <span className="text-outline">Quality Control Lab:</span>
@@ -689,7 +679,7 @@ export const ReportsPage: React.FC = () => {
           </div>
 
           {/* Scheduled Report Automations Card */}
-          <div className="bg-surface-container-lowest border border-[#D1D1D1] rounded-xl p-space-lg shadow-sm flex flex-col justify-between">
+          <div className="bg-surface-container-lowest border border-line rounded-xl p-space-lg shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-space-sm">
                 <div className="flex items-center gap-2">
@@ -698,7 +688,7 @@ export const ReportsPage: React.FC = () => {
                     Active Automations (3)
                   </h3>
                 </div>
-                <span className="font-label-sm text-label-sm text-secondary font-semibold bg-[#ECFDF5] px-2 py-0.5 rounded-full">
+                <span className="font-label-sm text-label-sm text-secondary font-semibold bg-success-soft px-2 py-0.5 rounded-full">
                   Running
                 </span>
               </div>
@@ -764,7 +754,7 @@ export const ReportsPage: React.FC = () => {
       {activeReportModal && (
         <div className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-xs flex items-center justify-center p-gutter animate-in fade-in-0 duration-150">
           <div className="bg-surface-container-lowest w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col erp-animate-pop border border-outline-variant/30">
-            <div className="px-space-xl py-space-md bg-surface-container-low flex items-center justify-between border-b border-[#D1D1D1]">
+            <div className="px-space-xl py-space-md bg-surface-container-low flex items-center justify-between border-b border-line">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary">{activeReportModal.icon}</span>
                 <span className="font-headline-sm text-headline-sm text-on-surface font-bold">
@@ -788,13 +778,13 @@ export const ReportsPage: React.FC = () => {
                     {activeReportModal.desc}
                   </div>
                 </div>
-                <span className="font-label-sm text-label-sm px-2.5 py-1 rounded-full bg-[#ECFDF5] text-[#065F46] font-semibold shrink-0">
+                <span className="font-label-sm text-label-sm px-2.5 py-1 rounded-full bg-success-soft text-success font-semibold shrink-0">
                   {activeReportModal.badge}
                 </span>
               </div>
 
               {/* Sample Output Table */}
-              <div className="border border-[#D1D1D1] rounded-xl overflow-hidden">
+              <div className="border border-line rounded-xl overflow-hidden">
                 <table className="w-full text-left font-body-sm text-body-sm">
                   <thead>
                     <tr className="bg-surface-container-low font-label-sm text-label-sm text-outline uppercase">
@@ -805,14 +795,14 @@ export const ReportsPage: React.FC = () => {
                       <th className="py-2.5 px-3 text-center">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E2E8F0]">
+                  <tbody className="divide-y divide-line">
                     <tr>
                       <td className="py-2.5 px-3 font-semibold text-on-surface">Zorawar DAP Fertilizer (50kg)</td>
                       <td className="py-2.5 px-3 text-outline">Phosphatic Fertilizer</td>
                       <td className="py-2.5 px-3 text-right">180 Bags</td>
                       <td className="py-2.5 px-3 text-right font-semibold">Rs. 1,953,000</td>
                       <td className="py-2.5 px-3 text-center">
-                        <span className="px-2 py-0.5 rounded-full text-label-sm bg-[#ECFDF5] text-[#065F46] font-medium">
+                        <span className="px-2 py-0.5 rounded-full text-label-sm bg-success-soft text-success font-medium">
                           Active
                         </span>
                       </td>
@@ -823,7 +813,7 @@ export const ReportsPage: React.FC = () => {
                       <td className="py-2.5 px-3 text-right">84 Bottles</td>
                       <td className="py-2.5 px-3 text-right font-semibold">Rs. 138,600</td>
                       <td className="py-2.5 px-3 text-center">
-                        <span className="px-2 py-0.5 rounded-full text-label-sm bg-[#EFF6FF] text-primary font-medium">
+                        <span className="px-2 py-0.5 rounded-full text-label-sm bg-info-soft text-primary font-medium">
                           In Stock
                         </span>
                       </td>
@@ -834,7 +824,7 @@ export const ReportsPage: React.FC = () => {
                       <td className="py-2.5 px-3 text-right">45 Packs</td>
                       <td className="py-2.5 px-3 text-right font-semibold">Rs. 202,500</td>
                       <td className="py-2.5 px-3 text-center">
-                        <span className="px-2 py-0.5 rounded-full text-label-sm bg-[#ECFDF5] text-[#065F46] font-medium">
+                        <span className="px-2 py-0.5 rounded-full text-label-sm bg-success-soft text-success font-medium">
                           Active
                         </span>
                       </td>
@@ -844,11 +834,11 @@ export const ReportsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-space-xl py-space-md bg-surface-container-low flex items-center justify-between border-t border-[#D1D1D1]">
+            <div className="px-space-xl py-space-md bg-surface-container-low flex items-center justify-between border-t border-line">
               <span className="font-label-sm text-label-sm text-outline">Generated dynamically from Branch DB</span>
               <div className="flex items-center gap-space-sm">
                 <button
-                  className="h-10 px-space-md rounded-lg bg-surface-container-lowest border border-[#D1D1D1] text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors shadow-sm"
+                  className="h-10 px-space-md rounded-lg bg-surface-container-lowest border border-line text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors shadow-sm"
                   onClick={() => setActiveReportModal(null)}
                   type="button"
                 >
@@ -875,7 +865,7 @@ export const ReportsPage: React.FC = () => {
       {isScheduleModalOpen && (
         <div className="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-xs flex items-center justify-center p-gutter animate-in fade-in-0 duration-150">
           <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col erp-animate-pop border border-outline-variant/30">
-            <div className="px-space-xl py-space-md bg-surface-container-low flex items-center justify-between border-b border-[#D1D1D1]">
+            <div className="px-space-xl py-space-md bg-surface-container-low flex items-center justify-between border-b border-line">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary">schedule_send</span>
                 <span className="font-headline-sm text-headline-sm text-on-surface font-bold">
@@ -896,7 +886,7 @@ export const ReportsPage: React.FC = () => {
                 <label className="font-label-md text-label-md text-on-surface font-semibold block mb-1">
                   Report Type
                 </label>
-                <select className="w-full h-10 px-3 rounded-lg border border-[#D1D1D1] bg-surface font-body-sm text-body-sm text-on-surface focus:outline-none">
+                <select className="w-full h-10 px-3 rounded-lg border border-line bg-surface font-body-sm text-body-sm text-on-surface focus:outline-none">
                   <option>Daily Sales &amp; Cashier Settlement</option>
                   <option>Farmer Khata Aging &amp; Delinquency</option>
                   <option>Inventory Expiry &amp; Batch Health</option>
@@ -910,7 +900,7 @@ export const ReportsPage: React.FC = () => {
                   <label className="font-label-md text-label-md text-on-surface font-semibold block mb-1">
                     Frequency
                   </label>
-                  <select className="w-full h-10 px-3 rounded-lg border border-[#D1D1D1] bg-surface font-body-sm text-body-sm text-on-surface focus:outline-none">
+                  <select className="w-full h-10 px-3 rounded-lg border border-line bg-surface font-body-sm text-body-sm text-on-surface focus:outline-none">
                     <option>Daily (Evening Close)</option>
                     <option>Weekly (Mondays 9 AM)</option>
                     <option>Monthly (1st &amp; 15th)</option>
@@ -920,7 +910,7 @@ export const ReportsPage: React.FC = () => {
                   <label className="font-label-md text-label-md text-on-surface font-semibold block mb-1">
                     Format
                   </label>
-                  <select className="w-full h-10 px-3 rounded-lg border border-[#D1D1D1] bg-surface font-body-sm text-body-sm text-on-surface focus:outline-none">
+                  <select className="w-full h-10 px-3 rounded-lg border border-line bg-surface font-body-sm text-body-sm text-on-surface focus:outline-none">
                     <option>PDF Document</option>
                     <option>Excel (CSV)</option>
                     <option>Both (PDF + Excel)</option>
@@ -933,7 +923,7 @@ export const ReportsPage: React.FC = () => {
                   Recipient WhatsApp / Mobile #
                 </label>
                 <input
-                  className="w-full h-10 px-3 rounded-lg border border-[#D1D1D1] bg-surface font-body-sm text-body-sm text-on-surface focus:outline-none"
+                  className="w-full h-10 px-3 rounded-lg border border-line bg-surface font-body-sm text-body-sm text-on-surface focus:outline-none"
                   defaultValue="+92 300 8712394"
                   placeholder="+92 300 0000000"
                   type="text"
@@ -945,7 +935,7 @@ export const ReportsPage: React.FC = () => {
                   Recipient Email
                 </label>
                 <input
-                  className="w-full h-10 px-3 rounded-lg border border-[#D1D1D1] bg-surface font-body-sm text-body-sm text-on-surface focus:outline-none"
+                  className="w-full h-10 px-3 rounded-lg border border-line bg-surface font-body-sm text-body-sm text-on-surface focus:outline-none"
                   defaultValue="muhammad@pesticideclub.pk"
                   placeholder="admin@pesticideclub.pk"
                   type="email"
@@ -953,9 +943,9 @@ export const ReportsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-space-xl py-space-md bg-surface-container-low flex items-center justify-end gap-space-sm border-t border-[#D1D1D1]">
+            <div className="px-space-xl py-space-md bg-surface-container-low flex items-center justify-end gap-space-sm border-t border-line">
               <button
-                className="h-10 px-space-md rounded-lg bg-surface-container-lowest border border-[#D1D1D1] text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors shadow-sm"
+                className="h-10 px-space-md rounded-lg bg-surface-container-lowest border border-line text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors shadow-sm"
                 onClick={() => setIsScheduleModalOpen(false)}
                 type="button"
               >

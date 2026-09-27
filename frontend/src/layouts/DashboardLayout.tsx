@@ -32,9 +32,9 @@ export const DashboardLayout: React.FC = () => {
   return (
     <div className="bg-background font-body-md text-on-surface antialiased min-h-screen">
       {/* Fixed Left Sidebar */}
-      <aside className="fixed left-0 top-0 h-screen w-[250px] bg-surface-container-lowest z-50 flex flex-col border-r border-[#D1D1D1]">
+      <aside className="fixed left-0 top-0 h-screen w-[250px] bg-surface-container-lowest z-50 flex flex-col border-r border-line">
         {/* Brand Header */}
-        <div className="h-16 px-space-md flex items-center gap-space-sm border-b border-[#D1D1D1] shrink-0">
+        <div className="h-16 px-space-md flex items-center gap-space-sm border-b border-line shrink-0">
           <img
             alt="Pesticide Club Logo"
             className="h-8 w-auto object-contain"
@@ -187,7 +187,7 @@ export const DashboardLayout: React.FC = () => {
         </div>
 
         {/* Sidebar Status Footer */}
-        <div className="p-space-sm border-t border-[#D1D1D1] shrink-0 bg-surface-container-lowest">
+        <div className="p-space-sm border-t border-line shrink-0 bg-surface-container-lowest">
           <div className="flex items-center gap-space-sm p-space-xs rounded-lg bg-surface-container-low">
             <div className="w-2 h-2 rounded-full bg-secondary shrink-0"></div>
             <div className="flex flex-col min-w-0">
@@ -205,7 +205,7 @@ export const DashboardLayout: React.FC = () => {
       {/* Main Content Area (shifted left by 250px) */}
       <div className="pl-[250px]">
         {/* Fixed Topbar Header */}
-        <header className="fixed top-0 left-[250px] right-0 h-16 bg-surface-container-lowest border-b border-[#D1D1D1] z-40 px-gutter-lg flex items-center justify-between">
+        <header className="fixed top-0 left-[250px] right-0 h-16 bg-surface-container-lowest border-b border-line z-40 px-gutter-lg flex items-center justify-between">
           <div className="flex items-center gap-space-sm">
             <img
               alt="Pesticide Club Logo"
@@ -226,7 +226,7 @@ export const DashboardLayout: React.FC = () => {
                 search
               </span>
               <input
-                className="h-[38px] w-80 pl-9 pr-3 rounded-lg border border-[#D1D1D1] bg-surface-container-lowest font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary"
+                className="h-[38px] w-80 pl-9 pr-3 rounded-lg border border-line bg-surface-container-lowest font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary"
                 placeholder="Search farmer, invoice, batch, product... [Ctrl+K]"
                 type="text"
               />
@@ -243,7 +243,7 @@ export const DashboardLayout: React.FC = () => {
                 <span>New</span>
               </button>
               <button
-                className="relative h-[38px] w-[38px] rounded-lg border border-[#D1D1D1] bg-surface-container-lowest flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low erp-btn-press cursor-pointer"
+                className="relative h-[38px] w-[38px] rounded-lg border border-line bg-surface-container-lowest flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low erp-btn-press cursor-pointer"
                 type="button"
                 onClick={() => navigate('/notifications')}
               >
@@ -255,9 +255,9 @@ export const DashboardLayout: React.FC = () => {
             <div className="h-6 w-px bg-outline-variant"></div>
 
             {/* Branch Status Pill */}
-            <div className="hidden lg:flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-[#ECFDF5] border border-[#A7F3D0]">
-              <span className="w-2 h-2 rounded-full bg-[#065F46]"></span>
-              <span className="font-label-sm text-label-sm text-[#065F46]">Main Branch • Open</span>
+            <div className="hidden lg:flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-success-soft border border-success-line">
+              <span className="w-2 h-2 rounded-full bg-success"></span>
+              <span className="font-label-sm text-label-sm text-success">Main Branch • Open</span>
             </div>
 
             {/* User Profile */}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useBump } from '@/components/ui/animation';
+import { notify } from '@/lib/notify';
 
 interface CartItem {
   id: number;
@@ -105,7 +106,6 @@ export const POSPage: React.FC = () => {
   const [discount, setDiscount] = useState<number>(650);
   const [cashReceived, setCashReceived] = useState<number>(25000);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank' | 'easypaisa' | 'jazzcash' | 'khata'>('cash');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const skuInputRef = useRef<HTMLInputElement>(null);
 
@@ -141,12 +141,7 @@ export const POSPage: React.FC = () => {
   const totalItemBump = useBump(totalItemCount);
   const netPayableBump = useBump(netPayable);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 1500);
-  };
+  const showToast = (msg: string) => notify(msg, 1500);
 
   const addToCart = (product: Product) => {
     setCartItems((prev) => {
@@ -227,13 +222,6 @@ export const POSPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full">
-      {/* Toast Banner */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-primary text-on-primary px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 font-label-md text-label-md erp-animate-pop border border-primary-fixed/40">
-          <span className="material-symbols-outlined text-[18px]">check_circle</span>
-          <span>{toastMessage}</span>
-        </div>
-      )}
 
       {/* POS Top Auxiliary Status & Short Bar */}
       <div className="flex flex-wrap items-center justify-between gap-space-sm mb-space-md">

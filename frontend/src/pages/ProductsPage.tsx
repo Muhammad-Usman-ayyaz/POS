@@ -657,7 +657,7 @@ export const ProductsPage: React.FC = () => {
                               ? 'bg-secondary-fixed text-on-secondary-fixed'
                               : p.stockStatus === 'Low Stock'
                               ? 'bg-error-container text-on-error-container'
-                              : 'bg-[#FEF2F2] text-[#991B1B]'
+                              : 'bg-danger-soft text-danger'
                           }`}
                         >
                           <span
@@ -677,8 +677,8 @@ export const ProductsPage: React.FC = () => {
                       <span
                         className={`px-2 py-0.5 rounded-full font-label-sm text-label-sm font-semibold inline-block ${
                           p.status === 'Active'
-                            ? 'bg-[#ECFDF5] text-[#065F46]'
-                            : 'bg-[#FFFBEB] text-[#92400E]'
+                            ? 'bg-success-soft text-success'
+                            : 'bg-warning-soft text-warning'
                         }`}
                       >
                         {p.status}

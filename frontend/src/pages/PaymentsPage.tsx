@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { notify } from '@/lib/notify';
 
 export const PaymentsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -12,7 +13,6 @@ export const PaymentsPage: React.FC = () => {
     'Partial settlement towards Rabi fertilizer & weedicide bill #POS-9420. Balance to be settled post cotton ginning harvest.'
   );
   const [sendSms, setSendSms] = useState<boolean>(true);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const currentDue = 145000;
   const creditCeiling = 300000;
@@ -23,10 +23,7 @@ export const PaymentsPage: React.FC = () => {
   const usedPercent = Math.min(100, (remainingDue / creditCeiling) * 100);
   const freedPercent = Math.min(100 - usedPercent, (amount / creditCeiling) * 100);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
+  const showToast = (msg: string) => notify(msg);
 
   const numberToWords = (num: number): string => {
     if (num <= 0) return 'Zero Rupees';
@@ -60,13 +57,6 @@ export const PaymentsPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-space-lg">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-20 right-8 z-50 flex items-center gap-2 px-space-md py-3 rounded-xl bg-on-surface text-surface shadow-xl animate-bounce">
-          <span className="material-symbols-outlined text-secondary text-[20px]">check_circle</span>
-          <span className="font-label-md text-label-md">{toastMessage}</span>
-        </div>
-      )}
 
       {/* Top Navigation Context */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-space-sm bg-surface-container-lowest p-space-lg rounded-xl shadow-sm">
@@ -439,16 +429,16 @@ export const PaymentsPage: React.FC = () => {
             </div>
 
             {/* SMS Alert Notice Toggle */}
-            <div className="flex items-center justify-between p-3.5 bg-[#ECFDF5] rounded-xl">
+            <div className="flex items-center justify-between p-3.5 bg-success-soft rounded-xl">
               <div className="flex items-center gap-space-sm min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-[#A7F3D0] text-[#065F46] flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-success-line text-success flex items-center justify-center shrink-0">
                   <span className="material-symbols-outlined text-[20px]">sms</span>
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="font-label-md text-label-md text-[#065F46] font-semibold truncate leading-tight">
+                  <span className="font-label-md text-label-md text-success font-semibold truncate leading-tight">
                     Send Instant Khata SMS Voucher
                   </span>
-                  <span className="font-body-sm text-body-sm text-[#065F46]/80 truncate leading-tight">
+                  <span className="font-body-sm text-body-sm text-success/80 truncate leading-tight">
                     Dispatched to Chaudhry Riaz: <span className="font-semibold">+92 300 8712394</span>
                   </span>
                 </div>
@@ -507,7 +497,7 @@ export const PaymentsPage: React.FC = () => {
                 </span>
                 <span className="font-headline-sm text-headline-sm text-on-surface">Live Ledger Impact</span>
               </div>
-              <span className="px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-[#ECFDF5] text-[#065F46] font-semibold">
+              <span className="px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-success-soft text-success font-semibold">
                 Immediate Khata Recalculation
               </span>
             </div>
@@ -653,7 +643,7 @@ export const PaymentsPage: React.FC = () => {
               {/* Row 1 */}
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-container-low hover:bg-surface-container transition-colors">
                 <div className="flex items-center gap-space-sm">
-                  <div className="w-8 h-8 rounded-lg bg-[#FEE2E2] text-error flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-danger-tint text-error flex items-center justify-center">
                     <span className="material-symbols-outlined text-[16px]">send_to_mobile</span>
                   </div>
                   <div className="flex flex-col">
@@ -661,7 +651,7 @@ export const PaymentsPage: React.FC = () => {
                     <span className="font-body-sm text-body-sm text-outline">05 Oct 2024 • JazzCash Direct</span>
                   </div>
                 </div>
-                <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-[#ECFDF5] text-[#065F46] font-semibold">
+                <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-success-soft text-success font-semibold">
                   Posted
                 </span>
               </div>
@@ -677,7 +667,7 @@ export const PaymentsPage: React.FC = () => {
                     <span className="font-body-sm text-body-sm text-outline">15 Sep 2024 • Cash Counter 01</span>
                   </div>
                 </div>
-                <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-[#ECFDF5] text-[#065F46] font-semibold">
+                <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-success-soft text-success font-semibold">
                   Posted
                 </span>
               </div>
@@ -693,7 +683,7 @@ export const PaymentsPage: React.FC = () => {
                     <span className="font-body-sm text-body-sm text-outline">01 Aug 2024 • Meezan Bank IBFT</span>
                   </div>
                 </div>
-                <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-[#ECFDF5] text-[#065F46] font-semibold">
+                <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-success-soft text-success font-semibold">
                   Posted
                 </span>
               </div>

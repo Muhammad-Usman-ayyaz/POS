@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { notify } from '@/lib/notify';
 
 interface LedgerEntry {
   id: string;
@@ -122,12 +123,8 @@ export const KhataPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
+  const showToast = (msg: string) => notify(msg);
 
   const filteredEntries = useMemo(() => {
     return LEDGER_DATA.filter((item) => {
@@ -175,13 +172,6 @@ export const KhataPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-space-lg">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-20 right-8 z-50 flex items-center gap-2 px-space-md py-3 rounded-xl bg-on-surface text-surface shadow-xl animate-bounce">
-          <span className="material-symbols-outlined text-secondary text-[20px]">check_circle</span>
-          <span className="font-label-md text-label-md">{toastMessage}</span>
-        </div>
-      )}
 
       {/* Breadcrumb & Top Utility Row */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-sm">
@@ -292,7 +282,7 @@ export const KhataPage: React.FC = () => {
             <span className="hidden sm:inline">Print Slip</span>
           </button>
           <button
-            className="h-[38px] px-space-sm rounded-lg bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#075E54] font-label-md text-label-md flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="h-[38px] px-space-sm rounded-lg bg-whatsapp/10 hover:bg-whatsapp/20 text-whatsapp-dark font-label-md text-label-md flex items-center gap-1.5 transition-colors cursor-pointer"
             onClick={() => showToast('Dispatched encrypted WhatsApp statement voucher to farmer mobile!')}
             type="button"
           >
@@ -512,7 +502,7 @@ export const KhataPage: React.FC = () => {
                     row.docType === 'OB'
                       ? 'bg-surface-container-lowest'
                       : row.docType === 'RCP'
-                      ? 'bg-[#ECFDF5]/20'
+                      ? 'bg-success-soft/20'
                       : 'bg-surface-container-low/30'
                   } hover:bg-surface-container-low transition-colors`}
                   key={row.id}
@@ -526,7 +516,7 @@ export const KhataPage: React.FC = () => {
                         {row.docRef}
                       </span>
                     ) : row.docType === 'RCP' ? (
-                      <span className="inline-flex items-center gap-1 font-mono font-label-sm text-label-sm px-2 py-0.5 rounded bg-[#ECFDF5] text-[#065F46] font-semibold">
+                      <span className="inline-flex items-center gap-1 font-mono font-label-sm text-label-sm px-2 py-0.5 rounded bg-success-soft text-success font-semibold">
                         <span className="material-symbols-outlined text-[13px]">task_alt</span>
                         {row.docRef}
                       </span>

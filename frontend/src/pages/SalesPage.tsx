@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { notify } from '@/lib/notify';
 
 interface SaleRecord {
   id: string;
@@ -121,12 +122,8 @@ export const SalesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [channelFilter, setChannelFilter] = useState('all');
   const [quickFilter, setQuickFilter] = useState<'all' | 'khata' | 'over50k' | 'partial'>('all');
-  const [notification, setNotification] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3500);
-  };
+  const showToast = (msg: string) => notify(msg);
 
   const filteredSales = useMemo(() => {
     return SALES_DATA.filter((s) => {
@@ -175,13 +172,6 @@ export const SalesPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-y-space-xl">
-      {/* Toast Notification */}
-      {notification && (
-        <div className="fixed top-20 right-8 z-50 bg-secondary text-on-secondary px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 animate-bounce">
-          <span className="material-symbols-outlined text-[20px]">check_circle</span>
-          <span className="font-label-md text-label-md font-medium">{notification}</span>
-        </div>
-      )}
 
       {/* Top Action Breadcrumb & Title Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-space-md">
@@ -526,7 +516,7 @@ export const SalesPage: React.FC = () => {
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm font-semibold ${
                         sale.status === 'Settled'
-                          ? 'bg-[#ECFDF5] text-[#065F46]'
+                          ? 'bg-success-soft text-success'
                           : sale.status === 'Khata Charged'
                           ? 'bg-primary/10 text-primary'
                           : 'bg-error-container text-error'
@@ -608,9 +598,9 @@ export const SalesPage: React.FC = () => {
             <div className="mt-6 flex flex-col gap-2">
               <div className="h-44 w-full">
                 <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 540 140">
-                  <line stroke="#E2E8F0" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="540" y1="20" y2="20"></line>
-                  <line stroke="#E2E8F0" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="540" y1="60" y2="60"></line>
-                  <line stroke="#E2E8F0" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="540" y1="100" y2="100"></line>
+                  <line stroke="var(--erp-surface-container-high)" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="540" y1="20" y2="20"></line>
+                  <line stroke="var(--erp-surface-container-high)" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="540" y1="60" y2="60"></line>
+                  <line stroke="var(--erp-surface-container-high)" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="540" y1="100" y2="100"></line>
                   <defs>
                     <linearGradient id="velocityFill" x1="0" x2="0" y1="0" y2="1">
                       <stop offset="0%" stopColor="#147A5F" stopOpacity="0.25"></stop>
@@ -629,12 +619,12 @@ export const SalesPage: React.FC = () => {
                     strokeLinejoin="round"
                     strokeWidth="3"
                   ></path>
-                  <circle cx="160" cy="40" fill="#147A5F" r="5" stroke="#FFFFFF" strokeWidth="2"></circle>
+                  <circle cx="160" cy="40" fill="#147A5F" r="5" stroke="var(--erp-surface-container-lowest)" strokeWidth="2"></circle>
                   <text fill="#147A5F" fontSize="10" fontWeight="600" textAnchor="middle" x="160" y="30">
                     Rs. 112k
                   </text>
-                  <circle cx="400" cy="25" fill="#006c49" r="5" stroke="#FFFFFF" strokeWidth="2"></circle>
-                  <text fill="#006c49" fontSize="10" fontWeight="600" textAnchor="middle" x="400" y="16">
+                  <circle cx="400" cy="25" fill="var(--erp-primary-container)" r="5" stroke="var(--erp-surface-container-lowest)" strokeWidth="2"></circle>
+                  <text fill="var(--erp-primary-container)" fontSize="10" fontWeight="600" textAnchor="middle" x="400" y="16">
                     Rs. 168k
                   </text>
                 </svg>

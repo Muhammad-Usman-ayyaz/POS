@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { notify } from '@/lib/notify';
 
 export const InvoicePreviewPage: React.FC = () => {
   const [profile, setProfile] = useState<'a4' | 'thermal' | 'dotmatrix'>('a4');
@@ -7,22 +8,11 @@ export const InvoicePreviewPage: React.FC = () => {
   const [includeAdvisory, setIncludeAdvisory] = useState(true);
   const [includeQr, setIncludeQr] = useState(true);
   const [includeUrdu, setIncludeUrdu] = useState(true);
-  const [notification, setNotification] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3500);
-  };
+  const showToast = (msg: string) => notify(msg);
 
   return (
     <div className="flex flex-col w-full">
-      {/* Toast Notification */}
-      {notification && (
-        <div className="fixed top-20 right-8 z-50 bg-secondary text-on-secondary px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 animate-bounce">
-          <span className="material-symbols-outlined text-[20px]">check_circle</span>
-          <span className="font-label-md text-label-md font-medium">{notification}</span>
-        </div>
-      )}
 
       {/* Interactive Top Action Toolbar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md mb-space-xl bg-surface-container-lowest p-space-md rounded-xl shadow-sm border border-surface-container">
@@ -61,7 +51,7 @@ export const InvoicePreviewPage: React.FC = () => {
           </button>
           <button
             onClick={() => showToast('WhatsApp invoice dispatched to Chaudhry Riaz Ahmed (+92 300 8712394)!')}
-            className="h-9 px-space-sm rounded-lg bg-[#ECFDF5] text-[#065F46] font-label-md text-label-md flex items-center gap-1 hover:bg-[#D1FAE5] transition-colors font-semibold"
+            className="h-9 px-space-sm rounded-lg bg-success-soft text-success font-label-md text-label-md flex items-center gap-1 hover:bg-success-tint transition-colors font-semibold"
             type="button"
           >
             <span className="material-symbols-outlined text-[18px]">chat</span>

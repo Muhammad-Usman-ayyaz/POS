@@ -264,7 +264,7 @@ export const DashboardPage: React.FC = () => {
                   </linearGradient>
                 </defs>
                 {/* Target Line Dashed */}
-                <line opacity="0.6" stroke="#727782" strokeDasharray="6,6" strokeWidth="2" x1="20" x2="680" y1="60" y2="60"></line>
+                <line opacity="0.6" stroke="var(--erp-outline)" strokeDasharray="6,6" strokeWidth="2" x1="20" x2="680" y1="60" y2="60"></line>
                 {/* Area Fill */}
                 <path d="M 20 180 L 20 140 Q 80 110 130 135 T 240 90 T 350 75 T 460 110 T 570 45 T 680 30 L 680 180 Z" fill="url(#primarySaleGrad)"></path>
                 {/* Line Path */}
