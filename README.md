@@ -62,9 +62,10 @@ pesticide-erp/
    ```bash
    python manage.py migrate
    ```
-6. (Optional) Load sample products so the catalog has data:
+6. (Optional) Load sample data:
    ```bash
-   python manage.py seed_demo_catalog
+   python manage.py seed_demo_catalog       # products, categories, brands
+   python manage.py seed_demo_procurement   # suppliers + one part-paid purchase
    ```
 7. Start development server:
    ```bash
