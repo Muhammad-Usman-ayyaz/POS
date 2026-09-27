@@ -13,4 +13,8 @@ urlpatterns = [
     path('api/', include('apps.suppliers.urls')),
     # Purchases: goods received from suppliers
     path('api/', include('apps.purchases.urls')),
+    # Farmers & customers directory
+    path('api/', include('apps.customers.urls')),
+    # Farmer khata: shop-wide credit ledger
+    path('api/khata/', include('apps.khata.urls')),
 ]

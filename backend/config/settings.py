@@ -45,6 +45,8 @@ INSTALLED_APPS = [
     'apps.inventory.apps.InventoryConfig',
     'apps.suppliers.apps.SuppliersConfig',
     'apps.purchases.apps.PurchasesConfig',
+    'apps.customers.apps.CustomersConfig',
+    'apps.khata.apps.KhataConfig',
 ]
 
 MIDDLEWARE = [
