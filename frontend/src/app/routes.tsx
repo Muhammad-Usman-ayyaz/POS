@@ -1,8 +1,10 @@
+import type React from 'react';
 import { Navigate, createBrowserRouter } from 'react-router-dom';
 import AuthLayout from '@/layouts/AuthLayout';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import ProtectedRoute from '@/features/auth/ProtectedRoute';
 import RoleProtectedRoute from '@/features/auth/RoleProtectedRoute';
+import { rolesFor } from '@/features/auth/permissions';
 import LoginPage from '@/features/auth/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import POSPage from '@/pages/POSPage';
@@ -24,6 +26,10 @@ import {
   SettingsPage,
   NotFoundPage,
 } from '@/pages/PlaceholderPages';
+
+const guard = (path: string, element: React.ReactElement) => (
+  <RoleProtectedRoute allowedRoles={rolesFor(path)}>{element}</RoleProtectedRoute>
+);
 
 export const router = createBrowserRouter([
   // Public Routes wrapped in AuthLayout
@@ -55,7 +61,7 @@ export const router = createBrowserRouter([
       },
       {
         path: '/pos',
-        element: <POSPage />,
+        element: guard('/pos', <POSPage />),
       },
       {
         path: '/products',
@@ -67,15 +73,15 @@ export const router = createBrowserRouter([
       },
       {
         path: '/stock-movement',
-        element: <StockMovementPage />,
+        element: guard('/stock-movement', <StockMovementPage />),
       },
       {
         path: '/suppliers',
-        element: <SuppliersPage />,
+        element: guard('/suppliers', <SuppliersPage />),
       },
       {
         path: '/purchases',
-        element: <PurchasesPage />,
+        element: guard('/purchases', <PurchasesPage />),
       },
       {
         path: '/customers',
@@ -123,25 +129,17 @@ export const router = createBrowserRouter([
       },
       {
         path: '/reports',
-        element: <ReportsPage />,
+        element: guard('/reports', <ReportsPage />),
       },
 
-      // Role-Protected Management Routes (OWNER, MANAGER)
+      // Role-restricted routes (see features/auth/permissions.ts)
       {
         path: '/employees',
-        element: (
-          <RoleProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
-            <EmployeesPage />
-          </RoleProtectedRoute>
-        ),
+        element: guard('/employees', <EmployeesPage />),
       },
       {
         path: '/settings',
-        element: (
-          <RoleProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
-            <SettingsPage />
-          </RoleProtectedRoute>
-        ),
+        element: guard('/settings', <SettingsPage />),
       },
     ],
   },

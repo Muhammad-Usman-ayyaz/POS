@@ -5,31 +5,62 @@ const TOKEN_KEY = 'pesticide_erp_token';
 const REFRESH_TOKEN_KEY = 'pesticide_erp_refresh_token';
 const USER_KEY = 'pesticide_erp_user';
 
-const getInitialUser = (): User | null => {
-  const savedUser = localStorage.getItem(USER_KEY);
-  if (!savedUser) return null;
+// "Remember this terminal" keeps the session in localStorage; otherwise it lives
+// in sessionStorage and ends when the tab closes.
+const safe = <T,>(fn: () => T, fallback: T): T => {
   try {
-    return JSON.parse(savedUser) as User;
+    return fn();
   } catch {
-    return null;
+    return fallback;
   }
 };
 
-const initialToken = localStorage.getItem(TOKEN_KEY);
-const initialRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-const initialUser = getInitialUser();
+const activeStorage = (): Storage | null =>
+  safe(
+    () => (localStorage.getItem(TOKEN_KEY) ? localStorage : sessionStorage.getItem(TOKEN_KEY) ? sessionStorage : null),
+    null
+  );
+
+const clearAll = () =>
+  safe(() => {
+    for (const store of [localStorage, sessionStorage]) {
+      store.removeItem(TOKEN_KEY);
+      store.removeItem(REFRESH_TOKEN_KEY);
+      store.removeItem(USER_KEY);
+    }
+  }, undefined);
+
+const readSession = () => {
+  const storage = activeStorage();
+  if (!storage) return { user: null as User | null, access: null as string | null, refresh: null as string | null };
+  const access = storage.getItem(TOKEN_KEY);
+  const refresh = storage.getItem(REFRESH_TOKEN_KEY);
+  let user: User | null = null;
+  try {
+    user = JSON.parse(storage.getItem(USER_KEY) ?? 'null') as User | null;
+  } catch {
+    user = null;
+  }
+  return { user, access, refresh };
+};
+
+const initial = readSession();
 
 export const useAuthStore = create<AuthState>((set) => ({
-  isAuthenticated: Boolean(initialToken && initialUser),
-  user: initialUser,
-  role: initialUser ? initialUser.role : null,
-  accessToken: initialToken,
-  refreshToken: initialRefreshToken,
+  isAuthenticated: Boolean(initial.access && initial.user),
+  user: initial.user,
+  role: initial.user ? initial.user.role : null,
+  accessToken: initial.access,
+  refreshToken: initial.refresh,
 
-  login: (data: AuthResponse) => {
-    localStorage.setItem(TOKEN_KEY, data.access);
-    localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh);
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  login: (data: AuthResponse, remember = true) => {
+    clearAll();
+    safe(() => {
+      const storage = remember ? localStorage : sessionStorage;
+      storage.setItem(TOKEN_KEY, data.access);
+      storage.setItem(REFRESH_TOKEN_KEY, data.refresh);
+      storage.setItem(USER_KEY, JSON.stringify(data.user));
+    }, undefined);
 
     set({
       isAuthenticated: true,
@@ -41,10 +72,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-
+    clearAll();
     set({
       isAuthenticated: false,
       user: null,
@@ -54,8 +82,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
   },
 
-  setAccessToken: (token: string) => {
-    localStorage.setItem(TOKEN_KEY, token);
-    set({ accessToken: token });
+  // The backend rotates refresh tokens, so a refresh may hand back a new one.
+  setTokens: ({ access, refresh }) => {
+    safe(() => {
+      const storage = activeStorage() ?? localStorage;
+      storage.setItem(TOKEN_KEY, access);
+      if (refresh) storage.setItem(REFRESH_TOKEN_KEY, refresh);
+    }, undefined);
+    set((state) => ({ accessToken: access, refreshToken: refresh ?? state.refreshToken }));
+  },
+
+  setUser: (user: User) => {
+    safe(() => (activeStorage() ?? localStorage).setItem(USER_KEY, JSON.stringify(user)), undefined);
+    set({ user, role: user.role });
   },
 }));

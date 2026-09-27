@@ -18,3 +18,7 @@ export const getCurrentUserApi = async (): Promise<User> => {
   const response = await apiClient.get<User>('/auth/me/');
   return response.data;
 };
+
+export const logoutApi = async (refreshToken: string): Promise<void> => {
+  await apiClient.post('/auth/logout/', { refresh: refreshToken });
+};

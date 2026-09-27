@@ -1,61 +1,58 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { isAxiosError } from 'axios';
+import { toast } from 'sonner';
 import { useAuthStore } from './store';
-import type { UserRole } from '@/types/auth';
+import { loginApi } from './api';
+import { loginSchema, type LoginFormData } from './schemas';
+
+const loginErrorMessage = (error: unknown): string => {
+  if (isAxiosError(error)) {
+    if (error.response?.status === 401) return 'Incorrect email or password.';
+    if (error.response?.status === 429) return 'Too many attempts. Please wait a minute and try again.';
+    if (!error.response) return 'Cannot reach the server. Check your connection and try again.';
+  }
+  return 'Sign in failed. Please try again.';
+};
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const loginStore = useAuthStore((state) => state.login);
 
-  const [role, setRole] = useState<'Owner' | 'Manager' | 'Salesman' | 'Accountant'>('Owner');
-  const [username, setUsername] = useState('owner@pesticideclub.com');
-  const [password, setPassword] = useState('SecureTerminalAccess2024');
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
+
   const [showPassword, setShowPassword] = useState(false);
   const [rememberTerminal, setRememberTerminal] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticatedNow, setIsAuthenticatedNow] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const handleRoleChange = (selectedRole: 'Owner' | 'Manager' | 'Salesman' | 'Accountant') => {
-    setRole(selectedRole);
-    if (selectedRole === 'Owner') setUsername('owner@pesticideclub.com');
-    else if (selectedRole === 'Manager') setUsername('manager@pesticideclub.com');
-    else if (selectedRole === 'Salesman') setUsername('pos@pesticideclub.com');
-    else if (selectedRole === 'Accountant') setUsername('accountant@pesticideclub.com');
-  };
+  const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/dashboard';
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  if (isAuthenticated && !isAuthenticatedNow) {
+    return <Navigate to={redirectTo} replace />;
+  }
 
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsAuthenticated(true);
-
-      const mappedRole: UserRole =
-        role === 'Owner'
-          ? 'OWNER'
-          : role === 'Manager'
-          ? 'MANAGER'
-          : role === 'Salesman'
-          ? 'SALESMAN'
-          : 'ACCOUNTANT';
-
-      loginStore({
-        access: 'mock_jwt_access_token_' + Date.now(),
-        refresh: 'mock_jwt_refresh_token_' + Date.now(),
-        user: {
-          id: 1,
-          email: username,
-          name: role === 'Owner' ? 'Muhammad Khan' : `${role} Operator`,
-          role: mappedRole,
-          is_active: true,
-        },
-      });
-
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 700);
-    }, 900);
+  const onSubmit = async (values: LoginFormData) => {
+    setFormError(null);
+    try {
+      const data = await loginApi(values);
+      setIsAuthenticatedNow(true);
+      loginStore(data, rememberTerminal);
+      navigate(redirectTo, { replace: true });
+    } catch (error) {
+      setFormError(loginErrorMessage(error));
+    }
   };
 
   return (
@@ -89,71 +86,14 @@ export const LoginPage: React.FC = () => {
               </div>
 
               {/* Form */}
-              <form className="flex flex-col gap-space-lg" onSubmit={handleSubmit}>
-                {/* Role Selector Chips */}
-                <div>
-                  <label className="block font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-space-xs">
-                    Operating Role
-                  </label>
-                  <div className="grid grid-cols-2 gap-space-xs" id="roleGroup">
-                    <button
-                      className={`role-pill flex items-center justify-center gap-space-xs py-space-xs px-space-sm rounded-full font-label-sm text-label-sm transition-all duration-150 cursor-pointer ${
-                        role === 'Owner'
-                          ? 'bg-primary text-on-primary shadow-sm'
-                          : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-                      }`}
-                      onClick={() => handleRoleChange('Owner')}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">storefront</span>
-                      <span>Shop Owner</span>
-                    </button>
-                    <button
-                      className={`role-pill flex items-center justify-center gap-space-xs py-space-xs px-space-sm rounded-full font-label-sm text-label-sm transition-all duration-150 cursor-pointer ${
-                        role === 'Manager'
-                          ? 'bg-primary text-on-primary shadow-sm'
-                          : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-                      }`}
-                      onClick={() => handleRoleChange('Manager')}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">domain</span>
-                      <span>Branch Mgr</span>
-                    </button>
-                    <button
-                      className={`role-pill flex items-center justify-center gap-space-xs py-space-xs px-space-sm rounded-full font-label-sm text-label-sm transition-all duration-150 cursor-pointer ${
-                        role === 'Salesman'
-                          ? 'bg-primary text-on-primary shadow-sm'
-                          : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-                      }`}
-                      onClick={() => handleRoleChange('Salesman')}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">point_of_sale</span>
-                      <span>Salesman / POS</span>
-                    </button>
-                    <button
-                      className={`role-pill flex items-center justify-center gap-space-xs py-space-xs px-space-sm rounded-full font-label-sm text-label-sm transition-all duration-150 cursor-pointer ${
-                        role === 'Accountant'
-                          ? 'bg-primary text-on-primary shadow-sm'
-                          : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-                      }`}
-                      onClick={() => handleRoleChange('Accountant')}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">menu_book</span>
-                      <span>Accountant</span>
-                    </button>
-                  </div>
-                </div>
-
+              <form className="flex flex-col gap-space-lg" noValidate onSubmit={handleSubmit(onSubmit)}>
                 {/* Email or ID */}
                 <div>
                   <label
                     className="block font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-space-xs"
                     htmlFor="usernameInput"
                   >
-                    Operator ID or Email
+                    Email Address
                   </label>
                   <div className="relative flex items-center">
                     <span className="material-symbols-outlined absolute left-space-md text-on-surface-variant text-[20px] pointer-events-none">
@@ -162,13 +102,16 @@ export const LoginPage: React.FC = () => {
                     <input
                       className="w-full h-[40px] pl-[42px] pr-space-md rounded bg-surface-container-lowest text-on-surface font-body-md text-body-md placeholder:text-outline outline-none shadow-sm focus:bg-surface-container-low transition-colors"
                       id="usernameInput"
-                      placeholder="owner@pesticideclub.com or EMP-0142"
-                      required
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="owner@pesticideclub.com"
+                      autoComplete="username"
+                      type="email"
+                      aria-invalid={Boolean(errors.email)}
+                      {...register('email')}
                     />
                   </div>
+                  {errors.email && (
+                    <p className="mt-space-xs font-label-sm text-label-sm text-error" role="alert">{errors.email.message}</p>
+                  )}
                 </div>
 
                 {/* Password */}
@@ -178,11 +121,15 @@ export const LoginPage: React.FC = () => {
                       className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider"
                       htmlFor="passwordInput"
                     >
-                      Access PIN / Password
+                      Password
                     </label>
-                    <a className="font-label-sm text-label-sm text-primary hover:underline" href="#">
+                    <button
+                      className="font-label-sm text-label-sm text-primary hover:underline cursor-pointer"
+                      onClick={() => toast.info('Password resets are handled by the shop owner. Please contact them.')}
+                      type="button"
+                    >
                       Forgot password?
-                    </a>
+                    </button>
                   </div>
                   <div className="relative flex items-center">
                     <span className="material-symbols-outlined absolute left-space-md text-on-surface-variant text-[20px] pointer-events-none">
@@ -192,10 +139,10 @@ export const LoginPage: React.FC = () => {
                       className="w-full h-[40px] pl-[42px] pr-[42px] rounded bg-surface-container-lowest text-on-surface font-body-md text-body-md placeholder:text-outline outline-none shadow-sm focus:bg-surface-container-low transition-colors"
                       id="passwordInput"
                       placeholder="••••••••••••"
-                      required
+                      autoComplete="current-password"
                       type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      aria-invalid={Boolean(errors.password)}
+                      {...register('password')}
                     />
                     <button
                       aria-label="Toggle password visibility"
@@ -208,7 +155,16 @@ export const LoginPage: React.FC = () => {
                       </span>
                     </button>
                   </div>
+                  {errors.password && (
+                    <p className="mt-space-xs font-label-sm text-label-sm text-error" role="alert">{errors.password.message}</p>
+                  )}
                 </div>
+
+                {formError && (
+                  <div className="rounded-lg bg-error-container px-space-md py-space-sm font-body-sm text-body-sm text-on-error-container" role="alert">
+                    {formError}
+                  </div>
+                )}
 
                 {/* Terminal Session Remember */}
                 <div className="flex items-center justify-between py-space-xs">
@@ -230,22 +186,22 @@ export const LoginPage: React.FC = () => {
                 {/* Primary Submit Button */}
                 <button
                   className={`w-full h-[44px] rounded text-on-primary font-label-lg text-label-lg flex items-center justify-center gap-space-sm shadow-md transition-all active:scale-[0.99] cursor-pointer ${
-                    isAuthenticated
+                    isAuthenticatedNow
                       ? 'bg-secondary'
-                      : isLoading
+                      : isSubmitting
                       ? 'bg-primary-container opacity-90'
                       : 'bg-primary-container hover:bg-primary'
                   }`}
-                  disabled={isLoading}
+                  disabled={isSubmitting}
                   id="signInBtn"
                   type="submit"
                 >
-                  {isLoading ? (
+                  {isSubmitting ? (
                     <>
                       <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
                       <span>Authenticating Terminal...</span>
                     </>
-                  ) : isAuthenticated ? (
+                  ) : isAuthenticatedNow ? (
                     <>
                       <span className="material-symbols-outlined text-[18px]">check_circle</span>
                       <span>Authenticated</span>

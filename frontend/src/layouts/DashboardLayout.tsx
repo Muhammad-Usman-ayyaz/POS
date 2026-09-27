@@ -1,11 +1,16 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store';
+import { signOut } from '@/features/auth/session';
+import { getCurrentUserApi } from '@/features/auth/api';
+import { canAccess, ROLE_LABELS } from '@/features/auth/permissions';
 
 export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
+  const role = useAuthStore((state) => state.role);
+  const setUser = useAuthStore((state) => state.setUser);
   const [profileDropdownOpen, setProfileDropdownOpen] = React.useState(false);
 
   const getNavLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -13,9 +18,15 @@ export const DashboardLayout: React.FC = () => {
       ? 'flex items-center gap-space-sm px-space-sm py-2 transition-all duration-150 ease-out bg-surface-container-high text-primary font-label-md border-l-4 border-primary rounded-lg shadow-xs select-none active:scale-[0.98]'
       : 'flex items-center gap-space-sm px-space-sm py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-150 ease-out select-none active:scale-[0.98]';
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  // Re-validate the stored session once per mount; a dead token ends the session
+  // via the API interceptor, and a changed role/profile is picked up here.
+  React.useEffect(() => {
+    getCurrentUserApi().then(setUser).catch(() => undefined);
+  }, [setUser]);
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -59,10 +70,12 @@ export const DashboardLayout: React.FC = () => {
                 Sales
               </span>
             </div>
-            <NavLink to="/pos" className={getNavLinkClass} data-path="pos-terminal">
-              <span className="material-symbols-outlined text-[18px]">point_of_sale</span>
-              <span className="font-label-md text-label-md">POS</span>
-            </NavLink>
+            {canAccess(role, '/pos') && (
+              <NavLink to="/pos" className={getNavLinkClass} data-path="pos-terminal">
+                <span className="material-symbols-outlined text-[18px]">point_of_sale</span>
+                <span className="font-label-md text-label-md">POS</span>
+              </NavLink>
+            )}
             <NavLink to="/sales" className={getNavLinkClass} data-path="sales-history">
               <span className="material-symbols-outlined text-[18px]">receipt_long</span>
               <span className="font-label-md text-label-md">Sales History</span>
@@ -86,25 +99,33 @@ export const DashboardLayout: React.FC = () => {
               <span className="material-symbols-outlined text-[18px]">inventory_2</span>
               <span className="font-label-md text-label-md">Inventory</span>
             </NavLink>
-            <NavLink to="/stock-movement" className={getNavLinkClass} data-path="stock-movement">
-              <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
-              <span className="font-label-md text-label-md">Stock Movement</span>
-            </NavLink>
+            {canAccess(role, '/stock-movement') && (
+              <NavLink to="/stock-movement" className={getNavLinkClass} data-path="stock-movement">
+                <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+                <span className="font-label-md text-label-md">Stock Movement</span>
+              </NavLink>
+            )}
 
             {/* Procurement */}
-            <div className="px-space-sm pt-space-sm pb-1">
-              <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
-                Procurement
-              </span>
-            </div>
-            <NavLink to="/purchases" className={getNavLinkClass} data-path="purchases">
-              <span className="material-symbols-outlined text-[18px]">shopping_cart</span>
-              <span className="font-label-md text-label-md">Purchases</span>
-            </NavLink>
-            <NavLink to="/suppliers" className={getNavLinkClass} data-path="suppliers">
-              <span className="material-symbols-outlined text-[18px]">local_shipping</span>
-              <span className="font-label-md text-label-md">Suppliers</span>
-            </NavLink>
+            {canAccess(role, '/purchases') && (
+              <div className="px-space-sm pt-space-sm pb-1">
+                <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
+                  Procurement
+                </span>
+              </div>
+            )}
+            {canAccess(role, '/purchases') && (
+              <NavLink to="/purchases" className={getNavLinkClass} data-path="purchases">
+                <span className="material-symbols-outlined text-[18px]">shopping_cart</span>
+                <span className="font-label-md text-label-md">Purchases</span>
+              </NavLink>
+            )}
+            {canAccess(role, '/suppliers') && (
+              <NavLink to="/suppliers" className={getNavLinkClass} data-path="suppliers">
+                <span className="material-symbols-outlined text-[18px]">local_shipping</span>
+                <span className="font-label-md text-label-md">Suppliers</span>
+              </NavLink>
+            )}
 
             {/* Customers */}
             <div className="px-space-sm pt-space-sm pb-1">
@@ -126,19 +147,25 @@ export const DashboardLayout: React.FC = () => {
             </NavLink>
 
             {/* Management */}
-            <div className="px-space-sm pt-space-sm pb-1">
-              <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
-                Management
-              </span>
-            </div>
-            <NavLink to="/reports" className={getNavLinkClass} data-path="reports">
-              <span className="material-symbols-outlined text-[18px]">bar_chart</span>
-              <span className="font-label-md text-label-md">Reports</span>
-            </NavLink>
-            <NavLink to="/employees" className={getNavLinkClass} data-path="employees">
-              <span className="material-symbols-outlined text-[18px]">badge</span>
-              <span className="font-label-md text-label-md">Employees</span>
-            </NavLink>
+            {canAccess(role, '/reports') && (
+              <div className="px-space-sm pt-space-sm pb-1">
+                <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
+                  Management
+                </span>
+              </div>
+            )}
+            {canAccess(role, '/reports') && (
+              <NavLink to="/reports" className={getNavLinkClass} data-path="reports">
+                <span className="material-symbols-outlined text-[18px]">bar_chart</span>
+                <span className="font-label-md text-label-md">Reports</span>
+              </NavLink>
+            )}
+            {canAccess(role, '/employees') && (
+              <NavLink to="/employees" className={getNavLinkClass} data-path="employees">
+                <span className="material-symbols-outlined text-[18px]">badge</span>
+                <span className="font-label-md text-label-md">Employees</span>
+              </NavLink>
+            )}
 
             {/* System */}
             <div className="px-space-sm pt-space-sm pb-1">
@@ -150,10 +177,12 @@ export const DashboardLayout: React.FC = () => {
               <span className="material-symbols-outlined text-[18px]">notifications</span>
               <span className="font-label-md text-label-md">Notifications</span>
             </NavLink>
-            <NavLink to="/settings" className={getNavLinkClass} data-path="settings">
-              <span className="material-symbols-outlined text-[18px]">settings</span>
-              <span className="font-label-md text-label-md">Settings</span>
-            </NavLink>
+            {canAccess(role, '/settings') && (
+              <NavLink to="/settings" className={getNavLinkClass} data-path="settings">
+                <span className="material-symbols-outlined text-[18px]">settings</span>
+                <span className="font-label-md text-label-md">Settings</span>
+              </NavLink>
+            )}
           </nav>
         </div>
 
@@ -243,10 +272,10 @@ export const DashboardLayout: React.FC = () => {
                 </div>
                 <div className="hidden xl:flex flex-col text-left">
                   <span className="font-label-md text-label-md text-on-surface font-semibold leading-tight">
-                    {user?.name || 'Muhammad Khan'}
+                    {user?.name}
                   </span>
                   <span className="font-label-sm text-label-sm text-outline leading-tight">
-                    {user?.role ? `${user.role} / Admin` : 'Shop Owner / Admin'}
+                    {role ? ROLE_LABELS[role] : ''}
                   </span>
                 </div>
                 <span className="material-symbols-outlined text-outline text-[18px] transition-transform duration-150 ease-out" style={{ transform: profileDropdownOpen ? 'rotate(180deg)' : 'none' }}>
@@ -258,7 +287,7 @@ export const DashboardLayout: React.FC = () => {
                 <div className="absolute right-0 mt-2 w-48 bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant/30 py-1 z-50 erp-animate-dropdown">
                   <div className="px-4 py-2 border-b border-surface-container-low">
                     <p className="text-xs text-outline">Signed in as</p>
-                    <p className="text-sm font-semibold text-on-surface truncate">{user?.email || 'owner@pesticideclub.com'}</p>
+                    <p className="text-sm font-semibold text-on-surface truncate">{user?.email}</p>
                   </div>
                   <button
                     className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-container-low flex items-center gap-2 transition-colors duration-100"

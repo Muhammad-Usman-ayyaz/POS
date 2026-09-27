@@ -27,7 +27,8 @@ export interface AuthState {
   role: UserRole | null;
   accessToken: string | null;
   refreshToken: string | null;
-  login: (data: AuthResponse) => void;
+  login: (data: AuthResponse, remember?: boolean) => void;
   logout: () => void;
-  setAccessToken: (token: string) => void;
+  setTokens: (tokens: { access: string; refresh?: string }) => void;
+  setUser: (user: User) => void;
 }
