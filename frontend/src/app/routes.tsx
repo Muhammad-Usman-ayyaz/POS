@@ -20,8 +20,8 @@ import SalesPage from '@/pages/SalesPage';
 import InvoicesPage from '@/pages/InvoicesPage';
 import InvoicePreviewPage from '@/pages/InvoicePreviewPage';
 import ReportsPage from '@/pages/ReportsPage';
+import PurchasesPage from '@/pages/PurchasesPage';
 import {
-  PurchasesPage,
   EmployeesPage,
   SettingsPage,
   NotFoundPage,

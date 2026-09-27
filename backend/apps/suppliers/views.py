@@ -29,25 +29,30 @@ class SupplierViewSet(ModelViewSet):
 
         # Separate subqueries (not a single annotate with two joined Sums) — joining items and
         # payments in one query fans them out into a cross product and inflates both totals.
-        live_purchases = Purchase.objects.filter(supplier=OuterRef('pk')).exclude(status=Purchase.Status.CANCELLED)
+        # Each OuterRef('pk') is resolved directly against this Supplier queryset (one level),
+        # not through an intermediate Subquery — nesting OuterRef two levels deep silently loses
+        # the correlation and returns the same shop-wide total for every supplier.
+        not_cancelled = ~Q(purchase__status=Purchase.Status.CANCELLED)
         purchased = (
-            PurchaseItem.objects.filter(purchase__in=Subquery(live_purchases.values('pk')))
+            PurchaseItem.objects.filter(purchase__supplier=OuterRef('pk')).filter(not_cancelled)
             .values('purchase__supplier')
             .annotate(total=Sum(F('quantity') * F('unit_cost'), output_field=MONEY))
             .values('total')
         )
         paid = (
-            SupplierPayment.objects.filter(purchase__in=Subquery(live_purchases.values('pk')))
+            SupplierPayment.objects.filter(purchase__supplier=OuterRef('pk')).filter(not_cancelled)
             .values('purchase__supplier')
             .annotate(total=Sum('amount', output_field=MONEY))
             .values('total')
         )
+        purchase_count = (
+            Purchase.objects.filter(supplier=OuterRef('pk')).exclude(status=Purchase.Status.CANCELLED)
+            .values('supplier').annotate(c=Count('pk')).values('c')
+        )
         qs = Supplier.objects.annotate(
             total_purchased=Coalesce(Subquery(purchased, output_field=MONEY), Value(Decimal('0'), output_field=MONEY)),
             total_paid=Coalesce(Subquery(paid, output_field=MONEY), Value(Decimal('0'), output_field=MONEY)),
-            purchase_count=Coalesce(
-                Subquery(live_purchases.values('supplier').annotate(c=Count('pk')).values('c')), Value(0)
-            ),
+            purchase_count=Coalesce(Subquery(purchase_count), Value(0)),
         ).annotate(outstanding_balance=F('total_purchased') - F('total_paid'))
         search = self.request.query_params.get('search', '').strip()
         if search:

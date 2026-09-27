@@ -53,22 +53,6 @@ export const BasePlaceholderPage: React.FC<PageProps> = ({
 
 
 
-export const InventoryPage: React.FC = () => (
-  <BasePlaceholderPage title="Inventory" description="Stock levels, warehouse tracking, and expiry alerts" />
-);
-
-export const StockMovementPage: React.FC = () => (
-  <BasePlaceholderPage title="Stock Movement" description="Batch transfers, adjustments, and warehouse audit trail" />
-);
-
-export const SuppliersPage: React.FC = () => (
-  <BasePlaceholderPage title="Suppliers" description="Vendor accounts, contact information, and supplier ledger" />
-);
-
-export const PurchasesPage: React.FC = () => (
-  <BasePlaceholderPage title="Purchases" description="Purchase orders and inward stock receiving" />
-);
-
 export const CustomersPage: React.FC = () => (
   <BasePlaceholderPage title="Customers" description="Farmer and dealer directory and accounts" />
 );

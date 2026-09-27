@@ -45,6 +45,28 @@ class SupplierApiTests(SupplierTestBase):
         data = self.client.get(f'{SUPPLIERS}{supplier.pk}/').data
         self.assertEqual(Decimal(data['outstanding_balance']), Decimal('600'))
 
+    def test_balances_are_isolated_per_supplier_in_list_view(self):
+        # Regression: an earlier version of the balance subquery lost its correlation to the
+        # outer Supplier row and returned the same shop-wide total for every supplier.
+        from apps.purchases.models import Purchase, PurchaseItem, SupplierPayment
+
+        paid_supplier = Supplier.objects.create(name='Has Purchases')
+        purchase = Purchase.objects.create(supplier=paid_supplier, purchase_date='2025-01-01')
+        PurchaseItem.objects.create(purchase=purchase, product=self.product, batch_no='B1', quantity=Decimal('10'), unit_cost=Decimal('100'))
+        SupplierPayment.objects.create(purchase=purchase, amount=Decimal('300'), paid_on='2025-01-05')
+
+        empty_supplier = Supplier.objects.create(name='No Purchases')
+
+        rows = {row['name']: row for row in self.client.get(SUPPLIERS).data}
+        self.assertEqual(Decimal(rows['Has Purchases']['total_purchased']), Decimal('1000'))
+        self.assertEqual(Decimal(rows['Has Purchases']['outstanding_balance']), Decimal('700'))
+        self.assertEqual(rows['Has Purchases']['purchase_count'], 1)
+
+        self.assertEqual(Decimal(rows['No Purchases']['total_purchased']), Decimal('0'))
+        self.assertEqual(Decimal(rows['No Purchases']['outstanding_balance']), Decimal('0'))
+        self.assertEqual(rows['No Purchases']['purchase_count'], 0)
+        self.assertIsNotNone(empty_supplier)
+
     def test_cancelled_purchase_excluded_from_balance(self):
         supplier = Supplier.objects.create(name='Regional Supply')
         from apps.purchases.models import Purchase, PurchaseItem
