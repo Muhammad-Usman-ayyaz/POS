@@ -66,7 +66,6 @@ pesticide-erp/
    ```bash
    python manage.py seed_demo_catalog       # products, categories, brands
    python manage.py seed_demo_procurement   # suppliers + one part-paid purchase
-   python manage.py seed_demo_khata         # farmers with a charge + partial payment
    ```
 7. Start development server:
    ```bash

@@ -10,6 +10,15 @@ const login = async (page: Page, email: string, password: string) => {
 };
 const owner = (page: Page) => login(page, process.env.E2E_OWNER_EMAIL ?? 'owner@pesticideclub.com', process.env.E2E_OWNER_PASSWORD ?? 'Owner-pass-123');
 
+// A row already visible (from a stale/prior filter) can still substring-match a new search term
+// before the request for that term actually lands, so filtering the DOM alone races the refetch.
+// Waiting for the real response avoids interacting with a row that's about to be replaced.
+const searchAndSettle = async (page: Page, placeholder: string, value: string) => {
+  const wait = page.waitForResponse((res) => res.url().includes('search=') && res.request().method() === 'GET');
+  await page.fill(`input[placeholder*="${placeholder}"]`, value);
+  await wait;
+};
+
 test.describe('Suppliers', () => {
   test('lists real suppliers with outstanding balances and supports CRUD', async ({ page }) => {
     await owner(page);
@@ -23,9 +32,7 @@ test.describe('Suppliers', () => {
     await page.getByRole('button', { name: 'Register Supplier' }).click();
     await expect(page.getByText(name).first()).toBeVisible();
 
-    await page.fill('input[placeholder*="Search by supplier"]', name);
-    // Wait for the debounced search to settle (and its list refetch) before opening the row menu,
-    // so the menu isn't torn down mid-click by the table re-rendering underneath it.
+    await searchAndSettle(page, 'Search by supplier', name);
     await expect(page.locator('tbody tr')).toHaveCount(1);
     await page.locator('tbody tr').filter({ hasText: name }).getByRole('button').click();
     await expect(page.getByRole('menuitem', { name: 'Edit supplier' })).toBeVisible();
@@ -34,7 +41,7 @@ test.describe('Suppliers', () => {
     await page.getByRole('button', { name: 'Save Changes' }).click();
     await expect(page.getByText(`${name} Renamed`).first()).toBeVisible();
 
-    await page.fill('input[placeholder*="Search by supplier"]', `${name} Renamed`);
+    await searchAndSettle(page, 'Search by supplier', `${name} Renamed`);
     await expect(page.locator('tbody tr')).toHaveCount(1);
     await page.locator('tbody tr').filter({ hasText: 'Renamed' }).getByRole('button').click();
     await expect(page.getByRole('menuitem', { name: 'Delete supplier' })).toBeVisible();

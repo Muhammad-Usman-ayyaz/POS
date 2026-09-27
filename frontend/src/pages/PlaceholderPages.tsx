@@ -53,24 +53,12 @@ export const BasePlaceholderPage: React.FC<PageProps> = ({
 
 
 
-export const CustomersPage: React.FC = () => (
-  <BasePlaceholderPage title="Customers" description="Farmer and dealer directory and accounts" />
-);
-
-export const KhataPage: React.FC = () => (
-  <BasePlaceholderPage title="Khata (Ledger)" description="Farmer credit, payment balance, and history" />
-);
-
 export const SalesPage: React.FC = () => (
   <BasePlaceholderPage title="Sales" description="Sales history, orders, and returns" />
 );
 
 export const InvoicesPage: React.FC = () => (
   <BasePlaceholderPage title="Invoices" description="Tax invoices, billing, and receipt generation" />
-);
-
-export const PaymentsPage: React.FC = () => (
-  <BasePlaceholderPage title="Payments" description="Inward and outward transactions, bank entries" />
 );
 
 export const ReportsPage: React.FC = () => (

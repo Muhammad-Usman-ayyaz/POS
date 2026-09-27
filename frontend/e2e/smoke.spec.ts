@@ -28,7 +28,7 @@ test('every page renders without runtime errors', async ({ page }) => {
 });
 
 test('page actions raise the shared toast', async ({ page }) => {
-  await page.goto('/customers');
-  await page.getByRole('button', { name: /SMS/i }).first().click();
+  await page.goto('/products');
+  await page.getByRole('button', { name: /Print Barcodes/i }).click();
   await expect(page.locator('[data-sonner-toast]')).toBeVisible();
 });
