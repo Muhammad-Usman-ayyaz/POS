@@ -39,7 +39,9 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     # Local application modules
+    'apps.core.apps.CoreConfig',
     'apps.accounts.apps.AccountsConfig',
+    'apps.catalog.apps.CatalogConfig',
 ]
 
 MIDDLEWARE = [
@@ -133,6 +135,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_PAGINATION_CLASS': 'apps.core.pagination.StandardPagination',
     'DEFAULT_THROTTLE_RATES': {
         'login': os.getenv('LOGIN_THROTTLE_RATE', '10/min'),
     },
