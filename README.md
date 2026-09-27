@@ -62,9 +62,17 @@ pesticide-erp/
    ```bash
    python manage.py migrate
    ```
-6. Start development server:
+6. (Optional) Load sample products so the catalog has data:
+   ```bash
+   python manage.py seed_demo_catalog
+   ```
+7. Start development server:
    ```bash
    python manage.py runserver 8000
+   ```
+8. Run backend tests (set `DB_ENGINE=sqlite` to run without PostgreSQL):
+   ```bash
+   python manage.py test
    ```
 
 #### Frontend Setup

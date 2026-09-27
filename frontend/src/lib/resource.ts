@@ -28,15 +28,21 @@ export function createResource<T extends { id: number | string }, TInput = Parti
   const useDetail = (id: T['id'] | undefined) =>
     useQuery({ queryKey: key('detail', id), queryFn: () => api.get(id as T['id']), enabled: id !== undefined });
 
-  const useCreate = () => {
+  // `silent: true` skips the global error toast when the caller shows the error itself (e.g. inside a form).
+  const useCreate = (options?: { silent?: boolean }) => {
     const qc = useQueryClient();
-    return useMutation({ mutationFn: api.create, onSuccess: () => qc.invalidateQueries({ queryKey: key() }) });
+    return useMutation({
+      mutationFn: api.create,
+      meta: { silent: options?.silent },
+      onSuccess: () => qc.invalidateQueries({ queryKey: key() }),
+    });
   };
 
-  const useUpdate = () => {
+  const useUpdate = (options?: { silent?: boolean }) => {
     const qc = useQueryClient();
     return useMutation({
       mutationFn: ({ id, input }: { id: T['id']; input: Partial<TInput> }) => api.update(id, input),
+      meta: { silent: options?.silent },
       onSuccess: () => qc.invalidateQueries({ queryKey: key() }),
     });
   };
