@@ -1,8 +1,6 @@
 # Pesticide Club Shop ERP & Inventory Management System
 
-## Phase 0: Project Foundation, Routing, Auth & UI Libraries
-
-This repository contains the full technical foundation for the **Pesticide Club Shop ERP & Inventory Management System**.
+This repository contains the **Pesticide Club Shop ERP & Inventory Management System**.
 
 ### Architecture Overview
 
@@ -33,8 +31,7 @@ pesticide-erp/
 ```
 
 ### Color Palette & Design System
-- **Primary Color:** `#015AA0`
-- **Secondary / Neutral:** `#D1D1D1`
+- **Palette ("Mint Ice", locked):** `#F2FDF9`, `#A8F0DC`, `#52CBB0`, `#147A5F` (derived mint shades and status colours allowed)
 - **UI Libraries:** Tailwind CSS + shadcn/ui + Lucide React + Uiverse component readiness
 
 ### User Roles
