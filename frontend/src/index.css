@@ -5,129 +5,130 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ─────────────────────────────────────────────
-   ERP DESIGN SYSTEM — Hakkagoori Mint Palette
-   Source palette → Hakkagoori transformation:
-     primary            #004278 → #147A5F
-     primary-container  #015aa0 → #52CBB0
+   ERP DESIGN SYSTEM — Lagoon Palette
+   Source palette → Lagoon transformation:
+     primary            #004278 → #176B87  (Inked Lapis)
+     primary-container  #015aa0 → #30A7A0  (Clear Hanada)
      on-primary         #ffffff → #ffffff
-     on-primary-container #b3d1ff → #F2FDF9
-     primary-fixed      #d3e4ff → #A8F0DC
-     primary-fixed-dim  #a3c9ff → #52CBB0
-     secondary          #006c49 → #147A5F  (was already green, stays)
-     secondary-container#6cf8bb → #A8F0DC
-     surface            #f8f9ff → #F2FDF9
+     on-primary-container #b3d1ff → #F5FBFA
+     primary-fixed      #d3e4ff → #7AC7C4  (Clear Hanada, light)
+     primary-fixed-dim  #a3c9ff → #30A7A0
+     secondary          #006c49 → #176B87  (kept aligned with primary — one core hue)
+     secondary-container#6cf8bb → #7AC7C4
+     surface            #f8f9ff → #FAF7EF  (warm cream, paper-like)
      surface-container-lowest #fff → #ffffff
-     surface-container-low  #eff4ff → #edfaf5
-     surface-container      #e5eeff → #d6f5eb
-     surface-container-high #dce9ff → #c2efde
-     surface-container-highest #d3e4fe→ #a8f0dc
-     background         #f8f9ff → #F2FDF9
+     surface-container-low  #eff4ff → #F3EEE0
+     surface-container      #e5eeff → #ECE4D0
+     surface-container-high #dce9ff → #E3D8BE
+     surface-container-highest #d3e4fe→ #D8C9A8
+     background         #f8f9ff → #FAF7EF
+     tertiary (warm accent) → Soft Crimson #E7CFA6 gold family
    ───────────────────────────────────────────── */
 
 /* ── Material-style design tokens used by ERP pages ── */
 :root {
-  /* Hakkagoori Mint — Primary scale */
-  --erp-primary:             #147A5F;
-  --erp-primary-container:   #52CBB0;
+  /* Lagoon — Primary scale (Inked Lapis / Clear Hanada) */
+  --erp-primary:             #176B87;
+  --erp-primary-container:   #30A7A0;
   --erp-on-primary:          #ffffff;
-  --erp-on-primary-container:#F2FDF9;
-  --erp-primary-fixed:       #A8F0DC;
-  --erp-primary-fixed-dim:   #52CBB0;
-  --erp-on-primary-fixed:    #012219;
-  --erp-on-primary-fixed-variant: #0d5a44;
-  --erp-inverse-primary:     #52CBB0;
+  --erp-on-primary-container:#F5FBFA;
+  --erp-primary-fixed:       #7AC7C4;
+  --erp-primary-fixed-dim:   #30A7A0;
+  --erp-on-primary-fixed:    #06282c;
+  --erp-on-primary-fixed-variant: #0f4d61;
+  --erp-inverse-primary:     #7AC7C4;
 
-  /* Secondary — deep teal */
-  --erp-secondary:           #147A5F;
-  --erp-secondary-container: #A8F0DC;
+  /* Secondary — same lagoon hue, kept as one coherent brand identity */
+  --erp-secondary:           #176B87;
+  --erp-secondary-container: #7AC7C4;
   --erp-on-secondary:        #ffffff;
-  --erp-on-secondary-container: #012219;
-  --erp-secondary-fixed:     #A8F0DC;
-  --erp-secondary-fixed-dim: #52CBB0;
-  --erp-on-secondary-fixed:  #012219;
-  --erp-on-secondary-fixed-variant: #0d5a44;
+  --erp-on-secondary-container: #06282c;
+  --erp-secondary-fixed:     #7AC7C4;
+  --erp-secondary-fixed-dim: #30A7A0;
+  --erp-on-secondary-fixed:  #06282c;
+  --erp-on-secondary-fixed-variant: #0f4d61;
 
-  /* Tertiary — amber/warm accent (unchanged, for warning/alert contrast) */
-  --erp-tertiary:            #7c4d00;
-  --erp-tertiary-container:  #8a5600;
+  /* Tertiary — Soft Crimson gold accent, for warm contrast against the teal */
+  --erp-tertiary:            #a3792f;
+  --erp-tertiary-container:  #c9a869;
   --erp-on-tertiary:         #ffffff;
-  --erp-on-tertiary-container: #ffc47d;
-  --erp-tertiary-fixed:      #ffddb8;
-  --erp-tertiary-fixed-dim:  #ffb95f;
-  --erp-on-tertiary-fixed:   #2a1700;
-  --erp-on-tertiary-fixed-variant: #653e00;
+  --erp-on-tertiary-container: #3f2d0a;
+  --erp-tertiary-fixed:      #E7CFA6;
+  --erp-tertiary-fixed-dim:  #c9a869;
+  --erp-on-tertiary-fixed:   #3f2d0a;
+  --erp-on-tertiary-fixed-variant: #6b4f1a;
 
-  /* Surface scale — mint tinted */
-  --erp-surface:             #F2FDF9;
-  --erp-surface-bright:      #F2FDF9;
-  --erp-surface-dim:         #c2efde;
-  --erp-background:          #F2FDF9;
+  /* Surface scale — warm cream, paper-like */
+  --erp-surface:             #FAF7EF;
+  --erp-surface-bright:      #FAF7EF;
+  --erp-surface-dim:         #E3D8BE;
+  --erp-background:          #FAF7EF;
   --erp-surface-container-lowest: #ffffff;
-  --erp-surface-container-low:    #edfaf5;
-  --erp-surface-container:        #d6f5eb;
-  --erp-surface-container-high:   #c2efde;
-  --erp-surface-container-highest:#A8F0DC;
-  --erp-surface-variant:     #c2efde;
-  --erp-surface-tint:        #147A5F;
+  --erp-surface-container-low:    #F3EEE0;
+  --erp-surface-container:        #ECE4D0;
+  --erp-surface-container-high:   #E3D8BE;
+  --erp-surface-container-highest:#D8C9A8;
+  --erp-surface-variant:     #E3D8BE;
+  --erp-surface-tint:        #176B87;
 
   /* On-surface */
-  --erp-on-surface:          #0a1f17;
-  --erp-on-surface-variant:  #3a4d43;
-  --erp-on-background:       #0a1f17;
-  --erp-inverse-surface:     #1a332a;
-  --erp-inverse-on-surface:  #edfaf5;
+  --erp-on-surface:          #16323c;
+  --erp-on-surface-variant:  #4c6873;
+  --erp-on-background:       #16323c;
+  --erp-inverse-surface:     #1c3238;
+  --erp-inverse-on-surface:  #F3EEE0;
 
   /* Outline */
-  --erp-outline:             #5a7a6e;
-  --erp-outline-variant:     #a8cbbf;
+  --erp-outline:             #7d9199;
+  --erp-outline-variant:     #cfe4e2;
 
-  /* Error (unchanged) */
+  /* Error (unchanged — a semantic red, not tied to the brand hue) */
   --erp-error:               #ba1a1a;
   --erp-error-container:     #ffdad6;
   --erp-on-error:            #ffffff;
   --erp-on-error-container:  #93000a;
 
   /* shadcn compatibility (used by shadcn components) */
-  --background: #F2FDF9;
-  --foreground: #0a1f17;
+  --background: #FAF7EF;
+  --foreground: #16323c;
   --card: #ffffff;
-  --card-foreground: #0a1f17;
+  --card-foreground: #16323c;
   --popover: #ffffff;
-  --popover-foreground: #0a1f17;
-  --primary: #147A5F;
+  --popover-foreground: #16323c;
+  --primary: #176B87;
   --primary-foreground: #ffffff;
-  --secondary: #edfaf5;
-  --secondary-foreground: #0a1f17;
-  --muted: #edfaf5;
-  --muted-foreground: #5a7a6e;
-  --accent: #d6f5eb;
-  --accent-foreground: #147A5F;
+  --secondary: #F3EEE0;
+  --secondary-foreground: #16323c;
+  --muted: #F3EEE0;
+  --muted-foreground: #7d9199;
+  --accent: #ECE4D0;
+  --accent-foreground: #176B87;
   --destructive: #ba1a1a;
-  --border: #a8cbbf;
-  --input: #a8cbbf;
-  --ring: #147A5F;
+  --border: #cfe4e2;
+  --input: #cfe4e2;
+  --ring: #176B87;
   --radius: 0.5rem;
-  --chart-1: #147A5F;
-  --chart-2: #52CBB0;
-  --chart-3: #A8F0DC;
-  --chart-4: #5a7a6e;
-  --chart-5: #c2efde;
+  --chart-1: #176B87;
+  --chart-2: #30A7A0;
+  --chart-3: #7AC7C4;
+  --chart-4: #a3792f;
+  --chart-5: #E3D8BE;
   --sidebar: #ffffff;
-  --sidebar-foreground: #0a1f17;
-  --sidebar-primary: #147A5F;
+  --sidebar-foreground: #16323c;
+  --sidebar-primary: #176B87;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #edfaf5;
-  --sidebar-accent-foreground: #147A5F;
-  --sidebar-border: #a8cbbf;
-  --sidebar-ring: #147A5F;
+  --sidebar-accent: #F3EEE0;
+  --sidebar-accent-foreground: #176B87;
+  --sidebar-border: #cfe4e2;
+  --sidebar-ring: #176B87;
 }
 
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Inter', sans-serif;
 
-  --color-brand-primary: #147A5F;
-  --color-brand-neutral: #a8cbbf;
+  --color-brand-primary: #176B87;
+  --color-brand-neutral: #cfe4e2;
 
   /* ── Status + utility colours (kept out of the brand palette on purpose) ── */
   --color-success:        #065F46;
@@ -337,32 +338,89 @@
 }
 
 .dark {
-  --background: #0a1f17;
-  --foreground: #F2FDF9;
-  --card: #0d2a1f;
-  --card-foreground: #F2FDF9;
-  --popover: #0d2a1f;
-  --popover-foreground: #F2FDF9;
-  --primary: #52CBB0;
-  --primary-foreground: #012219;
-  --secondary: #1a332a;
-  --secondary-foreground: #F2FDF9;
-  --muted: #1a332a;
-  --muted-foreground: #a8cbbf;
-  --accent: #1a332a;
-  --accent-foreground: #52CBB0;
+  --background: #0b1f26;
+  --foreground: #eaf3f2;
+  --card: #102a32;
+  --card-foreground: #eaf3f2;
+  --popover: #102a32;
+  --popover-foreground: #eaf3f2;
+  --primary: #4fb8c4;
+  --primary-foreground: #062024;
+  --secondary: #1a3a42;
+  --secondary-foreground: #eaf3f2;
+  --muted: #1a3a42;
+  --muted-foreground: #9fc4c8;
+  --accent: #1a3a42;
+  --accent-foreground: #4fb8c4;
   --destructive: #dc2626;
-  --border: #2a4d3d;
-  --input: #2a4d3d;
-  --ring: #52CBB0;
-  --sidebar: #0d2a1f;
-  --sidebar-foreground: #F2FDF9;
-  --sidebar-primary: #52CBB0;
-  --sidebar-primary-foreground: #012219;
-  --sidebar-accent: #1a332a;
-  --sidebar-accent-foreground: #F2FDF9;
-  --sidebar-border: #1a332a;
-  --sidebar-ring: #52CBB0;
+  --border: #2a4d52;
+  --input: #2a4d52;
+  --ring: #4fb8c4;
+  --sidebar: #102a32;
+  --sidebar-foreground: #eaf3f2;
+  --sidebar-primary: #4fb8c4;
+  --sidebar-primary-foreground: #062024;
+  --sidebar-accent: #1a3a42;
+  --sidebar-accent-foreground: #eaf3f2;
+  --sidebar-border: #1a3a42;
+  --sidebar-ring: #4fb8c4;
+
+  /* Dark-mode counterparts for the erp-* tokens most page content actually uses (the shadcn
+     tokens above only cover shadcn/ui primitives like Dialog and Card). Without these, toggling
+     dark mode would only recolor the app chrome and leave every page's own surfaces stuck light. */
+  --erp-primary:             #4fb8c4;
+  --erp-primary-container:   #2f8790;
+  --erp-on-primary:          #062024;
+  --erp-on-primary-container:#e3f5f4;
+  --erp-primary-fixed:       #2f8790;
+  --erp-primary-fixed-dim:   #4fb8c4;
+  --erp-on-primary-fixed:    #e3f5f4;
+  --erp-on-primary-fixed-variant: #bfe7e5;
+  --erp-inverse-primary:     #176B87;
+
+  --erp-secondary:           #4fb8c4;
+  --erp-secondary-container: #2f8790;
+  --erp-on-secondary:        #062024;
+  --erp-on-secondary-container: #e3f5f4;
+  --erp-secondary-fixed:     #2f8790;
+  --erp-secondary-fixed-dim: #4fb8c4;
+  --erp-on-secondary-fixed:  #e3f5f4;
+  --erp-on-secondary-fixed-variant: #bfe7e5;
+
+  --erp-tertiary:            #d8b877;
+  --erp-tertiary-container:  #6b4f1a;
+  --erp-on-tertiary:         #2a1e08;
+  --erp-on-tertiary-container: #f3e4c6;
+  --erp-tertiary-fixed:      #6b4f1a;
+  --erp-tertiary-fixed-dim:  #d8b877;
+  --erp-on-tertiary-fixed:   #f3e4c6;
+  --erp-on-tertiary-fixed-variant: #e2c893;
+
+  --erp-surface:             #0b1f26;
+  --erp-surface-bright:      #16323a;
+  --erp-surface-dim:         #0b1f26;
+  --erp-background:          #0b1f26;
+  --erp-surface-container-lowest: #071519;
+  --erp-surface-container-low:    #102a32;
+  --erp-surface-container:        #16323a;
+  --erp-surface-container-high:   #1e3f47;
+  --erp-surface-container-highest:#295059;
+  --erp-surface-variant:     #1e3f47;
+  --erp-surface-tint:        #4fb8c4;
+
+  --erp-on-surface:          #eaf3f2;
+  --erp-on-surface-variant:  #9fc4c8;
+  --erp-on-background:       #eaf3f2;
+  --erp-inverse-surface:     #eaf3f2;
+  --erp-inverse-on-surface:  #16323a;
+
+  --erp-outline:             #6f9298;
+  --erp-outline-variant:     #2a4d52;
+
+  --erp-error:               #ff8a80;
+  --erp-error-container:     #93000a;
+  --erp-on-error:            #690005;
+  --erp-on-error-container:  #ffdad6;
 }
 
 /* ── ERP Inline Style Overrides ── */
@@ -442,33 +500,52 @@
 }
 
 /* ─────────────────────────────────────────────
- * Mint ice
- * WILLOW MIST #F2FDF9
- * YOUNG WILLOW #A8F0DC
- * CLEAR BAMBOO #52CBB0
- * FOREST TEA #147A5F
+ * Lagoon
+ * INKED LAPIS #176B87
+ * CLEAR HANADA #30A7A0
+ * CLEAR HANADA #7AC7C4
+ * SOFT CRIMSON #E7CFA6
  * ───────────────────────────────────────────── */
 
 .gradient-hakkagoori {
   position: relative;
   background: linear-gradient(
     135deg,
-    #F2FDF9 12.5%,
-    #A8F0DC 37.5%,
-    #52CBB0 62.5%,
-    #147A5F 87.5%
+    #176B87 12.5%,
+    #30A7A0 37.5%,
+    #7AC7C4 62.5%,
+    #E7CFA6 87.5%
   );
 
   background: linear-gradient(
     135deg in oklab,
-    #F2FDF9 12.5%,
-    #A8F0DC 37.5%,
-    #52CBB0 62.5%,
-    #147A5F 87.5%
+    #176B87 12.5%,
+    #30A7A0 37.5%,
+    #7AC7C4 62.5%,
+    #E7CFA6 87.5%
   );
 }
 
 .gradient-hakkagoori::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-size: 256px 256px;
+  image-rendering: pixelated;
+  mix-blend-mode: overlay;
+  opacity: 0.030;
+  pointer-events: none;
+}
+
+/* Lagoon is the current name for this wash; kept as an alias rather than a rename so nothing
+   that already references .gradient-hakkagoori silently stops matching. */
+.gradient-lagoon {
+  position: relative;
+  background: linear-gradient(135deg, #176B87 12.5%, #30A7A0 37.5%, #7AC7C4 62.5%, #E7CFA6 87.5%);
+  background: linear-gradient(135deg in oklab, #176B87 12.5%, #30A7A0 37.5%, #7AC7C4 62.5%, #E7CFA6 87.5%);
+}
+
+.gradient-lagoon::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -552,8 +629,8 @@
 .erp-card-hover:hover,
 .erp-card-interactive:hover {
   transform: translateY(-3px);
-  box-shadow: 0 10px 24px -4px rgba(20, 122, 95, 0.1), 0 4px 8px -2px rgba(0, 0, 0, 0.04);
-  border-color: rgba(82, 203, 176, 0.5) !important;
+  box-shadow: 0 10px 24px -4px rgba(23, 107, 135, 0.12), 0 4px 8px -2px rgba(0, 0, 0, 0.04);
+  border-color: rgba(48, 167, 160, 0.5) !important;
 }
 
 .erp-card-hover:active,
@@ -660,62 +737,105 @@
 }
 
 /* ─────────────────────────────────────────────
- * TASTEFUL MINT ICE GLASSMORPHISM PRIMITIVES
- * Built directly from #F2FDF9, #A8F0DC, #52CBB0, #147A5F
+ * TASTEFUL LAGOON GLASSMORPHISM PRIMITIVES
+ * Built directly from #176B87, #30A7A0, #7AC7C4, #E7CFA6
  * ───────────────────────────────────────────── */
 
 .glass-card {
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(14px) saturate(160%);
   -webkit-backdrop-filter: blur(14px) saturate(160%);
-  border: 1px solid rgba(168, 240, 220, 0.6);
-  box-shadow: 0 4px 20px -2px rgba(20, 122, 95, 0.05), 0 1px 3px 0 rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(122, 199, 196, 0.6);
+  box-shadow: 0 4px 20px -2px rgba(23, 107, 135, 0.06), 0 1px 3px 0 rgba(0, 0, 0, 0.03);
 }
 
 .glass-header {
   background: rgba(255, 255, 255, 0.85) !important;
   backdrop-filter: blur(16px) saturate(170%);
   -webkit-backdrop-filter: blur(16px) saturate(170%);
-  border-bottom: 1px solid rgba(168, 240, 220, 0.65) !important;
-  box-shadow: 0 1px 4px 0 rgba(20, 122, 95, 0.04);
+  border-bottom: 1px solid rgba(122, 199, 196, 0.65) !important;
+  box-shadow: 0 1px 4px 0 rgba(23, 107, 135, 0.05);
 }
 
 .glass-dropdown {
   background: rgba(255, 255, 255, 0.94) !important;
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
-  border: 1px solid rgba(168, 240, 220, 0.7) !important;
-  box-shadow: 0 16px 36px -4px rgba(20, 122, 95, 0.14), 0 4px 12px -2px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(122, 199, 196, 0.7) !important;
+  box-shadow: 0 16px 36px -4px rgba(23, 107, 135, 0.16), 0 4px 12px -2px rgba(0, 0, 0, 0.06);
 }
 
 .glass-modal {
   background: rgba(255, 255, 255, 0.94) !important;
   backdrop-filter: blur(24px) saturate(190%);
   -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(168, 240, 220, 0.75) !important;
-  box-shadow: 0 24px 60px -12px rgba(20, 122, 95, 0.22), 0 0 0 1px rgba(82, 203, 176, 0.2);
+  border: 1px solid rgba(122, 199, 196, 0.75) !important;
+  box-shadow: 0 24px 60px -12px rgba(23, 107, 135, 0.24), 0 0 0 1px rgba(48, 167, 160, 0.2);
 }
 
 .glass-toast {
-  background: rgba(20, 122, 95, 0.94) !important;
+  background: rgba(23, 107, 135, 0.94) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(168, 240, 220, 0.5) !important;
-  box-shadow: 0 12px 32px -4px rgba(20, 122, 95, 0.35);
+  border: 1px solid rgba(122, 199, 196, 0.5) !important;
+  box-shadow: 0 12px 32px -4px rgba(23, 107, 135, 0.35);
 }
 
 .glass-pill {
-  background: rgba(237, 250, 245, 0.85);
+  background: rgba(250, 247, 239, 0.85);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(168, 240, 220, 0.6);
+  border: 1px solid rgba(122, 199, 196, 0.6);
 }
 
 .glass-toolbar {
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(14px) saturate(160%);
   -webkit-backdrop-filter: blur(14px) saturate(160%);
-  border: 1px solid rgba(168, 240, 220, 0.55);
+  border: 1px solid rgba(122, 199, 196, 0.55);
+}
+
+/* Dark-mode glass: the light-mode rules above are all rgba(255,255,255,...) fills, which stay
+   white regardless of theme and go nearly illegible once the surrounding page and its text turn
+   dark. Re-tint every glass-* surface to the dark Lagoon surface colour instead. */
+.dark .glass-card {
+  background: rgba(16, 42, 50, 0.88);
+  border-color: rgba(79, 184, 196, 0.3);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3), 0 1px 3px 0 rgba(0, 0, 0, 0.2);
+}
+
+.dark .glass-header {
+  background: rgba(11, 31, 38, 0.85) !important;
+  border-bottom-color: rgba(79, 184, 196, 0.25) !important;
+  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+.dark .glass-dropdown {
+  background: rgba(16, 42, 50, 0.96) !important;
+  border-color: rgba(79, 184, 196, 0.35) !important;
+  box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.45), 0 4px 12px -2px rgba(0, 0, 0, 0.3);
+}
+
+.dark .glass-modal {
+  background: rgba(16, 42, 50, 0.96) !important;
+  border-color: rgba(79, 184, 196, 0.4) !important;
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(79, 184, 196, 0.2);
+}
+
+.dark .glass-toast {
+  background: rgba(79, 184, 196, 0.94) !important;
+  border-color: rgba(16, 42, 50, 0.5) !important;
+  color: #062024;
+}
+
+.dark .glass-pill {
+  background: rgba(16, 42, 50, 0.85);
+  border-color: rgba(79, 184, 196, 0.3);
+}
+
+.dark .glass-toolbar {
+  background: rgba(16, 42, 50, 0.88);
+  border-color: rgba(79, 184, 196, 0.3);
 }
 
 /* Accessibility: Respect system reduced motion preferences */

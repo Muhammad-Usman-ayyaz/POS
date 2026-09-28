@@ -31,7 +31,7 @@ pesticide-erp/
 ```
 
 ### Color Palette & Design System
-- **Palette ("Mint Ice", locked):** `#F2FDF9`, `#A8F0DC`, `#52CBB0`, `#147A5F` (derived mint shades and status colours allowed)
+- **Palette ("Lagoon"):** `#176B87`, `#30A7A0`, `#7AC7C4`, `#E7CFA6` (derived shades and status colours allowed) — all colour is driven by CSS custom properties in `frontend/src/index.css` (`--erp-*` and the shadcn `--*` tokens), so re-theming is a token edit, not a component rewrite.
 - **UI Libraries:** Tailwind CSS + shadcn/ui + Lucide React + Uiverse component readiness
 
 ### User Roles
