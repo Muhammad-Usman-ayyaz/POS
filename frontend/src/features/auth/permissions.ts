@@ -13,6 +13,7 @@ export const ROUTE_ROLES: Record<string, UserRole[]> = {
   '/suppliers': ['OWNER', 'MANAGER', 'ACCOUNTANT'],
   '/reports': ['OWNER', 'MANAGER', 'ACCOUNTANT'],
   '/employees': ['OWNER', 'MANAGER'],
+  '/audit-log': ['OWNER', 'MANAGER'],
   // '/settings' is intentionally NOT restricted: it's every signed-in user's own account page
   // (profile, password, appearance), not a shop-management page — everyone needs it, same as
   // Customers or Khata.

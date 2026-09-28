@@ -25,4 +25,6 @@ urlpatterns = [
     path('api/', include('apps.sales.urls')),
     # Reports: dashboard summary, sales trend, category/product analytics
     path('api/reports/', include('apps.reports.urls')),
+    # Audit log: who did what, for critical activities (Owner/Manager only)
+    path('api/', include('apps.audit.urls')),
 ]

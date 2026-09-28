@@ -8,6 +8,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from apps.audit.services import log_action
 from apps.core.permissions import roles_permission
 
 from .models import User, UserRole
@@ -24,6 +25,20 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     """Takes user credentials (email, password) and returns JWT tokens with user info."""
     throttle_classes = [LoginRateThrottle]
     serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        email = str(request.data.get('email', ''))[:255]
+        try:
+            response = super().post(request, *args, **kwargs)
+        except Exception:
+            log_action(actor=None, action='LOGIN_FAILED', target_type='User', summary=f'Failed sign-in attempt for {email}')
+            raise
+        if response.status_code == 200:
+            user = User.objects.filter(email__iexact=email).first()
+            log_action(actor=user, action='LOGIN_SUCCESS', target_type='User', target_id=user.pk if user else None, summary=f'{email} signed in')
+        else:
+            log_action(actor=None, action='LOGIN_FAILED', target_type='User', summary=f'Failed sign-in attempt for {email}')
+        return response
 
 
 class CustomTokenRefreshView(TokenRefreshView):
@@ -88,6 +103,20 @@ class EmployeeViewSet(ModelViewSet):
             qs = qs.filter(role=role)
         return qs
 
+    def perform_create(self, serializer):
+        employee = serializer.save()
+        log_action(
+            actor=self.request.user, action='EMPLOYEE_CREATED', target_type='User', target_id=employee.pk,
+            summary=f'{employee.name} ({employee.role}) added by {self.request.user.name}',
+        )
+
+    def perform_update(self, serializer):
+        employee = serializer.save()
+        log_action(
+            actor=self.request.user, action='EMPLOYEE_UPDATED', target_type='User', target_id=employee.pk,
+            summary=f'{employee.name} updated by {self.request.user.name}',
+        )
+
     def destroy(self, request, *args, **kwargs):
         employee = self.get_object()
         if employee.pk == request.user.pk:
@@ -96,6 +125,10 @@ class EmployeeViewSet(ModelViewSet):
             return Response({'detail': "Only an Owner can deactivate another Owner's account."}, status=status.HTTP_400_BAD_REQUEST)
         employee.is_active = False
         employee.save(update_fields=['is_active'])
+        log_action(
+            actor=request.user, action='EMPLOYEE_DEACTIVATED', target_type='User', target_id=employee.pk,
+            summary=f'{employee.name} deactivated by {request.user.name}',
+        )
         return Response(EmployeeSerializer(employee).data)
 
     @action(detail=True, methods=['post'])
@@ -103,4 +136,8 @@ class EmployeeViewSet(ModelViewSet):
         employee = self.get_object()
         employee.is_active = True
         employee.save(update_fields=['is_active'])
+        log_action(
+            actor=request.user, action='EMPLOYEE_REACTIVATED', target_type='User', target_id=employee.pk,
+            summary=f'{employee.name} reactivated by {request.user.name}',
+        )
         return Response(EmployeeSerializer(employee).data)

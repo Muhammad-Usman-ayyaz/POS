@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from apps.accounts.models import UserRole
+from apps.audit.services import log_action
 from apps.core.permissions import roles_permission
 from apps.inventory.models import MovementType
 from apps.inventory.services import apply_stock_movement
@@ -58,6 +59,10 @@ class PurchaseViewSet(ModelViewSet):
             )
         purchase.status = Purchase.Status.CANCELLED
         purchase.save(update_fields=['status', 'updated_at'])
+        log_action(
+            actor=request.user, action='PURCHASE_CANCELLED', target_type='Purchase', target_id=purchase.pk,
+            summary=f'PUR-{purchase.pk} ({purchase.supplier.name}) cancelled',
+        )
         return Response(PurchaseSerializer(purchase).data)
 
     @action(detail=True, methods=['post'])
@@ -68,6 +73,10 @@ class PurchaseViewSet(ModelViewSet):
         serializer = SupplierPaymentSerializer(data=request.data, context={'purchase': purchase})
         serializer.is_valid(raise_exception=True)
         serializer.save(purchase=purchase, created_by=request.user)
+        log_action(
+            actor=request.user, action='SUPPLIER_PAYMENT_RECORDED', target_type='Purchase', target_id=purchase.pk,
+            summary=f'Rs. {serializer.validated_data["amount"]} paid to {purchase.supplier.name} for PUR-{purchase.pk}',
+        )
         # Re-fetch: get_object() prefetched items/payments, and that cache would otherwise hide
         # the payment just created, understating paid_amount/balance in the response.
         purchase = self.get_queryset().get(pk=purchase.pk)

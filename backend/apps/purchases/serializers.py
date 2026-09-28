@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.db import transaction
 from rest_framework import serializers
 
+from apps.audit.services import log_action
 from apps.catalog.models import Product
 from apps.inventory.models import MovementType
 from apps.inventory.services import apply_stock_movement, get_or_create_batch_for_purchase
@@ -88,6 +89,10 @@ class PurchaseSerializer(serializers.ModelSerializer):
                 user=getattr(request, 'user', None), reference=f'PUR-{purchase.pk}',
                 note=f'Received from {purchase.supplier.name}',
             )
+        log_action(
+            actor=getattr(request, 'user', None), action='PURCHASE_RECEIVED', target_type='Purchase', target_id=purchase.pk,
+            summary=f'PUR-{purchase.pk} received from {purchase.supplier.name} — Rs. {purchase.total_amount}',
+        )
         return purchase
 
     def update(self, instance, validated_data):

@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import UserRole
+from apps.audit.services import log_action
 from apps.catalog.models import Batch
 from apps.core.permissions import roles_permission
 
@@ -83,5 +84,9 @@ class StockAdjustmentView(APIView):
             quantity=data['quantity'],
             user=request.user,
             note=data.get('note', ''),
+        )
+        log_action(
+            actor=request.user, action='STOCK_ADJUSTED', target_type='Batch', target_id=data['batch'].pk,
+            summary=f'{data["movement_type"]}: {data["quantity"]} of {data["batch"].product.name} (batch {data["batch"].batch_no})',
         )
         return Response(StockMovementSerializer(movement).data, status=status.HTTP_201_CREATED)

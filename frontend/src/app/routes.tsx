@@ -21,6 +21,7 @@ import InvoicePreviewPage from '@/pages/InvoicePreviewPage';
 import ReportsPage from '@/pages/ReportsPage';
 import PurchasesPage from '@/pages/PurchasesPage';
 import EmployeesPage from '@/pages/EmployeesPage';
+import AuditLogPage from '@/pages/AuditLogPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { NotFoundPage } from '@/pages/PlaceholderPages';
 
@@ -136,6 +137,10 @@ export const router = createBrowserRouter([
       {
         path: '/employees',
         element: guard('/employees', <EmployeesPage />),
+      },
+      {
+        path: '/audit-log',
+        element: guard('/audit-log', <AuditLogPage />),
       },
       {
         path: '/settings',

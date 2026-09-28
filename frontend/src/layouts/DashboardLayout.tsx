@@ -162,6 +162,12 @@ export const DashboardLayout: React.FC = () => {
                 <span className="font-label-md text-label-md">Employees</span>
               </NavLink>
             )}
+            {canAccess(role, '/audit-log') && (
+              <NavLink to="/audit-log" className={getNavLinkClass} data-path="audit-log">
+                <span className="material-symbols-outlined text-[18px]">shield_person</span>
+                <span className="font-label-md text-label-md">Audit Log</span>
+              </NavLink>
+            )}
 
             {/* System */}
             <div className="px-space-sm pt-space-sm pb-1">

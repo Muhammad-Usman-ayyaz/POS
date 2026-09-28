@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'apps.khata.apps.KhataConfig',
     'apps.sales.apps.SalesConfig',
     'apps.reports.apps.ReportsConfig',
+    'apps.audit.apps.AuditConfig',
 ]
 
 MIDDLEWARE = [

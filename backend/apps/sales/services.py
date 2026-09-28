@@ -3,6 +3,7 @@ from datetime import date
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 
+from apps.audit.services import log_action
 from apps.inventory.models import MovementType
 from apps.inventory.services import apply_stock_movement
 from apps.khata.models import KhataCharge
@@ -51,6 +52,11 @@ def create_sale(*, customer, sale_date: date, payment_method: str, discount_amou
         sale.khata_charge = charge
         sale.save(update_fields=['khata_charge'])
 
+    log_action(
+        actor=user, action='SALE_CREATED', target_type='Sale', target_id=sale.pk,
+        summary=f'{sale.invoice_no} — Rs. {total} via {sale.get_payment_method_display()}'
+                f'{f" ({customer.name})" if customer else " (walk-in)"}',
+    )
     return sale
 
 
@@ -71,4 +77,5 @@ def cancel_sale(*, sale: Sale, user=None):
 
     sale.status = Sale.Status.CANCELLED
     sale.save(update_fields=['status', 'khata_charge'])
+    log_action(actor=user, action='SALE_CANCELLED', target_type='Sale', target_id=sale.pk, summary=f'{sale.invoice_no} cancelled')
     return sale

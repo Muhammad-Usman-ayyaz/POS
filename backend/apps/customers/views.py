@@ -8,6 +8,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from apps.audit.services import log_action
+
 from .models import Customer
 from .serializers import CustomerSerializer
 
@@ -85,6 +87,10 @@ class CustomerViewSet(ModelViewSet):
         serializer = KhataChargeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(customer=customer, created_by=request.user)
+        log_action(
+            actor=request.user, action='KHATA_CHARGE_RECORDED', target_type='Customer', target_id=customer.pk,
+            summary=f'Rs. {serializer.validated_data["amount"]} charged to {customer.name}',
+        )
         return Response(self.get_serializer(self.get_queryset().get(pk=customer.pk)).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
@@ -97,6 +103,10 @@ class CustomerViewSet(ModelViewSet):
         serializer = KhataPaymentSerializer(data=request.data, context={'customer': fresh})
         serializer.is_valid(raise_exception=True)
         serializer.save(customer=customer, created_by=request.user)
+        log_action(
+            actor=request.user, action='KHATA_PAYMENT_RECORDED', target_type='Customer', target_id=customer.pk,
+            summary=f'Rs. {serializer.validated_data["amount"]} paid by {customer.name}',
+        )
         return Response(self.get_serializer(self.get_queryset().get(pk=customer.pk)).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'])
