@@ -67,7 +67,7 @@ export const SuppliersPage: React.FC = () => {
   return (
     <div className="flex flex-col w-full gap-y-space-md">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md bg-surface-container-lowest p-space-lg rounded-xl shadow-sm">
+      <div className="erp-stagger-item erp-stagger-1 glass-card flex flex-col lg:flex-row lg:items-center justify-between gap-space-md p-space-lg rounded-xl shadow-sm">
         <div className="flex items-center gap-space-sm">
           <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
             <span className="material-symbols-outlined text-[24px]">local_shipping</span>
@@ -85,7 +85,7 @@ export const SuppliersPage: React.FC = () => {
           </div>
         </div>
         <button
-          className="h-[38px] px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit"
+          className="h-[38px] px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit erp-btn-press"
           onClick={() => setDialog({ mode: 'create' })}
           type="button"
         >
@@ -96,22 +96,22 @@ export const SuppliersPage: React.FC = () => {
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-md">
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm">
+        <div className="erp-stagger-item erp-stagger-2 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
           <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Total Purchased (All Time)</span>
           <div className="font-currency-stat text-currency-stat text-on-surface mt-0.5">{rs(totals.purchased)}</div>
         </div>
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm">
+        <div className="erp-stagger-item erp-stagger-3 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
           <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Outstanding Payable</span>
           <div className="font-currency-stat text-currency-stat text-error mt-0.5">{rs(totals.outstanding)}</div>
         </div>
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm">
+        <div className="erp-stagger-item erp-stagger-4 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
           <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Suppliers with a Balance</span>
           <div className="font-currency-stat text-currency-stat text-warning mt-0.5">{totals.overdue}</div>
         </div>
       </div>
 
       {/* Search */}
-      <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm relative flex items-center">
+      <div className="erp-stagger-item erp-stagger-5 glass-toolbar p-space-md rounded-xl shadow-sm relative flex items-center">
         <span className="material-symbols-outlined absolute left-6 text-outline text-[20px]">search</span>
         <input
           className="w-full h-[40px] pl-10 pr-10 rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline font-body-sm text-body-sm focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container"
@@ -123,7 +123,7 @@ export const SuppliersPage: React.FC = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+      <div className="erp-stagger-item erp-stagger-6 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -181,7 +181,7 @@ export const SuppliersPage: React.FC = () => {
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
-                          className="w-8 h-8 rounded-lg hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
+                          className="w-8 h-8 rounded-lg hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer erp-btn-press"
                           type="button"
                         >
                           <span className="material-symbols-outlined text-[18px]">more_vert</span>

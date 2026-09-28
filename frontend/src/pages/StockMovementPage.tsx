@@ -6,7 +6,7 @@ import { Pagination } from '@/components/Pagination';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { getErrorMessage } from '@/lib/apiError';
 
-const INBOUND = new Set<MovementType>(['PURCHASE_IN', 'ADJUSTMENT_IN']);
+const INBOUND = new Set<MovementType>(['PURCHASE_IN', 'ADJUSTMENT_IN', 'SALE_REVERSED']);
 
 const TYPE_STYLES: Record<MovementType, string> = {
   PURCHASE_IN: 'bg-success-soft text-success',
@@ -16,6 +16,7 @@ const TYPE_STYLES: Record<MovementType, string> = {
   DAMAGED: 'bg-danger-soft text-danger',
   EXPIRED: 'bg-danger-soft text-danger',
   PURCHASE_REVERSED: 'bg-danger-soft text-danger',
+  SALE_REVERSED: 'bg-success-soft text-success',
 };
 
 const formatDateTime = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -33,7 +34,7 @@ export const StockMovementPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-y-space-md">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md bg-surface-container-lowest p-space-lg rounded-xl shadow-sm">
+      <div className="erp-stagger-item erp-stagger-1 glass-card flex flex-col lg:flex-row lg:items-center justify-between gap-space-md p-space-lg rounded-xl shadow-sm">
         <div className="flex items-center gap-space-sm">
           <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
             <span className="material-symbols-outlined text-[24px]">swap_horiz</span>
@@ -45,7 +46,7 @@ export const StockMovementPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col md:flex-row gap-space-sm">
+      <div className="erp-stagger-item erp-stagger-2 glass-toolbar p-space-md rounded-xl shadow-sm flex flex-col md:flex-row gap-space-sm">
         <div className="flex-1 relative flex items-center">
           <span className="material-symbols-outlined absolute left-3 text-outline text-[20px]">search</span>
           <input
@@ -68,7 +69,7 @@ export const StockMovementPage: React.FC = () => {
         </select>
       </div>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+      <div className="erp-stagger-item erp-stagger-3 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>

@@ -6,9 +6,10 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 interface PickCustomerDialogProps {
   onPick: (customerId: number) => void;
   onClose: () => void;
+  description?: string;
 }
 
-export const PickCustomerDialog: React.FC<PickCustomerDialogProps> = ({ onPick, onClose }) => {
+export const PickCustomerDialog: React.FC<PickCustomerDialogProps> = ({ onPick, onClose, description }) => {
   const [search, setSearch] = useState('');
   const debounced = useDebouncedValue(search);
   const list = customersApi.useList({ search: debounced || undefined, page_size: 10 });
@@ -18,7 +19,7 @@ export const PickCustomerDialog: React.FC<PickCustomerDialogProps> = ({ onPick, 
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Select Farmer / Customer</DialogTitle>
-          <DialogDescription>Choose who this payment is from.</DialogDescription>
+          <DialogDescription>{description ?? 'Choose who this payment is from.'}</DialogDescription>
         </DialogHeader>
         <input
           autoFocus

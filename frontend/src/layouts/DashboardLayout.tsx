@@ -205,7 +205,7 @@ export const DashboardLayout: React.FC = () => {
       {/* Main Content Area (shifted left by 250px) */}
       <div className="pl-[250px]">
         {/* Fixed Topbar Header */}
-        <header className="fixed top-0 left-[250px] right-0 h-16 bg-surface-container-lowest border-b border-line z-40 px-gutter-lg flex items-center justify-between">
+        <header className="fixed top-0 left-[250px] right-0 h-16 glass-header border-b border-line z-40 px-gutter-lg flex items-center justify-between">
           <div className="flex items-center gap-space-sm">
             <img
               alt="Pesticide Club Logo"
@@ -284,7 +284,7 @@ export const DashboardLayout: React.FC = () => {
               </button>
 
               {profileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant/30 py-1 z-50 erp-animate-dropdown">
+                <div className="absolute right-0 mt-2 w-48 glass-dropdown rounded-xl shadow-lg py-1 z-50 erp-animate-dropdown">
                   <div className="px-4 py-2 border-b border-surface-container-low">
                     <p className="text-xs text-outline">Signed in as</p>
                     <p className="text-sm font-semibold text-on-surface truncate">{user?.email}</p>

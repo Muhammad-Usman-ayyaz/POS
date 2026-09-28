@@ -50,7 +50,7 @@ export const PaymentsPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-y-space-md">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md bg-surface-container-lowest p-space-lg rounded-xl shadow-sm">
+      <div className="erp-stagger-item erp-stagger-1 glass-card flex flex-col lg:flex-row lg:items-center justify-between gap-space-md p-space-lg rounded-xl shadow-sm">
         <div className="flex items-center gap-space-sm">
           <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
             <span className="material-symbols-outlined text-[24px]">payments</span>
@@ -61,7 +61,7 @@ export const PaymentsPage: React.FC = () => {
           </div>
         </div>
         <button
-          className="h-[38px] px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit"
+          className="h-[38px] px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit erp-btn-press"
           onClick={() => setPickerOpen(true)}
           type="button"
         >
@@ -71,17 +71,17 @@ export const PaymentsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm">
+        <div className="erp-stagger-item erp-stagger-2 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
           <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Received (This Page)</span>
           <div className="font-currency-stat text-currency-stat text-success mt-0.5">{rs(totalReceived)}</div>
         </div>
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm">
+        <div className="erp-stagger-item erp-stagger-3 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
           <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Payment Records</span>
           <div className="font-currency-stat text-currency-stat text-on-surface mt-0.5">{total}</div>
         </div>
       </div>
 
-      <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm relative flex items-center">
+      <div className="erp-stagger-item erp-stagger-4 glass-toolbar p-space-md rounded-xl shadow-sm relative flex items-center">
         <span className="material-symbols-outlined absolute left-6 text-outline text-[20px]">search</span>
         <input
           className="w-full h-[40px] pl-10 pr-3 rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline font-body-sm text-body-sm focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container"
@@ -92,7 +92,7 @@ export const PaymentsPage: React.FC = () => {
         />
       </div>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+      <div className="erp-stagger-item erp-stagger-5 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>

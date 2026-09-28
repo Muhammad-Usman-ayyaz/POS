@@ -17,4 +17,6 @@ urlpatterns = [
     path('api/', include('apps.customers.urls')),
     # Farmer khata: shop-wide credit ledger
     path('api/khata/', include('apps.khata.urls')),
+    # Sales: POS transactions, invoices
+    path('api/', include('apps.sales.urls')),
 ]

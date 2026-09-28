@@ -80,7 +80,7 @@ export const CustomersPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-y-space-md">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md bg-surface-container-lowest p-space-lg rounded-xl shadow-sm">
+      <div className="erp-stagger-item erp-stagger-1 glass-card flex flex-col lg:flex-row lg:items-center justify-between gap-space-md p-space-lg rounded-xl shadow-sm">
         <div className="flex items-center gap-space-sm">
           <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
             <span className="material-symbols-outlined text-[24px]">groups</span>
@@ -94,7 +94,7 @@ export const CustomersPage: React.FC = () => {
           </div>
         </div>
         <button
-          className="h-[38px] px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit"
+          className="h-[38px] px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit erp-btn-press"
           onClick={() => setDialog({ kind: 'create' })}
           type="button"
         >
@@ -103,7 +103,7 @@ export const CustomersPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col sm:flex-row gap-space-sm">
+      <div className="erp-stagger-item erp-stagger-2 glass-toolbar p-space-md rounded-xl shadow-sm flex flex-col sm:flex-row gap-space-sm">
         <div className="flex-1 relative flex items-center">
           <span className="material-symbols-outlined absolute left-3 text-outline text-[20px]">search</span>
           <input
@@ -120,7 +120,7 @@ export const CustomersPage: React.FC = () => {
         </label>
       </div>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+      <div className="erp-stagger-item erp-stagger-3 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -171,12 +171,12 @@ export const CustomersPage: React.FC = () => {
                   </td>
                   <td className="py-3 pr-space-md pl-space-xs text-center">
                     <div className="flex items-center justify-center gap-1">
-                      <button className="h-8 px-2.5 rounded-lg hover:bg-surface-container-high text-outline hover:text-primary text-label-sm font-label-sm cursor-pointer" onClick={() => setDialog({ kind: 'pay', customer: c })} type="button">
+                      <button className="h-8 px-2.5 rounded-lg hover:bg-surface-container-high text-outline hover:text-primary text-label-sm font-label-sm cursor-pointer erp-btn-press" onClick={() => setDialog({ kind: 'pay', customer: c })} type="button">
                         Pay
                       </button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="w-8 h-8 rounded-lg hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer" type="button">
+                          <button className="w-8 h-8 rounded-lg hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer erp-btn-press" type="button">
                             <span className="material-symbols-outlined text-[18px]">more_vert</span>
                           </button>
                         </DropdownMenuTrigger>

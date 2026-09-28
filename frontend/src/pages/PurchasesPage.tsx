@@ -63,7 +63,7 @@ export const PurchasesPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-y-space-md">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md bg-surface-container-lowest p-space-lg rounded-xl shadow-sm">
+      <div className="erp-stagger-item erp-stagger-1 glass-card flex flex-col lg:flex-row lg:items-center justify-between gap-space-md p-space-lg rounded-xl shadow-sm">
         <div className="flex items-center gap-space-sm">
           <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
             <span className="material-symbols-outlined text-[24px]">shopping_cart</span>
@@ -74,7 +74,7 @@ export const PurchasesPage: React.FC = () => {
           </div>
         </div>
         <button
-          className="h-[38px] px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit"
+          className="h-[38px] px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit erp-btn-press"
           onClick={() => setShowForm(true)}
           type="button"
         >
@@ -83,7 +83,7 @@ export const PurchasesPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col sm:flex-row gap-space-sm">
+      <div className="erp-stagger-item erp-stagger-2 glass-toolbar p-space-md rounded-xl shadow-sm flex flex-col sm:flex-row gap-space-sm">
         <div className="flex-1 relative flex items-center">
           <span className="material-symbols-outlined absolute left-3 text-outline text-[20px]">search</span>
           <input
@@ -105,7 +105,7 @@ export const PurchasesPage: React.FC = () => {
         </select>
       </div>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+      <div className="erp-stagger-item erp-stagger-3 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -164,7 +164,7 @@ export const PurchasesPage: React.FC = () => {
                       <div className="flex items-center justify-center gap-1">
                         {p.status === 'RECEIVED' && Number(p.balance) > 0 && (
                           <button
-                            className="h-8 px-2.5 rounded-lg bg-primary-container text-on-primary hover:bg-primary text-label-sm font-label-sm cursor-pointer"
+                            className="h-8 px-2.5 rounded-lg bg-primary-container text-on-primary hover:bg-primary text-label-sm font-label-sm cursor-pointer erp-btn-press"
                             onClick={() => setPayTarget(p)}
                             type="button"
                           >
@@ -173,7 +173,7 @@ export const PurchasesPage: React.FC = () => {
                         )}
                         {p.status === 'RECEIVED' && (
                           <button
-                            className="h-8 px-2.5 rounded-lg hover:bg-error-container/40 text-outline hover:text-error text-label-sm font-label-sm cursor-pointer"
+                            className="h-8 px-2.5 rounded-lg hover:bg-error-container/40 text-outline hover:text-error text-label-sm font-label-sm cursor-pointer erp-btn-press"
                             onClick={() => setCancelTarget(p)}
                             type="button"
                           >
@@ -186,7 +186,7 @@ export const PurchasesPage: React.FC = () => {
                   {expanded === p.id && (
                     <tr>
                       <td colSpan={9} className="bg-surface-container-low/50 px-space-lg py-space-md">
-                        <div className="grid md:grid-cols-2 gap-space-md">
+                        <div className="erp-animate-pop grid md:grid-cols-2 gap-space-md">
                           <div>
                             <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Line Items</span>
                             <table className="w-full mt-1 text-body-sm font-body-sm">

@@ -1,5 +1,6 @@
 export type MovementType =
-  | 'PURCHASE_IN' | 'SALE_OUT' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'DAMAGED' | 'EXPIRED' | 'PURCHASE_REVERSED';
+  | 'PURCHASE_IN' | 'SALE_OUT' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'DAMAGED' | 'EXPIRED'
+  | 'PURCHASE_REVERSED' | 'SALE_REVERSED';
 
 export const ADJUSTMENT_TYPES: { value: MovementType; label: string }[] = [
   { value: 'ADJUSTMENT_IN', label: 'Stock Adjustment (Add)' },
@@ -16,6 +17,7 @@ export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   DAMAGED: 'Damaged Stock',
   EXPIRED: 'Expired Stock',
   PURCHASE_REVERSED: 'Purchase Cancelled',
+  SALE_REVERSED: 'Sale Cancelled',
 };
 
 export interface BatchStock {

@@ -54,7 +54,7 @@ export const InventoryPage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-y-space-md">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md bg-surface-container-lowest p-space-lg rounded-xl shadow-sm">
+      <div className="erp-stagger-item erp-stagger-1 glass-card flex flex-col lg:flex-row lg:items-center justify-between gap-space-md p-space-lg rounded-xl shadow-sm">
         <div className="flex items-center gap-space-sm">
           <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
             <span className="material-symbols-outlined text-[24px]">inventory_2</span>
@@ -71,7 +71,7 @@ export const InventoryPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col md:flex-row gap-space-sm">
+      <div className="erp-stagger-item erp-stagger-2 glass-toolbar p-space-md rounded-xl shadow-sm flex flex-col md:flex-row gap-space-sm">
         <div className="flex-1 relative flex items-center">
           <span className="material-symbols-outlined absolute left-3 text-outline text-[20px]">search</span>
           <input
@@ -105,7 +105,7 @@ export const InventoryPage: React.FC = () => {
         </select>
       </div>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+      <div className="erp-stagger-item erp-stagger-3 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -154,7 +154,7 @@ export const InventoryPage: React.FC = () => {
                     {canAdjust && (
                       <td className="py-3 pr-space-md pl-space-xs text-center">
                         <button
-                          className="h-8 px-2.5 rounded-lg hover:bg-surface-container-high text-outline hover:text-primary text-label-sm font-label-sm cursor-pointer"
+                          className="h-8 px-2.5 rounded-lg hover:bg-surface-container-high text-outline hover:text-primary text-label-sm font-label-sm cursor-pointer erp-btn-press"
                           onClick={() => setAdjustTarget(b)}
                           type="button"
                         >

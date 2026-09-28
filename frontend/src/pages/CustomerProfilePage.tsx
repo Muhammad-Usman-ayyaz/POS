@@ -58,7 +58,7 @@ export const CustomerProfilePage: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm p-space-lg relative overflow-hidden">
+      <div className="erp-stagger-item erp-stagger-1 erp-card-hover glass-card rounded-xl shadow-sm p-space-lg relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-space-lg relative z-10">
           <div className="flex items-start gap-space-md min-w-0">
             <div className="w-16 h-16 rounded-xl bg-primary text-on-primary font-headline-lg text-headline-lg flex items-center justify-center shadow-md select-none shrink-0">
@@ -86,10 +86,10 @@ export const CustomerProfilePage: React.FC = () => {
               )}
             </div>
             <div className="flex gap-space-sm">
-              <button className="h-10 px-space-md rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md cursor-pointer" onClick={() => setDialog('charge')} type="button">
+              <button className="h-10 px-space-md rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md cursor-pointer erp-btn-press" onClick={() => setDialog('charge')} type="button">
                 Record Credit Sale
               </button>
-              <button className="h-10 px-space-md rounded-lg bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md shadow-sm cursor-pointer" onClick={() => setDialog('pay')} type="button">
+              <button className="h-10 px-space-md rounded-lg bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md shadow-sm cursor-pointer erp-btn-press" onClick={() => setDialog('pay')} type="button">
                 Record Payment
               </button>
             </div>
@@ -98,21 +98,21 @@ export const CustomerProfilePage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-md">
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm">
+        <div className="erp-stagger-item erp-stagger-2 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
           <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Total Charged</span>
           <div className="font-currency-stat text-currency-stat text-on-surface mt-0.5">{rs(customer.total_charged)}</div>
         </div>
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm">
+        <div className="erp-stagger-item erp-stagger-3 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
           <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Total Paid</span>
           <div className="font-currency-stat text-currency-stat text-success mt-0.5">{rs(customer.total_paid)}</div>
         </div>
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm">
+        <div className="erp-stagger-item erp-stagger-4 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
           <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Credit Limit</span>
           <div className="font-currency-stat text-currency-stat text-on-surface mt-0.5">{rs(customer.credit_limit)}</div>
         </div>
       </div>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+      <div className="erp-stagger-item erp-stagger-5 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
         <div className="p-space-md border-b border-surface-container-low">
           <h2 className="font-headline-sm text-headline-sm text-on-surface">Khata Ledger</h2>
         </div>
