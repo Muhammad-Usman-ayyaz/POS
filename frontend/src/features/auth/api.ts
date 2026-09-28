@@ -22,3 +22,7 @@ export const getCurrentUserApi = async (): Promise<User> => {
 export const logoutApi = async (refreshToken: string): Promise<void> => {
   await apiClient.post('/auth/logout/', { refresh: refreshToken });
 };
+
+export const changePasswordApi = async (input: { current_password: string; new_password: string }): Promise<void> => {
+  await apiClient.post('/auth/change-password/', input);
+};

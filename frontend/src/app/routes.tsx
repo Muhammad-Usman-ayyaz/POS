@@ -21,11 +21,9 @@ import InvoicesPage from '@/pages/InvoicesPage';
 import InvoicePreviewPage from '@/pages/InvoicePreviewPage';
 import ReportsPage from '@/pages/ReportsPage';
 import PurchasesPage from '@/pages/PurchasesPage';
-import {
-  EmployeesPage,
-  SettingsPage,
-  NotFoundPage,
-} from '@/pages/PlaceholderPages';
+import EmployeesPage from '@/pages/EmployeesPage';
+import SettingsPage from '@/pages/SettingsPage';
+import { NotFoundPage } from '@/pages/PlaceholderPages';
 
 const guard = (path: string, element: React.ReactElement) => (
   <RoleProtectedRoute allowedRoles={rolesFor(path)}>{element}</RoleProtectedRoute>

@@ -1,11 +1,19 @@
 from rest_framework import permissions, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
+from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .serializers import CustomTokenObtainPairSerializer, UserSerializer
+
+from apps.core.permissions import roles_permission
+
+from .models import User, UserRole
+from .serializers import ChangePasswordSerializer, CustomTokenObtainPairSerializer, EmployeeSerializer, UserSerializer
+
+MANAGEMENT = (UserRole.OWNER, UserRole.MANAGER)
 
 
 class LoginRateThrottle(AnonRateThrottle):
@@ -48,3 +56,51 @@ class LogoutView(APIView):
         except TokenError:
             return Response({'detail': 'Invalid token.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ChangePasswordView(APIView):
+    """Lets the signed-in user change their own password."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        request.user.set_password(serializer.validated_data['new_password'])
+        request.user.save(update_fields=['password'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EmployeeViewSet(ModelViewSet):
+    """Owner/Manager-only staff directory. Deactivating replaces deletion — a departed employee's
+    name still needs to show up as "created_by" on old sales, purchases, and adjustments."""
+
+    serializer_class = EmployeeSerializer
+    permission_classes = [roles_permission(*MANAGEMENT, read_roles=MANAGEMENT)]
+
+    def get_queryset(self):
+        qs = User.objects.all()
+        search = self.request.query_params.get('search', '').strip()
+        if search:
+            qs = qs.filter(name__icontains=search)
+        role = self.request.query_params.get('role')
+        if role:
+            qs = qs.filter(role=role)
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        employee = self.get_object()
+        if employee.pk == request.user.pk:
+            return Response({'detail': 'You cannot deactivate your own account.'}, status=status.HTTP_400_BAD_REQUEST)
+        if employee.role == UserRole.OWNER and request.user.role != UserRole.OWNER:
+            return Response({'detail': "Only an Owner can deactivate another Owner's account."}, status=status.HTTP_400_BAD_REQUEST)
+        employee.is_active = False
+        employee.save(update_fields=['is_active'])
+        return Response(EmployeeSerializer(employee).data)
+
+    @action(detail=True, methods=['post'])
+    def reactivate(self, request, pk=None):
+        employee = self.get_object()
+        employee.is_active = True
+        employee.save(update_fields=['is_active'])
+        return Response(EmployeeSerializer(employee).data)
