@@ -66,6 +66,8 @@ pesticide-erp/
    ```bash
    python manage.py seed_demo_catalog       # products, categories, brands
    python manage.py seed_demo_procurement   # suppliers + one part-paid purchase
+   python manage.py seed_demo_khata         # 3 demo farmers with khata history
+   python manage.py seed_demo_sales         # a couple of demo POS sales (cash + khata)
    ```
 7. Start development server:
    ```bash
@@ -90,3 +92,13 @@ pesticide-erp/
    ```bash
    npm run dev
    ```
+5. Run the Playwright end-to-end suite (needs the backend running on `:8000` with the fixed
+   Owner/Salesman accounts the specs log in as):
+   ```bash
+   python manage.py seed_e2e_users   # from backend/, creates/resets owner@pesticideclub.com and pos@pesticideclub.com
+   npx playwright test               # from frontend/; starts its own Vite dev server on :5173
+   ```
+   If the suite fails with a login redirecting back to `/login` instead of `/dashboard`, the
+   per-IP login throttle (`LOGIN_THROTTLE_RATE`, default `10/min`) has likely been exhausted by the
+   suite's own repeated logins — raise it for local test runs, e.g.
+   `LOGIN_THROTTLE_RATE=1000/min python manage.py runserver 8000`.

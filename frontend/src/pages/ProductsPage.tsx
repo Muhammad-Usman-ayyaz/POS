@@ -135,7 +135,7 @@ export const ProductsPage: React.FC = () => {
   return (
     <div className="flex flex-col w-full gap-y-space-md">
       {/* Top Headline / Metrics & Action Summary Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md bg-surface-container-lowest p-space-lg rounded-xl shadow-sm">
+      <div className="erp-stagger-item erp-stagger-1 glass-card flex flex-col lg:flex-row lg:items-center justify-between gap-space-md p-space-lg rounded-xl shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center gap-space-md">
           <div className="flex items-center gap-space-sm">
             <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
@@ -201,7 +201,7 @@ export const ProductsPage: React.FC = () => {
       </div>
 
       {/* Filtration & Global Discovery Toolbar */}
-      <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col gap-space-sm">
+      <div className="erp-stagger-item erp-stagger-2 glass-toolbar p-space-md rounded-xl shadow-sm flex flex-col gap-space-sm">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-space-sm">
           {/* Global Search */}
           <div className="md:col-span-5 relative flex items-center">
@@ -317,7 +317,7 @@ export const ProductsPage: React.FC = () => {
       </div>
 
       {/* Main Product Master Table Workspace */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden flex flex-col">
+      <div className="erp-stagger-item erp-stagger-3 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden flex flex-col">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
