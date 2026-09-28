@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { customers as customersApi, useRecordCharge, useRecordCustomerPayment } from '@/features/customers/api';
 import { useKhataLedger } from '@/features/khata/api';
+import { ChargeDialog } from '@/features/khata/components/ChargeDialog';
+import { CustomerPaymentDialog } from '@/features/khata/components/CustomerPaymentDialog';
+import { PickCustomerDialog } from '@/features/khata/components/PickCustomerDialog';
+import type { ChargeInput, PaymentInput } from '@/features/khata/types';
 import { Pagination } from '@/components/Pagination';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { getErrorMessage } from '@/lib/apiError';
+import { notify } from '@/lib/notify';
 
 const rs = (value: string | number) => `Rs. ${Number(value).toLocaleString()}`;
 const formatDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+type PickerIntent = 'charge' | 'pay' | null;
 
 export const KhataPage: React.FC = () => {
   const navigate = useNavigate();
@@ -16,9 +24,44 @@ export const KhataPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  const [pickerIntent, setPickerIntent] = useState<PickerIntent>(null);
+  const [activeCustomerId, setActiveCustomerId] = useState<number | null>(null);
+  const [actionKind, setActionKind] = useState<'charge' | 'pay' | null>(null);
+
   const list = useKhataLedger({ search: debouncedSearch || undefined, type: entryType || undefined, page, page_size: pageSize });
   const rows = list.data?.results ?? [];
   const total = list.data?.count ?? 0;
+
+  const activeCustomer = customersApi.useDetail(activeCustomerId ?? undefined);
+  const recordCharge = useRecordCharge();
+  const recordPayment = useRecordCustomerPayment();
+
+  const handlePick = (customerId: number) => {
+    setActiveCustomerId(customerId);
+    setPickerIntent(null);
+  };
+
+  const closeActionDialog = () => {
+    setActiveCustomerId(null);
+    recordCharge.reset();
+    recordPayment.reset();
+  };
+
+  const handleCharge = (input: ChargeInput) => {
+    if (activeCustomerId === null || !activeCustomer.data) return;
+    recordCharge.mutate(
+      { id: activeCustomerId, input },
+      { onSuccess: () => { notify(`Rs. ${Number(input.amount).toLocaleString()} charged to ${activeCustomer.data.name}`); closeActionDialog(); } }
+    );
+  };
+
+  const handlePay = (input: PaymentInput) => {
+    if (activeCustomerId === null || !activeCustomer.data) return;
+    recordPayment.mutate(
+      { id: activeCustomerId, input },
+      { onSuccess: () => { notify(`Payment of Rs. ${Number(input.amount).toLocaleString()} recorded for ${activeCustomer.data.name}`); closeActionDialog(); } }
+    );
+  };
 
   return (
     <div className="flex flex-col w-full gap-y-space-md">
@@ -29,17 +72,35 @@ export const KhataPage: React.FC = () => {
           </div>
           <div>
             <h1 className="font-headline-lg text-headline-lg text-on-surface">Farmer Khata</h1>
-            <p className="font-body-sm text-body-sm text-outline">Shop-wide credit ledger — every charge and payment, across all farmers.</p>
+            <p className="font-body-sm text-body-sm text-outline">Every credit sale and payment, across all farmers — the one place khata activity is recorded.</p>
           </div>
         </div>
-        <button
-          className="h-[38px] px-space-md rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container-high transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit erp-btn-press"
-          onClick={() => navigate('/customers')}
-          type="button"
-        >
-          <span className="material-symbols-outlined text-[18px]">groups</span>
-          <span>Farmers Directory</span>
-        </button>
+        <div className="flex items-center gap-space-sm flex-wrap">
+          <button
+            className="h-[38px] px-space-md rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container-high transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit erp-btn-press"
+            onClick={() => navigate('/customers')}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[18px]">groups</span>
+            <span>Farmers Directory</span>
+          </button>
+          <button
+            className="h-[38px] px-space-md rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container-high transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit erp-btn-press"
+            onClick={() => { setActionKind('charge'); setPickerIntent('charge'); }}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[18px]">post_add</span>
+            <span>Record Credit Sale</span>
+          </button>
+          <button
+            className="h-[38px] px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-colors font-label-md text-label-md flex items-center gap-1.5 shadow-sm cursor-pointer w-fit erp-btn-press"
+            onClick={() => { setActionKind('pay'); setPickerIntent('pay'); }}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[18px]">payments</span>
+            <span>Record Payment</span>
+          </button>
+        </div>
       </div>
 
       <div className="erp-stagger-item erp-stagger-2 glass-toolbar p-space-md rounded-xl shadow-sm flex flex-col md:flex-row gap-space-sm">
@@ -113,6 +174,29 @@ export const KhataPage: React.FC = () => {
         </div>
         <Pagination noun="entries" onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} page={page} pageSize={pageSize} total={total} />
       </div>
+
+      {pickerIntent && (
+        <PickCustomerDialog
+          description={pickerIntent === 'charge' ? 'Choose who this credit sale is for.' : 'Choose who this payment is from.'}
+          onClose={() => setPickerIntent(null)}
+          onPick={handlePick}
+        />
+      )}
+
+      {activeCustomerId !== null && activeCustomer.data && actionKind === 'charge' && (
+        <ChargeDialog customerName={activeCustomer.data.name} error={recordCharge.error} onClose={closeActionDialog} onSubmit={handleCharge} saving={recordCharge.isPending} />
+      )}
+
+      {activeCustomerId !== null && activeCustomer.data && actionKind === 'pay' && (
+        <CustomerPaymentDialog
+          customerName={activeCustomer.data.name}
+          error={recordPayment.error}
+          onClose={closeActionDialog}
+          onSubmit={handlePay}
+          outstandingBalance={activeCustomer.data.outstanding_balance}
+          saving={recordPayment.isPending}
+        />
+      )}
     </div>
   );
 };

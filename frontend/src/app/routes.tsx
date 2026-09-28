@@ -15,7 +15,6 @@ import SuppliersPage from '@/pages/SuppliersPage';
 import CustomersPage from '@/pages/CustomersPage';
 import CustomerProfilePage from '@/pages/CustomerProfilePage';
 import KhataPage from '@/pages/KhataPage';
-import PaymentsPage from '@/pages/PaymentsPage';
 import SalesPage from '@/pages/SalesPage';
 import InvoicesPage from '@/pages/InvoicesPage';
 import InvoicePreviewPage from '@/pages/InvoicePreviewPage';
@@ -118,12 +117,15 @@ export const router = createBrowserRouter([
         element: <InvoicePreviewPage />,
       },
       {
+        // Payments used to be its own page — it was just the Khata ledger filtered to payments,
+        // plus a "record payment" shortcut Khata itself now has. Redirect rather than 404 in case
+        // anything still links here.
         path: '/payments',
-        element: <PaymentsPage />,
+        element: <Navigate replace to="/khata" />,
       },
       {
         path: '/record-payment',
-        element: <PaymentsPage />,
+        element: <Navigate replace to="/khata" />,
       },
       {
         path: '/reports',

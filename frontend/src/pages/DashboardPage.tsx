@@ -239,7 +239,7 @@ export const DashboardPage: React.FC = () => {
             <div className="grid grid-cols-1 gap-2 pt-1">
               {[
                 { to: '/pos', icon: 'post_add', label: 'New Sale', sub: 'POS terminal & invoice', color: 'bg-primary-container text-on-primary' },
-                { to: '/payments', icon: 'price_check', label: 'Record Farmer Payment', sub: 'Khata credit settlement', color: 'bg-secondary-container text-on-secondary-container' },
+                { to: '/khata', icon: 'price_check', label: 'Record Farmer Payment', sub: 'Khata credit settlement', color: 'bg-secondary-container text-on-secondary-container' },
                 { to: '/inventory', icon: 'move_to_inbox', label: 'Check Stock Levels', sub: 'Batches & expiry', color: 'bg-surface-container-highest text-primary' },
               ].map((action) => (
                 <button

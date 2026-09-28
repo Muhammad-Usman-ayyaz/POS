@@ -21,45 +21,56 @@ const searchAndSettle = async (page: Page, placeholder: string, value: string) =
 };
 
 test.describe('Customers & Khata', () => {
-  test('registers a farmer, records a credit sale and a payment, and the ledger reflects both', async ({ page }) => {
+  test('registers a farmer, records a credit sale and a payment from Khata, and the ledger reflects both', async ({ page }) => {
     const name = `E2E Farmer ${Date.now()}`;
     await owner(page);
+
+    // Customers is a pure directory now: register, but all khata actions happen on Khata.
     await page.goto('/customers');
     await expect(page.getByText('Chaudhry Riaz Ahmed')).toBeVisible();
-
     await page.getByRole('button', { name: 'Register New Farmer' }).click();
     await page.locator('#custName').fill(name);
     await page.locator('#custLimit').fill('50000');
     await page.getByRole('button', { name: 'Register Customer' }).click();
     await expect(page.getByText(name).first()).toBeVisible();
 
+    // Customers rows no longer carry Pay / Record credit sale actions.
     await searchAndSettle(page, 'Search by name', name);
-    const row = page.locator('tbody tr').filter({ hasText: name });
-    await expect(row).toHaveCount(1);
-    await row.getByRole('button').last().click();
-    await expect(page.getByRole('menuitem', { name: 'Record credit sale' })).toBeVisible();
-    await page.getByRole('menuitem', { name: 'Record credit sale' }).click();
+    const custRow = page.locator('tbody tr').filter({ hasText: name });
+    await custRow.getByRole('button').last().click();
+    await expect(page.getByRole('menuitem', { name: 'Record credit sale' })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'View profile & khata' })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // Record the credit sale from Khata instead.
+    await page.goto('/khata');
+    await page.getByRole('button', { name: 'Record Credit Sale' }).click();
+    await page.getByPlaceholder('Search by name or phone...').fill(name);
+    await page.getByRole('button', { name: new RegExp(name) }).click();
     await page.locator('#chargeAmount').fill('8000');
     await page.locator('#chargeDesc').fill('Seed & fertilizer');
     await page.getByRole('button', { name: 'Record Charge' }).click();
-
-    await searchAndSettle(page, 'Search by name', name);
+    await searchAndSettle(page, 'Search by farmer', name);
     await expect(page.locator('tbody tr').filter({ hasText: name })).toContainText('Rs. 8,000');
 
-    // Pay part of it from the row action.
-    await page.locator('tbody tr').filter({ hasText: name }).getByRole('button', { name: 'Pay' }).click();
+    // Pay part of it, also from Khata.
+    await page.getByRole('button', { name: 'Record Payment' }).click();
+    await page.getByPlaceholder('Search by name or phone...').fill(name);
+    await page.getByRole('button', { name: new RegExp(name) }).click();
     await page.locator('#custPayAmount').fill('3000');
     await page.getByRole('button', { name: 'Record Payment' }).click();
-    await searchAndSettle(page, 'Search by name', name);
-    await expect(page.locator('tbody tr').filter({ hasText: name })).toContainText('Rs. 5,000');
+    await searchAndSettle(page, 'Search by farmer', name);
+    await expect(page.locator('tbody tr').filter({ hasText: name }).first()).toContainText('Rs. 3,000');
 
-    // Profile page shows both entries in its ledger
+    // Profile page shows both entries in its ledger.
+    await page.goto('/customers');
+    await searchAndSettle(page, 'Search by name', name);
     await page.locator('tbody tr').filter({ hasText: name }).getByRole('button').first().click();
     await expect(page).toHaveURL(/\/customers\/\d+/);
     await expect(page.getByText('Credit Sale', { exact: true })).toBeVisible();
     await expect(page.getByText(/Payment · Cash/)).toBeVisible();
 
-    // Global Khata ledger shows both entries too
+    // Global Khata ledger shows both entries too.
     await page.goto('/khata');
     await searchAndSettle(page, 'Search by farmer', name);
     await expect(page.locator('tbody tr')).toHaveCount(2);
@@ -67,7 +78,7 @@ test.describe('Customers & Khata', () => {
 
   test('a khata payment can exceed the outstanding balance (advance)', async ({ page }) => {
     await owner(page);
-    await page.goto('/payments');
+    await page.goto('/khata');
     await page.getByRole('button', { name: 'Record Payment' }).click();
     await page.getByPlaceholder('Search by name or phone...').fill('Haji Munir');
     await expect(page.getByRole('button', { name: /Haji Munir Gujjar/ })).toBeVisible();
@@ -90,11 +101,13 @@ test.describe('Customers & Khata', () => {
     await expect(page.locator('[data-sonner-toast]').filter({ hasText: /khata history/i })).toBeVisible();
   });
 
-  test('salesman can access customers, khata and payments (unrestricted routes)', async ({ page }) => {
+  test('salesman can access customers and khata (unrestricted routes), and /payments redirects to Khata', async ({ page }) => {
     await login(page, process.env.E2E_SALES_EMAIL ?? 'pos@pesticideclub.com', process.env.E2E_SALES_PASSWORD ?? 'Sales-pass-123');
-    for (const path of ['/customers', '/khata', '/payments']) {
+    for (const path of ['/customers', '/khata']) {
       await page.goto(path);
       await expect(page.getByText('Access Restricted')).toHaveCount(0);
     }
+    await page.goto('/payments');
+    await expect(page).toHaveURL(/\/khata/);
   });
 });

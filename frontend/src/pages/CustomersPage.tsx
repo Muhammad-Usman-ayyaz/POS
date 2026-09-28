@@ -1,11 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { customers as customersApi, useRecordCharge, useRecordCustomerPayment } from '@/features/customers/api';
+import { customers as customersApi } from '@/features/customers/api';
 import { CustomerFormDialog } from '@/features/customers/components/CustomerFormDialog';
 import type { Customer, CustomerInput } from '@/features/customers/types';
-import { ChargeDialog } from '@/features/khata/components/ChargeDialog';
-import { CustomerPaymentDialog } from '@/features/khata/components/CustomerPaymentDialog';
-import type { ChargeInput, PaymentInput } from '@/features/khata/types';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Pagination } from '@/components/Pagination';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -16,10 +13,7 @@ import { notify } from '@/lib/notify';
 const rs = (value: string | number) => `Rs. ${Number(value).toLocaleString()}`;
 const initialsOf = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '?';
 
-type DialogState =
-  | { kind: 'create' | 'edit'; customer?: Customer }
-  | { kind: 'charge' | 'pay'; customer: Customer }
-  | null;
+type DialogState = { kind: 'create' | 'edit'; customer?: Customer } | null;
 
 export const CustomersPage: React.FC = () => {
   const navigate = useNavigate();
@@ -38,15 +32,11 @@ export const CustomersPage: React.FC = () => {
   const createCustomer = customersApi.useCreate({ silent: true });
   const updateCustomer = customersApi.useUpdate({ silent: true });
   const removeCustomer = customersApi.useRemove();
-  const recordCharge = useRecordCharge();
-  const recordPayment = useRecordCustomerPayment();
 
   const closeDialog = () => {
     setDialog(null);
     createCustomer.reset();
     updateCustomer.reset();
-    recordCharge.reset();
-    recordPayment.reset();
   };
 
   const handleSaveCustomer = (input: CustomerInput) => {
@@ -55,22 +45,6 @@ export const CustomersPage: React.FC = () => {
     } else {
       createCustomer.mutate(input, { onSuccess: () => { notify(`${input.name} registered`); closeDialog(); } });
     }
-  };
-
-  const handleCharge = (input: ChargeInput) => {
-    if (dialog?.kind !== 'charge') return;
-    recordCharge.mutate(
-      { id: dialog.customer.id, input },
-      { onSuccess: () => { notify(`Rs. ${Number(input.amount).toLocaleString()} charged to ${dialog.customer.name}`); closeDialog(); } }
-    );
-  };
-
-  const handlePay = (input: PaymentInput) => {
-    if (dialog?.kind !== 'pay') return;
-    recordPayment.mutate(
-      { id: dialog.customer.id, input },
-      { onSuccess: () => { notify(`Payment of Rs. ${Number(input.amount).toLocaleString()} recorded for ${dialog.customer.name}`); closeDialog(); } }
-    );
   };
 
   const handleDelete = () => {
@@ -90,7 +64,11 @@ export const CustomersPage: React.FC = () => {
               <h1 className="font-headline-lg text-headline-lg text-on-surface">Farmers &amp; Customers</h1>
               <span className="px-space-xs py-0.5 rounded-full bg-surface-container text-primary font-label-sm text-label-sm">{total} Registered</span>
             </div>
-            <p className="font-body-sm text-body-sm text-outline">Manage customer contacts and khata credit limits.</p>
+            <p className="font-body-sm text-body-sm text-outline">
+              The contacts directory. Credit sales, payments, and khata balances are managed on{' '}
+              <button className="text-primary underline cursor-pointer" onClick={() => navigate('/khata')} type="button">Farmer Khata</button>{' '}
+              or a farmer's own profile.
+            </p>
           </div>
         </div>
         <button
@@ -129,7 +107,7 @@ export const CustomersPage: React.FC = () => {
                 <th className="py-space-sm px-space-sm min-w-[150px]">Contact</th>
                 <th className="py-space-sm px-space-sm text-right min-w-[110px]">Credit Limit</th>
                 <th className="py-space-sm px-space-sm text-right min-w-[110px]">Outstanding</th>
-                <th className="py-space-sm pr-space-md pl-space-xs text-center min-w-[140px]">Actions</th>
+                <th className="py-space-sm pr-space-md pl-space-xs text-center min-w-[90px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-container-low font-body-md text-body-md text-on-surface">
@@ -170,24 +148,18 @@ export const CustomersPage: React.FC = () => {
                     )}
                   </td>
                   <td className="py-3 pr-space-md pl-space-xs text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <button className="h-8 px-2.5 rounded-lg hover:bg-surface-container-high text-outline hover:text-primary text-label-sm font-label-sm cursor-pointer erp-btn-press" onClick={() => setDialog({ kind: 'pay', customer: c })} type="button">
-                        Pay
-                      </button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="w-8 h-8 rounded-lg hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer erp-btn-press" type="button">
-                            <span className="material-symbols-outlined text-[18px]">more_vert</span>
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => navigate(`/customers/${c.id}`)}>View profile</DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => setDialog({ kind: 'charge', customer: c })}>Record credit sale</DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => setDialog({ kind: 'edit', customer: c })}>Edit details</DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => setPendingDelete(c)} variant="destructive">Delete customer</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="w-8 h-8 rounded-lg hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer erp-btn-press" type="button">
+                          <span className="material-symbols-outlined text-[18px]">more_vert</span>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => navigate(`/customers/${c.id}`)}>View profile &amp; khata</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setDialog({ kind: 'edit', customer: c })}>Edit details</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setPendingDelete(c)} variant="destructive">Delete customer</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}
@@ -204,21 +176,6 @@ export const CustomersPage: React.FC = () => {
           onClose={closeDialog}
           onSubmit={handleSaveCustomer}
           saving={createCustomer.isPending || updateCustomer.isPending}
-        />
-      )}
-
-      {dialog?.kind === 'charge' && (
-        <ChargeDialog customerName={dialog.customer.name} error={recordCharge.error} onClose={closeDialog} onSubmit={handleCharge} saving={recordCharge.isPending} />
-      )}
-
-      {dialog?.kind === 'pay' && (
-        <CustomerPaymentDialog
-          customerName={dialog.customer.name}
-          error={recordPayment.error}
-          onClose={closeDialog}
-          onSubmit={handlePay}
-          outstandingBalance={dialog.customer.outstanding_balance}
-          saving={recordPayment.isPending}
         />
       )}
 
