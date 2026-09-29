@@ -56,3 +56,34 @@ class TopProductsView(APIView):
         days = _int_param(request, 'days', 30, minimum=7, maximum=365)
         limit = _int_param(request, 'limit', 10, minimum=1, maximum=50)
         return Response(services.top_products(days, limit))
+
+
+class ProfitAnalysisView(APIView):
+    """Back-office only: revenue, cost of goods sold, profit, and margin over a period."""
+
+    permission_classes = [roles_permission(*BACK_OFFICE, read_roles=BACK_OFFICE)]
+
+    def get(self, request):
+        days = _int_param(request, 'days', 30, minimum=7, maximum=365)
+        return Response(services.profit_analysis(days))
+
+
+class PurchaseTrendView(APIView):
+    """Back-office only: daily purchase spend, for the Reports page."""
+
+    permission_classes = [roles_permission(*BACK_OFFICE, read_roles=BACK_OFFICE)]
+
+    def get(self, request):
+        days = _int_param(request, 'days', 30, minimum=7, maximum=365)
+        return Response(services.purchase_trend(days))
+
+
+class PurchasesBySupplierView(APIView):
+    """Back-office only: purchase spend grouped by supplier, for the Reports page."""
+
+    permission_classes = [roles_permission(*BACK_OFFICE, read_roles=BACK_OFFICE)]
+
+    def get(self, request):
+        days = _int_param(request, 'days', 30, minimum=7, maximum=365)
+        limit = _int_param(request, 'limit', 10, minimum=1, maximum=50)
+        return Response(services.purchases_by_supplier(days, limit))

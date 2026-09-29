@@ -156,6 +156,14 @@ export const InvoicePreviewPage: React.FC = () => {
               <span>Total</span>
               <span className="text-primary">{rs(sale.total_amount)}</span>
             </div>
+            <div className="flex justify-between font-body-sm text-body-sm text-on-surface-variant pt-space-xs border-t border-surface-container-low">
+              <span>Paid Amount</span>
+              <span className="text-success font-semibold">{rs(sale.paid_amount)}</span>
+            </div>
+            <div className="flex justify-between font-body-sm text-body-sm font-semibold">
+              <span className="text-on-surface-variant">Remaining Balance</span>
+              <span className={Number(sale.balance) > 0 ? 'text-error' : 'text-success'}>{rs(sale.balance)}</span>
+            </div>
           </div>
         </div>
 

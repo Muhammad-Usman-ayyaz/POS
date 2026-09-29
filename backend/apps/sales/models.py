@@ -19,9 +19,12 @@ class Sale(models.Model):
     with `cancel`, which reverses the stock it took out (and deletes the khata charge it posted,
     if any) rather than editing history.
 
-    A KHATA sale requires a customer and posts the full total as one KhataCharge — the same model
-    the manual "Record credit sale" flow uses, so a farmer's ledger reads as one continuous history
-    whether the charge came from the counter or from POS.
+    A sale can be split between an immediate payment and khata credit — e.g. Rs. 300 cash now,
+    the remaining Rs. 200 charged to the farmer's khata. `paid_amount` is how much was paid at the
+    counter (via `payment_method`); whatever's left of `total_amount` is posted as a single
+    KhataCharge, the same model the manual "Record credit sale" flow uses, so a farmer's ledger
+    reads as one continuous history whether the charge came from the counter or from POS.
+    `payment_method=KHATA` is the fully-deferred case: `paid_amount` is forced to 0.
     """
 
     class Status(models.TextChoices):
@@ -34,9 +37,12 @@ class Sale(models.Model):
     sale_date = models.DateField()
     payment_method = models.CharField(max_length=20, choices=SalePaymentMethod.choices, default=SalePaymentMethod.CASH)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # How much of total_amount was actually received at the counter; the rest becomes a khata charge.
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.COMPLETED)
     notes = models.CharField(max_length=255, blank=True)
-    # Set only for KHATA sales; nulled out (not followed) once cancel() has deleted the charge.
+    # Set whenever any part of the sale was charged to khata; nulled out (not followed) once
+    # cancel() has deleted the charge.
     khata_charge = models.ForeignKey(
         'khata.KhataCharge', null=True, blank=True, on_delete=models.SET_NULL, related_name='+'
     )
@@ -45,7 +51,10 @@ class Sale(models.Model):
 
     class Meta:
         ordering = ['-sale_date', '-id']
-        constraints = [models.CheckConstraint(condition=Q(discount_amount__gte=0), name='sale_discount_amount_gte_0')]
+        constraints = [
+            models.CheckConstraint(condition=Q(discount_amount__gte=0), name='sale_discount_amount_gte_0'),
+            models.CheckConstraint(condition=Q(paid_amount__gte=0), name='sale_paid_amount_gte_0'),
+        ]
 
     def __str__(self):
         return f'INV-{self.pk} ({self.status})'
@@ -61,6 +70,10 @@ class Sale(models.Model):
     @property
     def total_amount(self):
         return self.subtotal - self.discount_amount
+
+    @property
+    def balance(self):
+        return self.total_amount - self.paid_amount
 
 
 class SaleItem(models.Model):

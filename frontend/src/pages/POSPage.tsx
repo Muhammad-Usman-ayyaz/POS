@@ -44,6 +44,8 @@ export const POSPage: React.FC = () => {
   const [discount, setDiscount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<SalePaymentMethod>('CASH');
   const [customerId, setCustomerId] = useState<number | null>(null);
+  // null = "pay the full total now" (the ordinary case); a lower number splits the rest to khata.
+  const [paidOverride, setPaidOverride] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
@@ -59,6 +61,10 @@ export const POSPage: React.FC = () => {
   const subtotal = cart.reduce((sum, l) => sum + l.unitPrice * l.qty, 0);
   const totalItemCount = cart.reduce((sum, l) => sum + l.qty, 0);
   const total = Math.max(0, subtotal - (discount || 0));
+
+  const canSplitPayment = customerId !== null && paymentMethod !== 'KHATA';
+  const effectivePaid = paymentMethod === 'KHATA' ? 0 : Math.min(total, paidOverride ?? total);
+  const khataPortion = Math.max(0, total - effectivePaid);
 
   const cartCountBump = useBump(cart.length);
   const totalBump = useBump(total);
@@ -108,6 +114,7 @@ export const POSPage: React.FC = () => {
     setDiscount(0);
     setPaymentMethod('CASH');
     setCustomerId(null);
+    setPaidOverride(null);
   };
 
   const handleCompleteSale = () => {
@@ -115,8 +122,8 @@ export const POSPage: React.FC = () => {
       notifyError('Cannot complete an empty sale. Add items first.');
       return;
     }
-    if (paymentMethod === 'KHATA' && !customerId) {
-      notifyError('Select a farmer to charge this sale to their khata.');
+    if ((paymentMethod === 'KHATA' || khataPortion > 0) && !customerId) {
+      notifyError('Select a farmer to charge this sale (or its remaining balance) to their khata.');
       return;
     }
     createSale.mutate(
@@ -124,12 +131,18 @@ export const POSPage: React.FC = () => {
         sale_date: new Date().toISOString().slice(0, 10),
         payment_method: paymentMethod,
         discount_amount: discount || 0,
+        paid_amount: paymentMethod !== 'KHATA' && paidOverride !== null ? effectivePaid : undefined,
         customer: customerId ?? undefined,
         lines: cart.map((l) => ({ product: l.productId, batch: l.batchId, quantity: l.qty, unit_price: l.unitPrice })),
       },
       {
         onSuccess: (sale) => {
-          notify(`${sale.invoice_no} completed — ${rs(Number(sale.total_amount))}`);
+          const balance = Number(sale.balance);
+          notify(
+            balance > 0
+              ? `${sale.invoice_no} completed — ${rs(Number(sale.paid_amount))} paid, ${rs(balance)} to khata`
+              : `${sale.invoice_no} completed — ${rs(Number(sale.total_amount))}`
+          );
           openInvoicePdf(sale.id);
           resetSale();
         },
@@ -268,7 +281,7 @@ export const POSPage: React.FC = () => {
               <div className="bg-primary/5 rounded-lg p-space-sm flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <span className="font-label-md text-label-md text-on-surface font-semibold">{activeCustomerName}</span>
-                  <button className="text-outline hover:text-error cursor-pointer" onClick={() => setCustomerId(null)} type="button">
+                  <button className="text-outline hover:text-error cursor-pointer" onClick={() => { setCustomerId(null); setPaidOverride(null); }} type="button">
                     <span className="material-symbols-outlined text-[18px]">close</span>
                   </button>
                 </div>
@@ -389,7 +402,7 @@ export const POSPage: React.FC = () => {
                       className={`px-2 py-2 rounded-lg font-label-sm text-label-sm font-semibold flex flex-col items-center justify-center gap-1 erp-btn-press cursor-pointer ${
                         paymentMethod === pm.value ? 'bg-primary text-on-primary shadow-sm' : 'bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container'
                       }`}
-                      onClick={() => setPaymentMethod(pm.value)}
+                      onClick={() => { setPaymentMethod(pm.value); if (pm.value === 'KHATA') setPaidOverride(null); }}
                       type="button"
                     >
                       <span className="material-symbols-outlined text-[18px]">{pm.icon}</span>
@@ -398,6 +411,33 @@ export const POSPage: React.FC = () => {
                   ))}
                 </div>
               </div>
+
+              {canSplitPayment && (
+                <div className="mt-1 bg-surface-container-lowest p-space-sm rounded-lg">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="font-label-sm text-label-sm text-outline">Amount Received Now</label>
+                    <div className="flex items-center gap-1">
+                      <span className="font-label-sm text-label-sm text-outline">Rs.</span>
+                      <input
+                        className="w-24 h-7 text-right px-1.5 rounded bg-surface-container-low text-on-surface font-currency-cell text-currency-cell font-bold focus:outline-none"
+                        max={total}
+                        min={0}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setPaidOverride(raw === '' ? total : Math.max(0, Math.min(total, parseFloat(raw) || 0)));
+                        }}
+                        type="number"
+                        value={paidOverride ?? total}
+                      />
+                    </div>
+                  </div>
+                  {khataPortion > 0 && (
+                    <p className="font-label-sm text-label-sm text-warning mt-1">
+                      Rs. {khataPortion.toLocaleString()} will be charged to {activeCustomerName}'s khata.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <button
                 className="w-full h-12 mt-2 rounded-lg bg-primary hover:bg-primary-container text-on-primary font-headline-sm text-headline-sm font-bold flex items-center justify-center gap-2 shadow-md erp-btn-press cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"

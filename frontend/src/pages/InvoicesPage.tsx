@@ -116,22 +116,23 @@ export const InvoicesPage: React.FC = () => {
                 <th className="py-space-sm px-space-sm min-w-[110px]">Date</th>
                 <th className="py-space-sm px-space-sm min-w-[130px]">Payment</th>
                 <th className="py-space-sm px-space-sm text-right min-w-[110px]">Total</th>
+                <th className="py-space-sm px-space-sm text-right min-w-[110px]">Balance</th>
                 <th className="py-space-sm px-space-sm min-w-[100px]">Status</th>
                 <th className="py-space-sm pr-space-md pl-space-xs text-center min-w-[140px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-container-low font-body-md text-body-md text-on-surface">
-              {list.isPending && <tr><td className="py-space-xl text-center text-outline" colSpan={7}>Loading sales...</td></tr>}
+              {list.isPending && <tr><td className="py-space-xl text-center text-outline" colSpan={8}>Loading sales...</td></tr>}
               {list.isError && (
                 <tr>
-                  <td className="py-space-xl text-center text-error" colSpan={7}>
+                  <td className="py-space-xl text-center text-error" colSpan={8}>
                     {getErrorMessage(list.error, 'Could not load sales.')}{' '}
                     <button className="text-primary underline cursor-pointer" onClick={() => list.refetch()} type="button">Retry</button>
                   </td>
                 </tr>
               )}
               {list.isSuccess && rows.length === 0 && (
-                <tr><td className="py-space-xl text-center text-outline" colSpan={7}>No sales match these filters.</td></tr>
+                <tr><td className="py-space-xl text-center text-outline" colSpan={8}>No sales match these filters.</td></tr>
               )}
               {rows.map((sale) => (
                 <tr className="hover:bg-surface-container-low/60 transition-colors" key={sale.id}>
@@ -144,6 +145,9 @@ export const InvoicesPage: React.FC = () => {
                   <td className="py-3 px-space-sm font-body-sm text-body-sm text-outline">{formatDate(sale.sale_date)}</td>
                   <td className="py-3 px-space-sm">{PAYMENT_METHOD_LABELS[sale.payment_method]}</td>
                   <td className="py-3 px-space-sm text-right font-currency-cell text-currency-cell font-semibold">{rs(sale.total_amount)}</td>
+                  <td className="py-3 px-space-sm text-right font-currency-cell text-currency-cell font-semibold">
+                    {Number(sale.balance) > 0 ? <span className="text-warning">{rs(sale.balance)}</span> : <span className="text-outline">—</span>}
+                  </td>
                   <td className="py-3 px-space-sm">
                     <span className={`px-2 py-0.5 rounded-full font-label-sm text-label-sm font-semibold inline-block ${STATUS_STYLES[sale.status]}`}>{sale.status}</span>
                   </td>

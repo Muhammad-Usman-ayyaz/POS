@@ -38,7 +38,13 @@ class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True, read_only=True)
     subtotal = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     total_amount = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    balance = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     created_by_name = serializers.CharField(source='created_by.name', read_only=True, default=None)
+
+    # Optional on create: how much was paid now. Omitted means "pay the full total" (the ordinary
+    # case); a lower amount splits the rest to khata credit. Declared explicitly (rather than left
+    # to ModelSerializer's auto-mapping) so omitting it doesn't fall back to the model's `default=0`.
+    paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0'), required=False)
 
     # Write-only: the lines to sell. Required on create; sales don't edit lines afterwards.
     lines = SaleLineInputSerializer(many=True, write_only=True, required=False)
@@ -47,8 +53,8 @@ class SaleSerializer(serializers.ModelSerializer):
         model = Sale
         fields = [
             'id', 'invoice_no', 'customer', 'customer_name', 'sale_date', 'payment_method',
-            'discount_amount', 'status', 'notes', 'items', 'lines', 'subtotal', 'total_amount',
-            'created_by_name', 'created_at',
+            'discount_amount', 'paid_amount', 'balance', 'status', 'notes', 'items', 'lines',
+            'subtotal', 'total_amount', 'created_by_name', 'created_at',
         ]
         read_only_fields = ['id', 'status', 'created_at']
 
@@ -65,6 +71,7 @@ class SaleSerializer(serializers.ModelSerializer):
             sale_date=validated_data['sale_date'],
             payment_method=validated_data.get('payment_method', 'CASH'),
             discount_amount=validated_data.get('discount_amount', 0),
+            paid_amount=validated_data.get('paid_amount'),
             notes=validated_data.get('notes', ''),
             lines=lines,
             user=getattr(request, 'user', None),

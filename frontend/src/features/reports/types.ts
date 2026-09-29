@@ -39,3 +39,16 @@ export interface TopProduct {
   quantity: string;
   revenue: string;
 }
+
+export interface ProfitAnalysis {
+  revenue: string;
+  cost: string;
+  profit: string;
+  margin_pct: string;
+}
+
+export interface SupplierTotal {
+  supplier: number;
+  supplier_name: string;
+  total: string;
+}

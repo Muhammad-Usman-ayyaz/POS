@@ -87,6 +87,37 @@ class SaleCreateTests(SaleTestBase):
         res = self.client.post(SALES, self.payload(lines=[]), format='json')
         self.assertEqual(res.status_code, 400)
 
+    def test_full_cash_sale_has_zero_balance_and_no_khata_charge(self):
+        res = self.client.post(SALES, self.payload(customer=self.customer.pk), format='json')
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(Decimal(res.data['paid_amount']), Decimal('500'))
+        self.assertEqual(Decimal(res.data['balance']), Decimal('0'))
+        self.assertFalse(KhataCharge.objects.filter(customer=self.customer).exists())
+
+    def test_split_payment_charges_remainder_to_khata(self):
+        res = self.client.post(SALES, self.payload(customer=self.customer.pk, paid_amount='300'), format='json')
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(Decimal(res.data['paid_amount']), Decimal('300'))
+        self.assertEqual(Decimal(res.data['balance']), Decimal('200'))
+        charge = KhataCharge.objects.get(customer=self.customer)
+        self.assertEqual(charge.amount, Decimal('200'))
+
+    def test_split_payment_without_customer_rejected(self):
+        res = self.client.post(SALES, self.payload(paid_amount='300'), format='json')
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(Batch.objects.get(pk=self.batch.pk).quantity, Decimal('20'))  # nothing applied
+
+    def test_paid_amount_exceeding_total_rejected(self):
+        res = self.client.post(SALES, self.payload(customer=self.customer.pk, paid_amount='9999'), format='json')
+        self.assertEqual(res.status_code, 400)
+
+    def test_paid_amount_ignored_for_khata_sale(self):
+        # payment_method=KHATA always means "pay nothing now", regardless of paid_amount.
+        res = self.client.post(SALES, self.payload(payment_method='KHATA', customer=self.customer.pk, paid_amount='999'), format='json')
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(Decimal(res.data['paid_amount']), Decimal('0'))
+        self.assertEqual(KhataCharge.objects.get(customer=self.customer).amount, Decimal('500'))
+
 
 class SaleCancelTests(SaleTestBase):
     def test_cancel_reverses_stock(self):

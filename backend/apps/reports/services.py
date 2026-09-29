@@ -106,6 +106,61 @@ def sales_by_category(days: int):
     return [{'category': r['product__category__name'] or 'Uncategorised', 'total': str(r['total'])} for r in rows]
 
 
+def profit_analysis(days: int):
+    """Revenue minus cost of goods sold. Cost is approximated using each product's *current*
+    purchase_price (the catalog doesn't track a batch-specific landed cost), the same figure the
+    Products page's margin column already uses — not a perfect lot-by-lot cost, but consistent
+    with how margin is shown everywhere else in the app."""
+    today = timezone.localdate()
+    start = today - timedelta(days=days - 1)
+    items = SaleItem.objects.filter(sale__sale_date__range=(start, today), sale__status=Sale.Status.COMPLETED)
+    agg = items.aggregate(
+        revenue_lines=Coalesce(Sum(F('quantity') * F('unit_price'), output_field=MONEY), ZERO),
+        cost=Coalesce(Sum(F('quantity') * F('product__purchase_price'), output_field=MONEY), ZERO),
+    )
+    discount_total = _sum(Sale.objects.filter(sale_date__range=(start, today), status=Sale.Status.COMPLETED), 'discount_amount')
+    revenue = agg['revenue_lines'] - discount_total
+    cost = agg['cost']
+    profit = revenue - cost
+    margin_pct = (profit / revenue * 100) if revenue else ZERO
+    return {
+        'revenue': str(revenue), 'cost': str(cost), 'profit': str(profit),
+        'margin_pct': str(margin_pct.quantize(Decimal('0.1'))),
+    }
+
+
+def purchase_trend(days: int):
+    today = timezone.localdate()
+    start = today - timedelta(days=days - 1)
+    active = Purchase.objects.exclude(status=Purchase.Status.CANCELLED)
+    rows = (
+        PurchaseItem.objects.filter(purchase__in=active, purchase__purchase_date__range=(start, today))
+        .values('purchase__purchase_date').annotate(total=Sum(F('quantity') * F('unit_cost'), output_field=MONEY))
+    )
+    total_by_date = {r['purchase__purchase_date']: r['total'] for r in rows}
+    result = []
+    for i in range(days):
+        d = start + timedelta(days=i)
+        result.append({'date': d.isoformat(), 'total': str(total_by_date.get(d, ZERO))})
+    return result
+
+
+def purchases_by_supplier(days: int, limit: int = 10):
+    today = timezone.localdate()
+    start = today - timedelta(days=days - 1)
+    active = Purchase.objects.exclude(status=Purchase.Status.CANCELLED)
+    rows = (
+        PurchaseItem.objects.filter(purchase__in=active, purchase__purchase_date__range=(start, today))
+        .values('purchase__supplier__id', 'purchase__supplier__name')
+        .annotate(total=Sum(F('quantity') * F('unit_cost'), output_field=MONEY))
+        .order_by('-total')[:limit]
+    )
+    return [
+        {'supplier': r['purchase__supplier__id'], 'supplier_name': r['purchase__supplier__name'], 'total': str(r['total'])}
+        for r in rows
+    ]
+
+
 def top_products(days: int, limit: int):
     today = timezone.localdate()
     start = today - timedelta(days=days - 1)

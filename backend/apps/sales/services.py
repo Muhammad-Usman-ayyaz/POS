@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
@@ -12,16 +13,18 @@ from .models import Sale, SaleItem, SalePaymentMethod
 
 
 @transaction.atomic
-def create_sale(*, customer, sale_date: date, payment_method: str, discount_amount, notes: str, lines: list, user=None):
+def create_sale(*, customer, sale_date: date, payment_method: str, discount_amount, notes: str, lines: list, paid_amount=None, user=None):
     """
     The one path allowed to record a till transaction: deducts stock for every line (locked,
-    atomic, blocked on insufficient stock — same guarantee as purchases) and, for a KHATA sale,
-    posts the total as a single KhataCharge so the farmer's ledger and the invoice always agree.
+    atomic, blocked on insufficient stock — same guarantee as purchases), then settles the total
+    between an immediate payment and khata credit. `paid_amount` defaults to the full total (an
+    ordinary fully-paid sale); passing less than the total splits the difference to khata credit,
+    and `payment_method=KHATA` is shorthand for paying nothing now (`paid_amount` forced to 0).
+    Either way, whatever's left of the total is posted as one KhataCharge so the farmer's ledger
+    and the invoice always agree.
     """
     if not lines:
         raise ValidationError({'lines': 'At least one item is required.'})
-    if payment_method == SalePaymentMethod.KHATA and customer is None:
-        raise ValidationError({'customer': 'A customer is required for a khata (credit) sale.'})
 
     sale = Sale.objects.create(
         customer=customer, sale_date=sale_date, payment_method=payment_method,
@@ -45,16 +48,35 @@ def create_sale(*, customer, sale_date: date, payment_method: str, discount_amou
         raise ValidationError({'discount_amount': 'Discount cannot exceed the sale subtotal.'})
 
     if payment_method == SalePaymentMethod.KHATA:
+        actual_paid = Decimal('0')
+    elif paid_amount is None:
+        actual_paid = total
+    else:
+        actual_paid = paid_amount
+        if actual_paid < 0 or actual_paid > total:
+            raise ValidationError({'paid_amount': f'Must be between 0 and the sale total of {total}.'})
+
+    balance = total - actual_paid
+    if balance > 0 and customer is None:
+        raise ValidationError({'customer': 'A customer is required to charge the remaining balance to khata.'})
+
+    sale.paid_amount = actual_paid
+    if balance > 0:
         charge = KhataCharge.objects.create(
-            customer=customer, amount=total, description=f'INV-{sale.pk} — credit sale',
+            customer=customer, amount=balance,
+            description=(
+                f'INV-{sale.pk} — credit sale' if actual_paid == 0
+                else f'INV-{sale.pk} — balance after Rs. {actual_paid} paid via {sale.get_payment_method_display()}'
+            ),
             charge_date=sale_date, created_by=user if getattr(user, 'is_authenticated', False) else None,
         )
         sale.khata_charge = charge
-        sale.save(update_fields=['khata_charge'])
+    sale.save(update_fields=['paid_amount', 'khata_charge'])
 
     log_action(
         actor=user, action='SALE_CREATED', target_type='Sale', target_id=sale.pk,
-        summary=f'{sale.invoice_no} — Rs. {total} via {sale.get_payment_method_display()}'
+        summary=f'{sale.invoice_no} — Rs. {total} total, Rs. {actual_paid} paid via {sale.get_payment_method_display()}'
+                f'{f", Rs. {balance} to khata" if balance > 0 else ""}'
                 f'{f" ({customer.name})" if customer else " (walk-in)"}',
     )
     return sale

@@ -28,6 +28,10 @@ export interface Sale {
   sale_date: string;
   payment_method: SalePaymentMethod;
   discount_amount: string;
+  /** How much was paid at the counter; the rest (`balance`) was charged to khata. */
+  paid_amount: string;
+  /** total_amount - paid_amount. Zero for an ordinary fully-paid sale. */
+  balance: string;
   status: 'COMPLETED' | 'CANCELLED';
   notes: string;
   items: SaleItem[];
@@ -49,6 +53,9 @@ export interface SaleInput {
   sale_date: string;
   payment_method: SalePaymentMethod;
   discount_amount?: number;
+  /** Omit to pay the full total now (the ordinary case); a lower amount splits the rest to khata
+   * credit (requires `customer`). Ignored (forced to 0) when payment_method is KHATA. */
+  paid_amount?: number;
   notes?: string;
   lines: SaleLineInput[];
 }

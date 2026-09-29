@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { batches as batchesApi } from '@/features/inventory/api';
-import { useSalesByCategory, useSalesTrend, useTopProducts } from '@/features/reports/api';
+import {
+  useProfitAnalysis, usePurchaseTrend, usePurchasesBySupplier, useSalesByCategory, useSalesTrend, useTopProducts,
+} from '@/features/reports/api';
 import { SalesTrendChart } from '@/features/reports/components/SalesTrendChart';
 import { CategoryDoughnutChart } from '@/features/reports/components/CategoryDoughnutChart';
 
@@ -29,10 +31,11 @@ export const ReportsPage: React.FC = () => {
   const trend = useSalesTrend(days === 365 ? 90 : days); // sales-trend caps at 90 server-side
   const categoryTotals = useSalesByCategory(days);
   const topProducts = useTopProducts(days, 10);
+  const profit = useProfitAnalysis(days);
+  const purchaseTrend = usePurchaseTrend(days === 365 ? 90 : days); // purchase-trend caps at 90 server-side
+  const supplierTotals = usePurchasesBySupplier(days, 10);
   const lowStock = batchesApi.useList({ status: 'low', page_size: 10 });
   const nearExpiry = batchesApi.useList({ status: 'near_expiry', page_size: 10 });
-
-  const periodRevenue = (categoryTotals.data ?? []).reduce((sum, c) => sum + Number(c.total), 0);
 
   return (
     <div className="flex flex-col w-full gap-y-space-lg erp-animate-page">
@@ -62,9 +65,27 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="erp-stagger-item erp-stagger-2 glass-card p-space-md rounded-xl shadow-sm">
-        <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Revenue in period</span>
-        <div className="font-currency-stat text-currency-stat text-primary font-bold mt-0.5">{rs(periodRevenue)}</div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-space-md">
+        <div className="erp-stagger-item erp-stagger-2 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
+          <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Revenue</span>
+          <div className="font-currency-stat text-currency-stat text-primary font-bold mt-0.5">{profit.data ? rs(profit.data.revenue) : '—'}</div>
+        </div>
+        <div className="erp-stagger-item erp-stagger-2 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
+          <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Cost of Goods</span>
+          <div className="font-currency-stat text-currency-stat text-on-surface font-bold mt-0.5">{profit.data ? rs(profit.data.cost) : '—'}</div>
+        </div>
+        <div className="erp-stagger-item erp-stagger-2 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
+          <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Profit</span>
+          <div className={`font-currency-stat text-currency-stat font-bold mt-0.5 ${profit.data && Number(profit.data.profit) < 0 ? 'text-error' : 'text-success'}`}>
+            {profit.data ? rs(profit.data.profit) : '—'}
+          </div>
+        </div>
+        <div className="erp-stagger-item erp-stagger-2 erp-card-hover glass-card p-space-md rounded-xl shadow-sm">
+          <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">Margin</span>
+          <div className={`font-currency-stat text-currency-stat font-bold mt-0.5 ${profit.data && Number(profit.data.margin_pct) < 0 ? 'text-error' : 'text-success'}`}>
+            {profit.data ? `${profit.data.margin_pct}%` : '—'}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-gutter-lg items-start">
@@ -75,6 +96,15 @@ export const ReportsPage: React.FC = () => {
               <div className="h-64 flex items-center justify-center text-outline font-body-sm text-body-sm">Loading...</div>
             ) : (
               <SalesTrendChart points={trend.data ?? []} />
+            )}
+          </section>
+
+          <section className="erp-stagger-item erp-stagger-4 bg-surface-container-lowest rounded-xl p-space-lg shadow-sm">
+            <h2 className="font-headline-sm text-headline-sm text-on-surface mb-space-sm">Purchases Trend{days === 365 ? ' (last 90 days)' : ''}</h2>
+            {purchaseTrend.isPending ? (
+              <div className="h-64 flex items-center justify-center text-outline font-body-sm text-body-sm">Loading...</div>
+            ) : (
+              <SalesTrendChart points={purchaseTrend.data ?? []} />
             )}
           </section>
 
@@ -131,6 +161,22 @@ export const ReportsPage: React.FC = () => {
             ) : (
               <CategoryDoughnutChart rows={categoryTotals.data ?? []} />
             )}
+          </section>
+
+          <section className="erp-stagger-item erp-stagger-6 bg-surface-container-lowest rounded-xl p-space-lg shadow-sm">
+            <h2 className="font-headline-sm text-headline-sm text-on-surface mb-space-sm">Purchases by Supplier</h2>
+            <div className="flex flex-col divide-y divide-surface-container-low">
+              {supplierTotals.isPending && <p className="py-space-md text-center text-outline font-body-sm text-body-sm">Loading...</p>}
+              {supplierTotals.isSuccess && supplierTotals.data.length === 0 && (
+                <p className="py-space-md text-center text-outline font-body-sm text-body-sm">No purchases in this period.</p>
+              )}
+              {supplierTotals.data?.map((s) => (
+                <div className="py-2.5 flex items-center justify-between gap-space-sm" key={s.supplier}>
+                  <span className="font-label-md text-label-md text-on-surface font-semibold truncate">{s.supplier_name}</span>
+                  <span className="font-currency-cell text-currency-cell text-on-surface font-bold shrink-0">{rs(s.total)}</span>
+                </div>
+              ))}
+            </div>
           </section>
 
           <section className="erp-stagger-item erp-stagger-6 bg-surface-container-lowest rounded-xl p-space-lg shadow-sm">

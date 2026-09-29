@@ -85,6 +85,8 @@ def render_invoice_pdf(sale: Sale) -> bytes:
         ['Subtotal', f'Rs. {sale.subtotal:,.2f}'],
         ['Discount', f'Rs. {sale.discount_amount:,.2f}'],
         ['Total', f'Rs. {sale.total_amount:,.2f}'],
+        ['Paid Amount', f'Rs. {sale.paid_amount:,.2f}'],
+        ['Remaining Balance', f'Rs. {sale.balance:,.2f}'],
     ]
     totals_table = Table(totals_data, colWidths=[145 * mm, 30 * mm], hAlign='RIGHT')
     totals_table.setStyle(TableStyle([
@@ -92,6 +94,8 @@ def render_invoice_pdf(sale: Sale) -> bytes:
         ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
         ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
         ('LINEABOVE', (0, 2), (-1, 2), 0.75, BRAND_GREEN),
+        ('TEXTCOLOR', (0, 4), (-1, 4), colors.HexColor('#ba1a1a') if sale.balance > 0 else colors.HexColor('#146c43')),
+        ('FONTNAME', (0, 4), (-1, 4), 'Helvetica-Bold'),
         ('TOPPADDING', (0, 0), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))

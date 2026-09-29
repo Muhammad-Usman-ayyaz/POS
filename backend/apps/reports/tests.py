@@ -15,6 +15,9 @@ SUMMARY = '/api/reports/dashboard-summary/'
 TREND = '/api/reports/sales-trend/'
 BY_CATEGORY = '/api/reports/sales-by-category/'
 TOP_PRODUCTS = '/api/reports/top-products/'
+PROFIT = '/api/reports/profit-analysis/'
+PURCHASE_TREND = '/api/reports/purchase-trend/'
+PURCHASES_BY_SUPPLIER = '/api/reports/purchases-by-supplier/'
 
 
 def make_user(role, email=None):
@@ -139,3 +142,78 @@ class SalesByCategoryAndTopProductsTests(ReportsTestBase):
         self.client.force_authenticate(make_user(UserRole.ACCOUNTANT))
         self.assertEqual(self.client.get(BY_CATEGORY).status_code, 200)
         self.assertEqual(self.client.get(TOP_PRODUCTS).status_code, 200)
+
+
+class ProfitAnalysisTests(ReportsTestBase):
+    def setUp(self):
+        super().setUp()
+        self.product.purchase_price = Decimal('60')
+        self.product.save()
+
+    def test_profit_and_margin_computed(self):
+        self.make_sale(qty='5', unit_price='100')  # revenue 500, cost 300, profit 200, margin 40%
+        res = self.client.get(PROFIT)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(Decimal(res.data['revenue']), Decimal('500'))
+        self.assertEqual(Decimal(res.data['cost']), Decimal('300'))
+        self.assertEqual(Decimal(res.data['profit']), Decimal('200'))
+        self.assertEqual(Decimal(res.data['margin_pct']), Decimal('40.0'))
+
+    def test_discount_reduces_revenue_and_profit(self):
+        self.make_sale(qty='5', unit_price='100', discount='50')  # revenue 450, cost 300, profit 150
+        res = self.client.get(PROFIT)
+        self.assertEqual(Decimal(res.data['revenue']), Decimal('450'))
+        self.assertEqual(Decimal(res.data['profit']), Decimal('150'))
+
+    def test_cancelled_sale_excluded(self):
+        sale = self.make_sale(qty='5', unit_price='100')
+        cancel_sale(sale=sale, user=self.owner)
+        res = self.client.get(PROFIT)
+        self.assertEqual(Decimal(res.data['revenue']), Decimal('0'))
+        self.assertEqual(Decimal(res.data['profit']), Decimal('0'))
+
+    def test_no_sales_gives_zero_margin_not_error(self):
+        res = self.client.get(PROFIT)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(Decimal(res.data['margin_pct']), Decimal('0.0'))
+
+    def test_salesman_forbidden(self):
+        self.client.force_authenticate(make_user(UserRole.SALESMAN))
+        self.assertEqual(self.client.get(PROFIT).status_code, 403)
+
+
+class PurchaseAnalyticsTests(ReportsTestBase):
+    def make_purchase(self, supplier, qty='10', unit_cost='50', status=Purchase.Status.RECEIVED, purchase_date=None):
+        purchase = Purchase.objects.create(supplier=supplier, purchase_date=purchase_date or date.today(), status=status)
+        PurchaseItem.objects.create(purchase=purchase, product=self.product, batch_no=f'PB{purchase.pk}', quantity=Decimal(qty), unit_cost=Decimal(unit_cost))
+        return purchase
+
+    def test_purchase_trend_zero_filled(self):
+        supplier = Supplier.objects.create(name='Agri-Tech Ltd')
+        self.make_purchase(supplier, qty='10', unit_cost='50')  # 500 today
+        res = self.client.get(PURCHASE_TREND, {'days': 7})
+        self.assertEqual(res.status_code, 200)
+        totals = {row['date']: Decimal(row['total']) for row in res.data}
+        self.assertEqual(totals[date.today().isoformat()], Decimal('500'))
+
+    def test_purchase_trend_excludes_cancelled(self):
+        supplier = Supplier.objects.create(name='Agri-Tech Ltd')
+        self.make_purchase(supplier, status=Purchase.Status.CANCELLED)
+        res = self.client.get(PURCHASE_TREND, {'days': 7})
+        totals = {row['date']: Decimal(row['total']) for row in res.data}
+        self.assertEqual(totals[date.today().isoformat()], Decimal('0'))
+
+    def test_purchases_by_supplier_grouped_and_ordered(self):
+        big = Supplier.objects.create(name='Big Supplier')
+        small = Supplier.objects.create(name='Small Supplier')
+        self.make_purchase(big, qty='20', unit_cost='50')  # 1000
+        self.make_purchase(small, qty='2', unit_cost='50')  # 100
+        res = self.client.get(PURCHASES_BY_SUPPLIER)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data[0]['supplier_name'], 'Big Supplier')
+        self.assertEqual(Decimal(res.data[0]['total']), Decimal('1000'))
+
+    def test_salesman_forbidden(self):
+        self.client.force_authenticate(make_user(UserRole.SALESMAN))
+        self.assertEqual(self.client.get(PURCHASE_TREND).status_code, 403)
+        self.assertEqual(self.client.get(PURCHASES_BY_SUPPLIER).status_code, 403)
