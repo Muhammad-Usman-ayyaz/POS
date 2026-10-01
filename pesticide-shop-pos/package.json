@@ -1,0 +1,22 @@
+{
+  "name": "pesticide-shop-pos",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Offline-first POS, inventory and Khata for a pesticide and agri-input shop",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test:schema": "python packages/db-sqlite/tests/schema_test.py",
+    "test": "vitest run",
+    "typecheck": "tsc -p packages/db-sqlite --noEmit",
+    "dev:db": "tsx scripts/make-dev-db.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

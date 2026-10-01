@@ -1,0 +1,17 @@
+{
+  "name": "@pos/db-sqlite",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SQLite adapter: connection, migrations, first-launch setup, backup. The only package that contains SQL.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0"
+  }
+}
