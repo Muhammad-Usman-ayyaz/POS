@@ -13,7 +13,15 @@ export type DomainErrorCode =
   | 'ITEM_NOT_ON_INVOICE'
   | 'DUPLICATE_LINE'
   | 'RETURN_EXCEEDS_SOLD'
-  | 'EMPTY_RETURN';
+  | 'EMPTY_RETURN'
+  | 'INVALID_INPUT'
+  | 'NOT_FOUND'
+  | 'NOT_AUTHORIZED'
+  | 'PRODUCT_INACTIVE'
+  | 'CREDIT_LIMIT_EXCEEDED'
+  | 'BATCH_CONFLICT'
+  | 'OPENING_BALANCE_EXISTS'
+  | 'NOT_SUPPORTED';
 
 /** A business rule was broken. Services and the UI map `code` to a message the shopkeeper can read. */
 export class DomainError extends Error {
