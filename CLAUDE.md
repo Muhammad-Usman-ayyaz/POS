@@ -34,6 +34,7 @@ backend/
     customers/       Customer directory (contacts only — no financial actions live here either)
     khata/           KhataCharge / KhataPayment — the farmer credit ledger
     sales/           Sale + SaleItem — POS transactions, invoice PDF generation
+    returns/         SalesReturn + SalesReturnItem — customer returns against a completed sale
     reports/         Read-only aggregation endpoints for Dashboard/Reports (no models of its own)
     audit/           AuditLog — who did what, for the proposal's "audit log" security requirement
 frontend/
@@ -101,7 +102,7 @@ and `apps.reports.services.dashboard_summary`.
 `apps.audit.services.log_action(actor, action, summary, target_type='', target_id=None)` is the
 only way to write an `AuditLog` row — never expose write access through the API. Call it from the
 service/view layer at the exact point a critical action completes (see `apps.sales.services`,
-`apps.purchases.views`, `apps.customers.views`, `apps.inventory.views`,
+`apps.returns.services`, `apps.purchases.views`, `apps.customers.views`, `apps.inventory.views`,
 `apps.accounts.views.EmployeeViewSet`/`CustomTokenObtainPairView` for the full current list). If you
 add a new kind of critical action (a new financial transaction type, a new destructive admin
 action), add a `log_action()` call for it and a new entry in
@@ -158,6 +159,7 @@ animation that bypasses it.
 | `customers` | `Customer` (directory only) | Balance/charged/paid are annotated, not stored (see pattern #4) |
 | `khata` | `KhataCharge`, `KhataPayment` | `serialize_ledger()` merges both into one sorted feed for a customer or shop-wide |
 | `sales` | `Sale`, `SaleItem`, invoice PDF | `create_sale()`/`cancel_sale()` in `services.py` are the only entry points |
+| `returns` | `SalesReturn`, `SalesReturnItem` | "Returns & Claims": a customer bringing back some/all items from a completed sale. Separate from `Sale.cancel` (whole-sale reversal) — the original Sale is never edited. `create_return()` restocks via `apply_stock_movement(..., RETURN_IN)` and settles the refund as either a cash refund (recorded on the return only) or a `KhataPayment(method=ADJUSTMENT)` credit |
 | `reports` | Pure aggregation, no models | Dashboard summary, sales/purchase trends, profit analysis, category/product/supplier breakdowns |
 | `audit` | `AuditLog` | Read-only API; written only via `log_action()` |
 

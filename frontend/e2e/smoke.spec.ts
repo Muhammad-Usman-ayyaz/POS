@@ -4,7 +4,7 @@ const OWNER = { email: process.env.E2E_OWNER_EMAIL ?? 'owner@pesticideclub.com',
 
 const ROUTES = [
   '/dashboard', '/pos', '/products', '/inventory', '/stock-movement', '/suppliers', '/purchases',
-  '/customers', '/customers/1', '/khata', '/payments', '/sales', '/invoices', '/invoices/1', '/reports',
+  '/customers', '/customers/1', '/khata', '/payments', '/sales', '/invoices', '/invoices/1', '/returns', '/reports',
   '/employees', '/audit-log', '/settings',
 ];
 

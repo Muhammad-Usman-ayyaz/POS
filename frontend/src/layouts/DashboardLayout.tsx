@@ -84,6 +84,10 @@ export const DashboardLayout: React.FC = () => {
               <span className="material-symbols-outlined text-[18px]">description</span>
               <span className="font-label-md text-label-md">Invoices</span>
             </NavLink>
+            <NavLink to="/returns" className={getNavLinkClass} data-path="returns">
+              <span className="material-symbols-outlined text-[18px]">assignment_return</span>
+              <span className="font-label-md text-label-md">Returns &amp; Claims</span>
+            </NavLink>
 
             {/* Inventory */}
             <div className="px-space-sm pt-space-sm pb-1">

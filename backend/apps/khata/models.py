@@ -6,6 +6,7 @@ class PaymentMethod(models.TextChoices):
     CASH = 'CASH', 'Cash'
     BANK_TRANSFER = 'BANK_TRANSFER', 'Bank Transfer'
     EASYPAISA = 'EASYPAISA', 'Easypaisa'
+    ADJUSTMENT = 'ADJUSTMENT', 'Return Credit'
     JAZZCASH = 'JAZZCASH', 'JazzCash'
 
 

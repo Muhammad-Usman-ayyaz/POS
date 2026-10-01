@@ -17,6 +17,7 @@ const ACTION_STYLES: Record<AuditAction, string> = {
   KHATA_CHARGE_RECORDED: 'bg-warning-soft text-warning',
   KHATA_PAYMENT_RECORDED: 'bg-info-soft text-info',
   STOCK_ADJUSTED: 'bg-warning-soft text-warning',
+  SALE_RETURN_CREATED: 'bg-warning-soft text-warning',
   EMPLOYEE_CREATED: 'bg-success-soft text-success',
   EMPLOYEE_UPDATED: 'bg-info-soft text-info',
   EMPLOYEE_DEACTIVATED: 'bg-danger-soft text-danger',

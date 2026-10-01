@@ -23,6 +23,8 @@ urlpatterns = [
     path('api/khata/', include('apps.khata.urls')),
     # Sales: POS transactions, invoices
     path('api/', include('apps.sales.urls')),
+    # Returns & Claims: customer returns against a completed sale
+    path('api/', include('apps.returns.urls')),
     # Reports: dashboard summary, sales trend, category/product analytics
     path('api/reports/', include('apps.reports.urls')),
     # Audit log: who did what, for critical activities (Owner/Manager only)

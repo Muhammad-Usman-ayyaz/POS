@@ -18,6 +18,7 @@ import KhataPage from '@/pages/KhataPage';
 import SalesPage from '@/pages/SalesPage';
 import InvoicesPage from '@/pages/InvoicesPage';
 import InvoicePreviewPage from '@/pages/InvoicePreviewPage';
+import ReturnsPage from '@/pages/ReturnsPage';
 import ReportsPage from '@/pages/ReportsPage';
 import PurchasesPage from '@/pages/PurchasesPage';
 import EmployeesPage from '@/pages/EmployeesPage';
@@ -116,6 +117,10 @@ export const router = createBrowserRouter([
       {
         path: '/invoice-preview',
         element: <InvoicePreviewPage />,
+      },
+      {
+        path: '/returns',
+        element: <ReturnsPage />,
       },
       {
         // Payments used to be its own page — it was just the Khata ledger filtered to payments,

@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'apps.customers.apps.CustomersConfig',
     'apps.khata.apps.KhataConfig',
     'apps.sales.apps.SalesConfig',
+    'apps.returns.apps.ReturnsConfig',
     'apps.reports.apps.ReportsConfig',
     'apps.audit.apps.AuditConfig',
 ]

@@ -6,7 +6,7 @@ import { Pagination } from '@/components/Pagination';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { getErrorMessage } from '@/lib/apiError';
 
-const INBOUND = new Set<MovementType>(['PURCHASE_IN', 'ADJUSTMENT_IN', 'SALE_REVERSED']);
+const INBOUND = new Set<MovementType>(['PURCHASE_IN', 'ADJUSTMENT_IN', 'SALE_REVERSED', 'RETURN_IN']);
 
 const TYPE_STYLES: Record<MovementType, string> = {
   PURCHASE_IN: 'bg-success-soft text-success',
@@ -17,6 +17,7 @@ const TYPE_STYLES: Record<MovementType, string> = {
   EXPIRED: 'bg-danger-soft text-danger',
   PURCHASE_REVERSED: 'bg-danger-soft text-danger',
   SALE_REVERSED: 'bg-success-soft text-success',
+  RETURN_IN: 'bg-warning-soft text-warning',
 };
 
 const formatDateTime = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });

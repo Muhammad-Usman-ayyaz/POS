@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store';
 import { downloadInvoicePdf, sales as salesApi, useCancelSale } from '@/features/sales/api';
 import { PAYMENT_METHOD_LABELS, type Sale } from '@/features/sales/types';
+import { useCreateReturn } from '@/features/returns/api';
+import type { SalesReturnInput } from '@/features/returns/types';
+import { NewReturnDialog } from '@/features/returns/components/NewReturnDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Pagination } from '@/components/Pagination';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -18,11 +21,13 @@ const STATUS_STYLES: Record<Sale['status'], string> = {
 };
 
 const CAN_CANCEL_ROLES = new Set(['OWNER', 'MANAGER']);
+const CAN_RETURN_ROLES = new Set(['OWNER', 'MANAGER', 'SALESMAN']);
 
 export const InvoicesPage: React.FC = () => {
   const navigate = useNavigate();
   const role = useAuthStore((s) => s.role);
   const canCancel = role !== null && CAN_CANCEL_ROLES.has(role);
+  const canReturn = role !== null && CAN_RETURN_ROLES.has(role);
 
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebouncedValue(searchQuery);
@@ -31,6 +36,7 @@ export const InvoicesPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [cancelTarget, setCancelTarget] = useState<Sale | null>(null);
+  const [returnTarget, setReturnTarget] = useState<Sale | null>(null);
 
   const list = salesApi.useList({
     search: debouncedSearch || undefined, status: statusFilter || undefined, payment_method: methodFilter || undefined,
@@ -40,6 +46,7 @@ export const InvoicesPage: React.FC = () => {
   const total = list.data?.count ?? 0;
 
   const cancelSale = useCancelSale();
+  const createReturn = useCreateReturn();
 
   const handleCancel = () => {
     if (!cancelTarget) return;
@@ -47,6 +54,13 @@ export const InvoicesPage: React.FC = () => {
       onSuccess: () => { notify(`${cancelTarget.invoice_no} cancelled`); setCancelTarget(null); },
       onError: (err) => notifyError(getErrorMessage(err, 'Could not cancel this sale.')),
     });
+  };
+
+  const handleReturn = (input: SalesReturnInput) => {
+    createReturn.mutateAsync(input).then(
+      (result) => { notify(`${result.return_no} recorded`); setReturnTarget(null); },
+      (err) => notifyError(getErrorMessage(err, 'Could not process this return.')),
+    );
   };
 
   return (
@@ -160,6 +174,15 @@ export const InvoicesPage: React.FC = () => {
                       >
                         Print
                       </button>
+                      {canReturn && sale.status === 'COMPLETED' && (
+                        <button
+                          className="h-8 px-2.5 rounded-lg hover:bg-warning-soft text-outline hover:text-warning text-label-sm font-label-sm cursor-pointer erp-btn-press"
+                          onClick={() => setReturnTarget(sale)}
+                          type="button"
+                        >
+                          Return
+                        </button>
+                      )}
                       {canCancel && sale.status === 'COMPLETED' && (
                         <button
                           className="h-8 px-2.5 rounded-lg hover:bg-error-container/40 text-outline hover:text-error text-label-sm font-label-sm cursor-pointer erp-btn-press"
@@ -188,6 +211,16 @@ export const InvoicesPage: React.FC = () => {
         pending={cancelSale.isPending}
         title="Cancel this sale?"
       />
+
+      {returnTarget && (
+        <NewReturnDialog
+          error={createReturn.error}
+          onClose={() => setReturnTarget(null)}
+          onSubmit={handleReturn}
+          sale={returnTarget}
+          saving={createReturn.isPending}
+        />
+      )}
     </div>
   );
 };

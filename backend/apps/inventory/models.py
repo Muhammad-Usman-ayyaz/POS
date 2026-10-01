@@ -12,11 +12,12 @@ class MovementType(models.TextChoices):
     EXPIRED = 'EXPIRED', 'Expired Stock'
     PURCHASE_REVERSED = 'PURCHASE_REVERSED', 'Purchase Cancelled'
     SALE_REVERSED = 'SALE_REVERSED', 'Sale Cancelled'
+    RETURN_IN = 'RETURN_IN', 'Customer Return'
 
     # A movement decreases stock unless it's one of these.
     @classmethod
     def inbound(cls):
-        return {cls.PURCHASE_IN, cls.ADJUSTMENT_IN, cls.SALE_REVERSED}
+        return {cls.PURCHASE_IN, cls.ADJUSTMENT_IN, cls.SALE_REVERSED, cls.RETURN_IN}
 
 
 class StockMovement(models.Model):
