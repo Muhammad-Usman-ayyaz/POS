@@ -13,10 +13,11 @@ class UserAdmin(BaseUserAdmin):
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal info', {'fields': ('name',)}),
-        ('Permissions & Roles', {'fields': ('role', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Permissions & Roles', {'fields': ('role', 'is_active', 'is_staff', 'is_superuser')}),
         ('Important dates', {'fields': ('last_login', 'created_at', 'updated_at')}),
     )
     readonly_fields = ('created_at', 'updated_at', 'last_login')
+    filter_horizontal = ()
 
     add_fieldsets = (
         (
