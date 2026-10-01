@@ -1,0 +1,14 @@
+{
+  "name": "@pos/core",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pure TypeScript: types, Zod schemas, money math, domain functions and services. No SQLite, Electron, React or fs.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

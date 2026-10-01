@@ -10,7 +10,7 @@
   "scripts": {
     "test:schema": "python packages/db-sqlite/tests/schema_test.py",
     "test": "vitest run",
-    "typecheck": "tsc -p packages/db-sqlite --noEmit",
+    "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/db-sqlite --noEmit",
     "dev:db": "tsx scripts/make-dev-db.ts"
   },
   "devDependencies": {

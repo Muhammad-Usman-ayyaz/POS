@@ -8,3 +8,4 @@ release/
 backups/
 .env
 .DS_Store
+.vitest/

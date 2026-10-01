@@ -1,11 +1,13 @@
 // Port of schema_test.py. Loads the migrations into an in-memory database and checks the business rules.
 import { randomUUID } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { addDays, systemClock, todayUtc } from '@pos/core';
 import { migrate, openDatabase, type Db } from '../src/index.js';
 
 type Row = Record<string, unknown>;
 
-const day = (offset: number): string => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+// The triggers use the database's own date('now'), so these fixtures must follow the real clock.
+const day = (offset: number): string => addDays(todayUtc(systemClock), offset);
 const future = day(365);
 const soon = day(10);
 const past = '2020-01-01';
