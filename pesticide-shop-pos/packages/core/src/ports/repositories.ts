@@ -1,4 +1,5 @@
 import type {
+  AuditLog,
   Batch,
   Customer,
   Invoice,
@@ -74,6 +75,11 @@ export interface PaymentRepository {
   insert(row: NewRow<Payment>): void;
 }
 
+export interface AuditRepository {
+  /** Append-only record of who approved something unusual (an owner override). */
+  insert(row: NewRow<AuditLog>): void;
+}
+
 export interface LedgerRepository {
   /** Sum of amount_delta. Plus means the party owes more. */
   balance(partyType: 'customer' | 'supplier', partyId: string): number;
@@ -95,5 +101,6 @@ export interface Repositories {
   purchases: PurchaseRepository;
   payments: PaymentRepository;
   ledger: LedgerRepository;
+  audit: AuditRepository;
   numbers: DocumentNumbers;
 }

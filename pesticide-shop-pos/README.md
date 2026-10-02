@@ -23,7 +23,8 @@ scripts/                  Dev and release helpers
 - [x] Phase 1: db-sqlite package (connection, migration runner, first-launch setup, backup, Vitest)
 - [x] Phase 2, slices 1-2: Zod schemas for every table, money helpers, batch allocation, line and invoice totals, return limits (packages/core)
 - [x] Phase 2, slice 3: ports (repositories, unit of work, id and number generators) and services: stock, purchase, sale, payment, khata, sales return
-- [ ] Phase 2: cash refunds and voids (blocked on open question 8)
+- [x] Phase 2, slice 4: SQLite repositories and unit of work; one shared service suite runs on the fakes AND on SQLite; end-to-end scenario
+- [ ] Phase 2: cash refunds and voids (blocked on open questions 8 and 11)
 - [ ] Everything else: see `docs/build-plan.md`
 
 ## Check the database

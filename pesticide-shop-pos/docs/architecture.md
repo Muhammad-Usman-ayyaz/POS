@@ -9,8 +9,9 @@ Shells (swappable)    Electron desktop now | PWA or phone later | web admin late
 UI                    React pages (packages/ui)
 Core                  Pure TypeScript services and rules (packages/core)
 Ports                 Interfaces the core depends on (packages/core/src/ports)
-Adapters              SQLite now (packages/db-sqlite) | Supabase later
-Sync layer (later)    Reads change_log, pushes and pulls to Supabase
+Adapter               SQLite (packages/db-sqlite): the only implementation of the ports
+Sync layer (later)    A separate package that reads change_log and pushes and pulls to Supabase.
+                      Supabase is a sync target, not an adapter for the core ports.
 ```
 Dependency direction: `ui -> core <- db-sqlite`. `apps/desktop` wires everything together.
 
@@ -18,6 +19,9 @@ Dependency direction: `ui -> core <- db-sqlite`. `apps/desktop` wires everything
 - Renderer (React) shows screens and calls a typed API exposed by the preload script.
 - Main process owns the database, backup, printing and file access. IPC handlers validate input with Zod, then call core services.
 - The renderer never gets direct database or file access.
+
+## Supabase is a sync target, not an adapter
+The core ports (repositories and the unit of work) are synchronous and transactional, and SQLite is the one real implementation. Supabase will not implement them. When cloud backup or a second device arrives, a sync package reads unsynced `change_log` rows from SQLite and pushes them to Supabase (and later pulls changes back), so the core services and ports do not change.
 
 ## Why local-first
 The shop must keep billing during internet or power cuts. SQLite is a single file on his PC. Cloud is added later as a copy, never as a requirement.

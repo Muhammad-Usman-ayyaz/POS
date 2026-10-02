@@ -14,7 +14,7 @@ No ORM. The schema, triggers and views live in plain SQL migrations. Repositorie
 - `packages/ui`: React pages and components. Never touches SQLite or Electron directly. It calls a typed API.
 - `apps/desktop`: Electron main process, preload, IPC wiring, backup, printing, installer.
 Direction: `ui -> core <- db-sqlite`, and `apps/desktop` wires them together.
-Keep this separation. Later the SQLite adapter will be joined by a Supabase adapter and a sync layer, and nothing else should need to change.
+Keep this separation. SQLite is the only adapter for the core ports. Supabase comes later as a sync target fed by `change_log` (a separate sync package), not as a second adapter, so nothing else should need to change.
 
 ## Database rules (details in docs/database-rules.md)
 - Schema is `packages/db-sqlite/migrations/001_init.sql`. NEVER edit an applied migration. Add `002_...sql` instead.
@@ -50,3 +50,9 @@ Full list: `docs/decisions.md`. Unanswered owner questions with the defaults to 
 3. Do not add libraries without saying why. Prefer free, offline-friendly choices.
 4. Keep screens simple and fast for a busy counter: keyboard-friendly POS, large touch targets, clear errors.
 5. Update the docs when a decision changes.
+
+## Subagents
+Three project subagents live in `.claude/agents/`. Claude delegates to them automatically; you can also ask for one by name.
+- `schema-guardian` (read-only): checks data rules (migrations, derived stock and balances, append-only tables, soft deletes, money as integers, one transaction per operation, the flows in `docs/database-rules.md`) and runs `npm test`, `npm run typecheck` and `npm run test:schema`. Run it before every commit.
+- `layer-checker` (read-only): checks the dependency rules (`ui -> core <- db-sqlite`, pure core, SQL only in db-sqlite, Zod on every IPC input). Run it before every commit.
+- `test-skeptic`: plants a deliberate bug to prove each new or changed test can fail, then restores the file byte for byte. Run it whenever tests are added or changed, especially guard and rollback tests.

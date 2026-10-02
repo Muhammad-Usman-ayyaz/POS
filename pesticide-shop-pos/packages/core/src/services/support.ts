@@ -2,7 +2,7 @@ import type { z } from 'zod';
 import type { Clock } from '../clock.js';
 import { DomainError } from '../errors.js';
 import type { DeviceScope, IdGenerator, NewRow, Repositories, UnitOfWork } from '../ports/index.js';
-import type { Batch, Customer, LedgerEntry, Payment, Product, PublicUser, StockMovement, Supplier } from '../schemas/index.js';
+import type { AuditLog, Batch, Customer, LedgerEntry, Payment, Product, PublicUser, StockMovement, Supplier } from '../schemas/index.js';
 
 /** What every service needs. The adapters (SQLite, real clock, crypto) are supplied from outside core. */
 export interface ServiceDeps {
@@ -113,6 +113,17 @@ export function rowFactory(deps: ServiceDeps) {
         ref_id: a.ref_id ?? null,
         entry_date: a.entry_date,
         created_by: a.created_by,
+      };
+    },
+
+    audit(a: { user_id: string; action: string; table_name: string; row_id: string; details: unknown }): NewRow<AuditLog> {
+      return {
+        id: deps.ids.newId(),
+        user_id: a.user_id,
+        action: a.action,
+        table_name: a.table_name,
+        row_id: a.row_id,
+        details: JSON.stringify(a.details),
       };
     },
 

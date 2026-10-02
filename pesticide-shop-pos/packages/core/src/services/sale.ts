@@ -6,9 +6,11 @@ import { DomainError } from '../errors.js';
 import type { NewRow } from '../ports/index.js';
 import { Id, IsoDate, NonNegPaisa, PaymentMethod, PriceType, Qty } from '../schemas/common.js';
 import type { Invoice, InvoiceItem } from '../schemas/index.js';
-import { activeUser, liveCustomer, liveProduct, parseInput, rowFactory, type ServiceDeps } from './support.js';
+import { activeUser, liveCustomer, liveProduct, ownerUser, parseInput, rowFactory, type ServiceDeps } from './support.js';
 
-export const SaleInput = z.object({
+// Both schemas are strict: an unknown key (for example a `unit_price` sent by a client) is an error, not
+// something that is quietly ignored. Prices come from the product; a different price is an explicit override.
+export const SaleInput = z.strictObject({
   /** Leave out for a walk-in sale, which must be paid in full. */
   customer_id: Id.optional(),
   /** Defaults to the customer's usual price type, else retail. */
@@ -17,19 +19,29 @@ export const SaleInput = z.object({
   due_date: IsoDate.optional(),
   /** Paid now, in paisa. */
   paid_amount: NonNegPaisa,
-  /** For the money paid now by a customer. Walk-in sales are recorded as paid, with no method. */
+  /** How the amount paid now was paid. Saved on the invoice, and on the payments row for a customer sale. */
   payment_method: PaymentMethod.default('cash'),
   reference_no: z.string().min(1).optional(),
+  /**
+   * Owner approval to put a credit sale over the customer's credit limit. Without it such a sale is refused.
+   * Only checked when a limit is set (credit_limit above 0).
+   */
+  credit_override: z.strictObject({ approved_by: Id }).optional(),
   created_by: Id,
   lines: z
     .array(
-      z.object({
+      z.strictObject({
         product_id: Id,
         /** Base units. */
         qty: Qty,
         line_discount: NonNegPaisa.default(0),
         /** Manual batch choice. Leave out for earliest expiry first. */
-        batches: z.array(z.object({ batch_id: Id, qty: Qty })).min(1).optional(),
+        batches: z.array(z.strictObject({ batch_id: Id, qty: Qty })).min(1).optional(),
+        /**
+         * Owner-approved price for this line, in paisa per pack. Normally the price is looked up from the
+         * product (retail or wholesale, by price type) and the cashier cannot change it.
+         */
+        price_override: z.strictObject({ unit_price: NonNegPaisa, approved_by: Id }).optional(),
       }),
     )
     .min(1),
@@ -66,8 +78,21 @@ export function createSaleService(deps: ServiceDeps) {
         // `taken` stops two cart lines for the same product from selling the same stock twice.
         const taken = new Map<string, number>();
         const drafts: InvoiceLineDraft[] = [];
+        const approvals: { user_id: string; action: string; details: unknown }[] = [];
         for (const line of input.lines) {
           const product = liveProduct(tx, line.product_id);
+          // The price is looked up from the product. Only an active owner can set a different one.
+          const listPrice = price_type === 'wholesale' ? product.wholesale_price : product.retail_price;
+          let unit_price = listPrice;
+          if (line.price_override) {
+            ownerUser(tx, line.price_override.approved_by);
+            unit_price = line.price_override.unit_price;
+            approvals.push({
+              user_id: line.price_override.approved_by,
+              action: 'price_override',
+              details: { product_id: product.id, price_type, list_price: listPrice, unit_price },
+            });
+          }
           const all = tx.batches.listForProduct(product.id);
           const costOf = new Map(all.map((b) => [b.id, b.cost_price]));
           const batches: AllocatableBatch[] = all.map((b) => ({
@@ -84,7 +109,7 @@ export function createSaleService(deps: ServiceDeps) {
               {
                 product_id: product.id,
                 qty: line.qty,
-                unit_price: price_type === 'wholesale' ? product.wholesale_price : product.retail_price,
+                unit_price,
                 pack_size: product.pack_size,
                 line_discount: line.line_discount,
                 tax_rate_bp: product.tax_rate_bp,
@@ -99,13 +124,22 @@ export function createSaleService(deps: ServiceDeps) {
         checkInvoicePayment({ total: totals.total, paid_amount: input.paid_amount, has_customer: customer !== undefined });
         const unpaid = totals.total - input.paid_amount;
 
-        if (customer && unpaid > 0) {
+        if (input.credit_override) ownerUser(tx, input.credit_override.approved_by);
+        // A limit of 0 means no limit is set. The balance includes any opening balance, so it counts too.
+        if (customer && unpaid > 0 && customer.credit_limit > 0) {
           const owed = tx.ledger.balance('customer', customer.id);
           if (owed + unpaid > customer.credit_limit) {
-            throw new DomainError(
-              'CREDIT_LIMIT_EXCEEDED',
-              `credit limit is ${customer.credit_limit}; the customer owes ${owed} and this sale adds ${unpaid}`,
-            );
+            if (!input.credit_override) {
+              throw new DomainError(
+                'CREDIT_LIMIT_EXCEEDED',
+                `credit limit is ${customer.credit_limit}; the customer owes ${owed} and this sale adds ${unpaid}`,
+              );
+            }
+            approvals.push({
+              user_id: input.credit_override.approved_by,
+              action: 'credit_limit_override',
+              details: { customer_id: customer.id, credit_limit: customer.credit_limit, owed, unpaid },
+            });
           }
         }
         if (input.due_date !== undefined && input.due_date < today) {
@@ -124,12 +158,16 @@ export function createSaleService(deps: ServiceDeps) {
           tax_total: totals.tax_total,
           total: totals.total,
           paid_amount: input.paid_amount,
+          payment_method: input.payment_method,
           status: 'active',
           void_reason: null,
           voided_by: null,
           ...deps.scope,
         };
         tx.invoices.insert(invoice);
+        for (const a of approvals) {
+          tx.audit.insert(rows.audit({ user_id: a.user_id, action: a.action, table_name: 'invoices', row_id: invoice.id, details: a.details }));
+        }
 
         const items: NewRow<InvoiceItem>[] = [];
         for (const d of drafts) {

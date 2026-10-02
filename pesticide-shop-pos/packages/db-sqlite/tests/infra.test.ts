@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_MIGRATIONS_DIR,
   backupDatabase,
   checkIntegrity,
   currentSchemaVersion,
@@ -43,19 +44,73 @@ describe('connection', () => {
 });
 
 describe('migrations', () => {
-  it('loads 001_init in order', () => {
-    const m = loadMigrations();
-    expect(m[0]?.version).toBe(1);
+  it('loads the migrations in order: 001_init, then 002_invoice_payment_method', () => {
+    expect(loadMigrations().map((m) => [m.version, m.description])).toEqual([
+      [1, 'init'],
+      [2, 'invoice_payment_method'],
+    ]);
   });
 
   it('applies on a fresh database, records the version, and is a no-op the second time', async () => {
     const db = openDatabase(':memory:');
     const first = await migrate(db);
-    expect(first.applied).toEqual([1]);
+    expect(first.applied).toEqual([1, 2]);
     expect(first.backupPath).toBeNull();
-    expect(currentSchemaVersion(db)).toBe(1);
+    expect(currentSchemaVersion(db)).toBe(2);
     const second = await migrate(db);
     expect(second.applied).toEqual([]);
+  });
+
+  describe('002: invoices.payment_method', () => {
+    const migrationsUpTo1 = () => {
+      const dir001 = join(dir, 'm001');
+      mkdirSync(dir001);
+      writeFileSync(join(dir001, '001_init.sql'), readFileSync(join(DEFAULT_MIGRATIONS_DIR, '001_init.sql'), 'utf8'));
+      return dir001;
+    };
+    const insertInvoice = (db: ReturnType<typeof openDatabase>, id: string, extra = '') => {
+      const ids = firstLaunchSetup(db, setupInput);
+      const customer = 'c0000000-0000-4000-8000-000000000001';
+      db.prepare("INSERT INTO customers (id, name_en, shop_id, branch_id, device_id) VALUES (?, 'C', ?, ?, ?)").run(customer, ids.shopId, ids.branchId, ids.deviceId);
+      db.prepare(`INSERT INTO invoices (id, invoice_no, customer_id, created_by, subtotal, total, paid_amount, shop_id, branch_id, device_id${extra ? ', payment_method' : ''})
+                  VALUES (?, ?, ?, ?, 100, 100, 100, ?, ?, ?${extra ? ', ?' : ''})`).run(id, `INV-${id}`, customer, ids.ownerId, ids.shopId, ids.branchId, ids.deviceId, ...(extra ? [extra] : []));
+    };
+
+    it('gives invoices that already exist the method cash', async () => {
+      const db = openDatabase(join(dir, 'upgrade.db'));
+      await migrate(db, { migrationsDir: migrationsUpTo1() });
+      expect(currentSchemaVersion(db)).toBe(1);
+      insertInvoice(db, 'old-1');
+      expect(() => db.prepare('SELECT payment_method FROM invoices').get()).toThrow(/no such column/);
+
+      const result = await migrate(db);
+      expect(result.applied).toEqual([2]);
+      expect(result.backupPath).not.toBeNull(); // the existing database was copied first
+      expect(db.prepare("SELECT payment_method FROM invoices WHERE id = 'old-1'").get()).toEqual({ payment_method: 'cash' });
+    });
+
+    it('defaults to cash, accepts the four methods, and refuses anything else', async () => {
+      const db = openDatabase(':memory:');
+      await migrate(db);
+      insertInvoice(db, 'a');
+      expect(db.prepare("SELECT payment_method FROM invoices WHERE id = 'a'").get()).toEqual({ payment_method: 'cash' });
+      for (const method of ['cash', 'bank', 'easypaisa', 'jazzcash']) expect(() => insertInvoiceWith(db, method)).not.toThrow();
+      expect(() => insertInvoiceWith(db, 'cheque')).toThrow(/CHECK constraint/i);
+      expect(() => insertInvoiceWith(db, '')).toThrow(/CHECK constraint/i);
+
+      function insertInvoiceWith(d: typeof db, method: string) {
+        const row = d.prepare("SELECT customer_id, created_by, shop_id, branch_id, device_id FROM invoices WHERE id = 'a'").get() as Record<string, string>;
+        d.prepare(`INSERT INTO invoices (id, invoice_no, customer_id, created_by, subtotal, total, paid_amount, payment_method, shop_id, branch_id, device_id)
+                   VALUES (?, ?, ?, ?, 100, 100, 100, ?, ?, ?, ?)`).run(`m-${method}`, `INV-m-${method}`, row.customer_id, row.created_by, method, row.shop_id, row.branch_id, row.device_id);
+      }
+    });
+
+    it('is not null', async () => {
+      const db = openDatabase(':memory:');
+      await migrate(db);
+      const column = (db.pragma('table_info(invoices)') as { name: string; notnull: number; dflt_value: string | null }[]).find((c) => c.name === 'payment_method');
+      expect(column).toMatchObject({ notnull: 1, dflt_value: "'cash'" });
+    });
   });
 
   it('takes a backup before applying a new migration to an existing file', async () => {

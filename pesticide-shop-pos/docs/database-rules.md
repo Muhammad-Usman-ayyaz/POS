@@ -1,6 +1,6 @@
 # Database rules and service flows
 
-The schema is in `packages/db-sqlite/migrations/001_init.sql`. The database refuses many bad writes by itself (negative stock, selling expired batches, over-returns, editing history). The services below create the rows. The database does NOT create stock or ledger rows automatically.
+The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later numbered migrations (`002_invoice_payment_method.sql` adds `invoices.payment_method`). Never edit an applied migration. The database refuses many bad writes by itself (negative stock, selling expired batches, over-returns, editing history). The services below create the rows. The database does NOT create stock or ledger rows automatically.
 
 ## Units and money
 - `products.base_unit` is ml, g or piece. `pack_size` is base units per pack (1L bottle = 1000 ml).
@@ -16,12 +16,13 @@ Positive `amount_delta` means the customer owes more (or we owe the supplier mor
 
 ## Record a sale (one transaction)
 1. Take the next invoice number for this device from `number_sequences` (format like `INV-A-000123`).
-2. Insert `invoices`. Credit sales need a customer. A walk-in sale must be paid in full.
+2. Insert `invoices`, with `payment_method` (cash, bank, easypaisa or jazzcash, default cash) for the amount paid at sale. Credit sales need a customer. A walk-in sale must be paid in full. The unit price of each line is looked up from the product (`retail_price` or `wholesale_price` by the invoice's price type); the cashier cannot type a price. A different price is an owner-approved `price_override` on that line, and the approval is written to `audit_log`.
+   A credit sale (a customer, with something unpaid) is refused if the customer's balance plus the unpaid amount would pass `customers.credit_limit`. A limit of 0 means no limit is set, so nothing is checked. The balance includes the opening balance. An owner can approve a sale over the limit with a `credit_override`, which is written to `audit_log`.
 3. For each line, choose batch(es) earliest-expiry-first, skipping expired batches. One `invoice_items` row per batch used. Copy the batch `cost_price` onto the line.
 4. Insert a `stock_movements` row (`sale`, negative qty) per invoice item.
-5. If there is a customer: insert `ledger_entries` (`invoice`, plus total). If money was paid now, insert `payments` (`in`) and a `ledger_entries` row (`payment`, minus amount).
-6. Walk-in cash lives on `invoices.paid_amount` only. `payments` and `ledger_entries` need a real customer or supplier.
-7. Cash received report = `payments` (in, cash) + walk-in `invoices.paid_amount`.
+5. If there is a customer: insert `ledger_entries` (`invoice`, plus total). If money was paid now, insert `payments` (`in`, with the same method as `invoices.payment_method`) and a `ledger_entries` row (`payment`, minus amount).
+6. Walk-in money lives on `invoices.paid_amount` and `invoices.payment_method` only. `payments` and `ledger_entries` need a real customer or supplier.
+7. Cash received report = `payments` (in, cash) + walk-in `invoices.paid_amount` where `payment_method` is cash. Do not add `paid_amount` of customer invoices: that money is already in `payments`.
 
 ## Record a customer payment
 Insert `payments` (`in`) and `ledger_entries` (`payment`, minus amount). Payments reduce the overall balance, not one invoice.

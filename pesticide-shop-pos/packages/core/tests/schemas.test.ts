@@ -15,7 +15,7 @@ const product = () => ({
 const invoice = () => ({
   id: randomUUID(), invoice_no: 'INV-A-000001', customer_id: randomUUID(), created_by: randomUUID(),
   invoice_date: '2026-10-01T10:00:00.000Z', due_date: null, price_type: 'retail' as const,
-  subtotal: 500_000, tax_total: 0, total: 500_000, paid_amount: 200_000, status: 'active' as const,
+  subtotal: 500_000, tax_total: 0, total: 500_000, paid_amount: 200_000, payment_method: 'cash' as const, status: 'active' as const,
   void_reason: null, voided_by: null, ...scope(), ...meta(),
 });
 
@@ -68,6 +68,14 @@ describe('Invoice (same rules as the table CHECKs)', () => {
     ['a voided invoice with no reason', { status: 'voided' }],
   ])('rejects %s', (_label, patch) => {
     expect(Invoice.safeParse({ ...invoice(), ...patch }).success).toBe(false);
+  });
+
+  it.each(['cash', 'bank', 'easypaisa', 'jazzcash'])('accepts the payment method %s', (payment_method) => {
+    expect(Invoice.safeParse({ ...invoice(), payment_method }).success).toBe(true);
+  });
+
+  it.each(['cheque', '', null, undefined])('rejects the payment method %s', (payment_method) => {
+    expect(Invoice.safeParse({ ...invoice(), payment_method }).success).toBe(false);
   });
 
   it('accepts a walk-in sale paid in full, and a properly voided invoice', () => {

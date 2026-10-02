@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { editableMeta, Id, IsoDate, IsoDateTime, lineMeta, NonNegPaisa, PriceType, Qty, syncScope, TaxRateBp } from './common.js';
+import { editableMeta, Id, IsoDate, IsoDateTime, lineMeta, NonNegPaisa, PaymentMethod, PriceType, Qty, syncScope, TaxRateBp } from './common.js';
 
 export const InvoiceStatus = z.enum(['active', 'voided']);
 export type InvoiceStatus = z.infer<typeof InvoiceStatus>;
@@ -18,6 +18,8 @@ export const Invoice = z
     tax_total: NonNegPaisa,
     total: NonNegPaisa,
     paid_amount: NonNegPaisa,
+    /** How the amount paid at sale was paid. For a customer sale the payments row uses the same method. */
+    payment_method: PaymentMethod,
     status: InvoiceStatus,
     void_reason: z.string().nullable(),
     voided_by: Id.nullable(),

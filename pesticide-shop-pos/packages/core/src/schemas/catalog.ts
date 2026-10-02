@@ -36,6 +36,7 @@ export const Customer = z
     ...names,
     phone: z.string().nullable(),
     village: z.string().nullable(),
+    /** Paisa the customer may owe. 0 means no limit is set. */
     credit_limit: NonNegPaisa,
     default_price_type: PriceType,
     notes: z.string().nullable(),
