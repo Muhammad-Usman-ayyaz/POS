@@ -1,6 +1,6 @@
 # Database rules and service flows
 
-The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later numbered migrations (`002_invoice_payment_method.sql` adds `invoices.payment_method`). Never edit an applied migration. The database refuses many bad writes by itself (negative stock, selling expired batches, over-returns, editing history). The services below create the rows. The database does NOT create stock or ledger rows automatically.
+The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later numbered migrations (`002_invoice_payment_method.sql` adds `invoices.payment_method`; `003_user_recovery_code.sql` adds `users.recovery_code_hash`). Never edit an applied migration. The database refuses many bad writes by itself (negative stock, selling expired batches, over-returns, editing history). The services below create the rows. The database does NOT create stock or ledger rows automatically.
 
 ## Units and money
 - `products.base_unit` is ml, g or piece. `pack_size` is base units per pack (1L bottle = 1000 ml).
@@ -51,6 +51,22 @@ Overdue invoices are not a view yet: since payments hit the overall balance, tre
 
 ## First launch
 The app must create the `shops`, `branches` and `devices` rows, the owner user, and default `settings` (for example `near_expiry_days = 30`) because every other table references them.
+
+## Audit log
+`audit_log` is append-only. Rows are written in the same transaction as the change they record, and the user is always the one signed in (taken from the session, never from the screen):
+
+| action | when | user_id |
+|---|---|---|
+| `login` / `login_failed` | every sign-in; failed ones say why (`unknown_user`, `wrong_password`, `inactive_user`) | the user, or NULL for an unknown name |
+| `price_override` / `credit_limit_override` | an owner approved a different price or a sale over the credit limit | the owner |
+| `return_approved` | an approved sales return | the owner |
+| `stock_adjustment` / `stock_write_off` | a stock count correction or a write-off | who did it |
+| `owner_password_reset` / `owner_password_reset_failed` / `recovery_code_regenerated` | owner recovery | the owner, or NULL |
+
+Passwords and recovery codes are never written to the log.
+
+## Users and the recovery code
+`users.password_hash` and `users.recovery_code_hash` are argon2id hashes made in the main process. The core services never see them: `UserRepository` leaves them out. The owner's recovery code is made at first launch, shown once, and replaced each time it is used or regenerated.
 
 ## Sync support
 Triggers write `change_log` on every insert and update. Set `synced_at` after a successful sync. Unsynced rows cannot be deleted.

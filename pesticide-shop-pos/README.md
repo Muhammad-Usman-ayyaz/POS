@@ -25,6 +25,7 @@ scripts/                  Dev and release helpers
 - [x] Phase 2, slice 3: ports (repositories, unit of work, id and number generators) and services: stock, purchase, sale, payment, khata, sales return
 - [x] Phase 2, slice 4: SQLite repositories and unit of work; one shared service suite runs on the fakes AND on SQLite; end-to-end scenario
 - [ ] Phase 2: cash refunds and voids (blocked on open questions 8 and 11)
+- [x] Phase 3, part 1: desktop shell (Electron, typed API in packages/api-contract, first-launch setup and owner recovery code, sign in, owner and staff roles, layout, English and Urdu, error messages). Run it with `npm run dev`; see CLAUDE.md
 - [ ] Everything else: see `docs/build-plan.md`
 
 ## Check the database

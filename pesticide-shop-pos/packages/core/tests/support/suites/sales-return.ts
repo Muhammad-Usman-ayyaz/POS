@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { codeOf, ID, services, uuid, type ServiceWorld, type WorldFactory } from '../world.js';
+import { codeOf, errorOf, ID, services, uuid, type ServiceWorld, type WorldFactory } from '../world.js';
 
 export function defineSalesReturnTests(make: WorldFactory): void {
   describe('sales return', () => {
@@ -44,6 +44,24 @@ export function defineSalesReturnTests(make: WorldFactory): void {
 
         expect(w.rows('ledger_entries').at(-1)).toMatchObject({ party_id: ID.customer, entry_type: 'return', amount_delta: -100_000, ref_type: 'return', ref_id: r.sales_return.id });
         expect(s.khata.balance(ID.customer)).toBe(200_000); // now owes Rs 2000
+      });
+
+      it('an approved return is written to the audit log, with the owner who approved it', () => {
+        const { invoice, item } = tenSold();
+        const r = ret(invoice.id, item.id, 2000);
+        expect(w.rows('audit_log')).toEqual([
+          expect.objectContaining({ user_id: ID.owner, action: 'return_approved', table_name: 'sales_returns', row_id: r.sales_return.id }),
+        ]);
+        expect(JSON.parse(w.rows('audit_log')[0]!.details as string)).toEqual({ return_no: 'RET-A-000001', invoice_id: invoice.id, total: 100_000, refund_method: 'khata_credit' });
+      });
+
+      it('a refused return writes no audit row, and the error says how much can still come back', () => {
+        const { invoice, item } = tenSold();
+        ret(invoice.id, item.id, 2000);
+        const e = errorOf(() => ret(invoice.id, item.id, 9000));
+        expect(e.code).toBe('RETURN_EXCEEDS_SOLD');
+        expect(e.params).toEqual({ returnable: 8000, requested: 9000, packSize: 1000 });
+        expect(w.rows('audit_log')).toHaveLength(1); // only the first, approved return
       });
 
       it('then 9 more bottles cannot come back, but the last 8 can, and the refunds add up to the sale', () => {

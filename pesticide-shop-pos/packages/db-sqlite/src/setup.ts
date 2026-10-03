@@ -9,6 +9,8 @@ export interface FirstLaunchInput {
   ownerUsername: string;
   /** Already hashed by the caller. This package does no password handling. */
   ownerPasswordHash: string;
+  /** Hash of the owner's one-time recovery code, if one was made. Stored with the owner in the same transaction. */
+  ownerRecoveryCodeHash?: string;
   branchName?: string;
   /** Short code used in invoice numbers, e.g. "A" gives INV-A-000001. */
   branchCode?: string;
@@ -68,9 +70,9 @@ export function firstLaunchSetup(db: Db, input: FirstLaunchInput): SetupIds {
       input.deviceCode ?? `${branchCode}1`,
     );
     db.prepare(
-      `INSERT INTO users (id, name, username, password_hash, role, shop_id, branch_id, device_id)
-       VALUES (?, ?, ?, ?, 'owner', ?, ?, ?)`,
-    ).run(ids.ownerId, input.ownerName, input.ownerUsername, input.ownerPasswordHash, ids.shopId, ids.branchId, ids.deviceId);
+      `INSERT INTO users (id, name, username, password_hash, recovery_code_hash, role, shop_id, branch_id, device_id)
+       VALUES (?, ?, ?, ?, ?, 'owner', ?, ?, ?)`,
+    ).run(ids.ownerId, input.ownerName, input.ownerUsername, input.ownerPasswordHash, input.ownerRecoveryCodeHash ?? null, ids.shopId, ids.branchId, ids.deviceId);
 
     const setting = db.prepare(
       'INSERT INTO settings (id, "key", value, shop_id, branch_id, device_id) VALUES (?, ?, ?, ?, ?, ?)',

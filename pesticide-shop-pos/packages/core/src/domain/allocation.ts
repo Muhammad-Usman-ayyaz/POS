@@ -27,7 +27,7 @@ export interface Allocation {
 function checkRequest(req: AllocateRequest): void {
   if (!Number.isInteger(req.qty) || req.qty <= 0) throw new DomainError('INVALID_QUANTITY', `quantity must be a positive integer: ${req.qty}`);
   if (!req.allow_loose && req.qty % req.pack_size !== 0) {
-    throw new DomainError('WHOLE_PACKS_ONLY', `this product is sold in whole packs of ${req.pack_size}`);
+    throw new DomainError('WHOLE_PACKS_ONLY', `this product is sold in whole packs of ${req.pack_size}`, { packSize: req.pack_size });
   }
 }
 
@@ -61,7 +61,7 @@ export function allocateBatches(req: AllocateRequest): Allocation[] {
 
   if (remaining > 0) {
     const available = req.qty - remaining;
-    throw new DomainError('INSUFFICIENT_STOCK', `only ${available} available, ${req.qty} requested`);
+    throw new DomainError('INSUFFICIENT_STOCK', `only ${available} available, ${req.qty} requested`, { available, requested: req.qty, packSize: req.pack_size, scope: 'product' });
   }
   return result;
 }
@@ -82,11 +82,13 @@ export function validateManualAllocation(req: AllocateRequest, manual: readonly 
 
     const batch = req.batches.find((b) => b.batch_id === m.batch_id);
     if (!batch) throw new DomainError('BATCH_NOT_AVAILABLE', `batch is not one of this product's batches: ${m.batch_id}`);
-    if (isExpired(batch, req.today)) throw new DomainError('BATCH_EXPIRED', `batch expired on ${batch.expiry_date}`);
+    if (isExpired(batch, req.today)) throw new DomainError('BATCH_EXPIRED', `batch expired on ${batch.expiry_date}`, { expiry: batch.expiry_date });
     if (!req.allow_loose && m.qty % req.pack_size !== 0) {
-      throw new DomainError('WHOLE_PACKS_ONLY', `this product is sold in whole packs of ${req.pack_size}`);
+      throw new DomainError('WHOLE_PACKS_ONLY', `this product is sold in whole packs of ${req.pack_size}`, { packSize: req.pack_size });
     }
-    if (m.qty > batch.stock) throw new DomainError('INSUFFICIENT_STOCK', `batch has ${batch.stock}, ${m.qty} requested`);
+    if (m.qty > batch.stock) {
+      throw new DomainError('INSUFFICIENT_STOCK', `batch has ${batch.stock}, ${m.qty} requested`, { available: batch.stock, requested: m.qty, packSize: req.pack_size, scope: 'batch' });
+    }
     total += m.qty;
   }
 

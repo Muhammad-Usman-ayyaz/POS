@@ -8,15 +8,20 @@
     "apps/*"
   ],
   "scripts": {
-    "test:schema": "python packages/db-sqlite/tests/schema_test.py",
+    "dev": "npm run dev -w @pos/desktop",
+    "build": "npm run build -w @pos/desktop",
+    "native": "npm run native -w @pos/desktop",
+    "screenshots": "npm run screenshots -w @pos/desktop",
     "test": "vitest run",
-    "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/db-sqlite --noEmit",
+    "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/db-sqlite --noEmit && tsc -p packages/api-contract --noEmit && tsc -p packages/ui --noEmit && tsc -p apps/desktop/tsconfig.node.json --noEmit && tsc -p apps/desktop/tsconfig.web.json --noEmit && tsc -p scripts --noEmit",
+    "test:schema": "python packages/db-sqlite/tests/schema_test.py",
     "dev:db": "tsx scripts/make-dev-db.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "@node-rs/argon2": "^2.2.1"
   }
 }

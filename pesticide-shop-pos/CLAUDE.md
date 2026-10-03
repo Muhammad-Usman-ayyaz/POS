@@ -11,9 +11,10 @@ No ORM. The schema, triggers and views live in plain SQL migrations. Repositorie
 ## Layers and dependency rules
 - `packages/core`: pure TypeScript. Types, Zod schemas, money math, and services (sale, return, void, purchase, payment, stock, khata). It must NOT import electron, better-sqlite3, react or fs. It talks to the outside only through interfaces in `src/ports`.
 - `packages/db-sqlite`: implements the ports with better-sqlite3. The ONLY place that contains SQL. Also holds `migrations/`.
-- `packages/ui`: React pages and components. Never touches SQLite or Electron directly. It calls a typed API.
-- `apps/desktop`: Electron main process, preload, IPC wiring, backup, printing, installer.
-Direction: `ui -> core <- db-sqlite`, and `apps/desktop` wires them together.
+- `packages/api-contract`: the typed API between the UI and any shell: channel names, strict Zod input schemas, output types, the error envelope. Pure TypeScript: it must NOT import React, Electron or Node code, and the UI and desktop both import it.
+- `packages/ui`: React pages and components, the design system (`docs/design-system.md`) and the English and Urdu texts. Never touches SQLite or Electron directly. It calls the typed API.
+- `apps/desktop`: Electron main process, preload, IPC wiring, the session, roles, password hashing, backup, printing, installer.
+Direction: `ui -> api-contract -> core <- db-sqlite`, and `apps/desktop` wires them together. Do not import `@pos/core/testing` from `ui` or `desktop`.
 Keep this separation. SQLite is the only adapter for the core ports. Supabase comes later as a sync target fed by `change_log` (a separate sync package), not as a second adapter, so nothing else should need to change.
 
 ## Database rules (details in docs/database-rules.md)
@@ -42,7 +43,8 @@ Full list: `docs/decisions.md`. Unanswered owner questions with the defaults to 
 ## Commands
 - `npm run test:schema` runs the schema checks (needs Python 3). All must pass after any migration change.
 - `npm test` runs Vitest (db-sqlite: schema rules, migrations, setup, backup). `npm run typecheck` runs tsc.
-- Add `npm run dev` when the desktop app is created.
+- `npm run dev` starts the desktop app (it opens `dev.db` in the repo root; with no `dev.db` you see the first-launch setup). `npm run dev:db` makes a `dev.db` with an owner, a staff user and demo data (the script prints the logins; it only ever replaces the repo-root `dev.db`, ignores `POS_DB_PATH`, and refuses to touch a database that holds a real shop). Never commit `dev.db`.
+- `npm run native` downloads and verifies the Electron build of SQLite (see `docs/native-sqlite.md`). `npm run build` builds the app. `npm run screenshots` captures every screen at three window sizes.
 
 ## How to work
 1. Read `docs/build-plan.md` and do one phase at a time. Finish and test a phase before starting the next.
@@ -54,5 +56,5 @@ Full list: `docs/decisions.md`. Unanswered owner questions with the defaults to 
 ## Subagents
 Three project subagents live in `.claude/agents/`. Claude delegates to them automatically; you can also ask for one by name.
 - `schema-guardian` (read-only): checks data rules (migrations, derived stock and balances, append-only tables, soft deletes, money as integers, one transaction per operation, the flows in `docs/database-rules.md`) and runs `npm test`, `npm run typecheck` and `npm run test:schema`. Run it before every commit.
-- `layer-checker` (read-only): checks the dependency rules (`ui -> core <- db-sqlite`, pure core, SQL only in db-sqlite, Zod on every IPC input). Run it before every commit.
+- `layer-checker` (read-only): checks the dependency rules (`ui -> api-contract -> core <- db-sqlite`, pure core, pure api-contract with no React or Electron, SQL only in db-sqlite, Zod on every IPC input). Run it before every commit.
 - `test-skeptic`: plants a deliberate bug to prove each new or changed test can fail, then restores the file byte for byte. Run it whenever tests are added or changed, especially guard and rollback tests.

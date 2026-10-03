@@ -90,6 +90,17 @@ export function services(w: ServiceWorld) {
   };
 }
 
+/** The DomainError thrown by `fn` (code, message, params). Fails loudly if it threw something else or nothing. */
+export function errorOf(fn: () => unknown): DomainError {
+  try {
+    fn();
+  } catch (e) {
+    if (e instanceof DomainError) return e;
+    throw new Error(`expected a DomainError, got: ${String(e)}`);
+  }
+  throw new Error('expected a DomainError, but nothing was thrown');
+}
+
 /** The error code of a DomainError thrown by `fn`, or undefined if it did not throw one. */
 export function codeOf(fn: () => unknown): string | undefined {
   try {

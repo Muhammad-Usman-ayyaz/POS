@@ -1,0 +1,35 @@
+{
+  "//": "better-sqlite3 is listed on purpose although only @pos/db-sqlite imports it: electron-vite leaves a package as an external import only when THIS package depends on it. Without it the bundler inlines better-sqlite3 and the app cannot start (\"Could not dynamically require ...better_sqlite3.node\"). Checked by removing it; see apps/desktop/tests/production-bundle.test.ts.",
+  "name": "@pos/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The Electron shell: main process, preload and renderer. Owns the database, the session and the password hashing; the renderer only calls the typed API.",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "native": "node scripts/fetch-native.mjs",
+    "predev": "node scripts/check-native.mjs",
+    "dev": "electron-vite dev",
+    "prebuild": "node scripts/check-native.mjs",
+    "build": "electron-vite build",
+    "screenshots": "node scripts/screenshots.mjs"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.2.1",
+    "@pos/api-contract": "^0.1.0",
+    "@pos/core": "^0.1.0",
+    "@pos/db-sqlite": "^0.1.0",
+    "@pos/ui": "^0.1.0",
+    "better-sqlite3": "^12.0.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/node": "^24.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "42.11.10",
+    "electron-vite": "^5.0.0",
+    "tailwindcss": "^4.1.0",
+    "tar": "^7.4.0",
+    "vite": "^7.0.0"
+  }
+}

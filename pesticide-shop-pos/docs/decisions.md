@@ -23,3 +23,9 @@
 | Near expiry | Warn at 30 days | `settings.near_expiry_days` |
 | Migration | Start fresh, no Django import | Old version used as reference only |
 | ORM | None. Plain SQL migrations and typed repositories | Triggers and views live in SQL |
+| Desktop shell | Electron 42 pinned exactly; Electron build of SQLite pinned and verified | See `docs/native-sqlite.md` |
+| Sign in | argon2id, session in the main process, owner and staff | Owner-only rules are checked in the main process |
+| Recovery | One-time owner recovery code, shown once, stored as a hash | Resets the owner password; replaced after use |
+| Staff limits | Stock changes and opening balances are owner-only by default | Open question 12 |
+| Security | Strict Content-Security-Policy in the built app | Relaxed only for the Vite dev server |
+| Audit | Sign-ins, overrides, returns, stock changes, resets are in `audit_log` | See `docs/database-rules.md` |

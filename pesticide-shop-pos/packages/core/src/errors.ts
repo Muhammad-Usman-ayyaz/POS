@@ -21,13 +21,23 @@ export type DomainErrorCode =
   | 'CREDIT_LIMIT_EXCEEDED'
   | 'BATCH_CONFLICT'
   | 'OPENING_BALANCE_EXISTS'
-  | 'NOT_SUPPORTED';
+  | 'NOT_SUPPORTED'
+  | 'NOT_SIGNED_IN'
+  | 'INVALID_CREDENTIALS'
+  | 'INVALID_RECOVERY_CODE'
+  | 'ALREADY_SET_UP'
+  | 'INTERNAL';
+
+/** Numbers and short strings that explain an error, so the UI can say "Only 3 packs left" in any language. */
+export type ErrorParams = Readonly<Record<string, string | number>>;
 
 /** A business rule was broken. Services and the UI map `code` to a message the shopkeeper can read. */
 export class DomainError extends Error {
   constructor(
     readonly code: DomainErrorCode,
     message: string,
+    /** Amounts are paisa, quantities are base units. The UI formats them. */
+    readonly params: ErrorParams = {},
   ) {
     super(message);
     this.name = 'DomainError';

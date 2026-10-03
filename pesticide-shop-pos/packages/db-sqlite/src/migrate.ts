@@ -14,6 +14,8 @@ export interface Migration {
 
 export interface MigrateOptions {
   migrationsDir?: string;
+  /** Migrations already in memory (the desktop app bundles the .sql files). Used instead of reading migrationsDir. */
+  migrations?: readonly Migration[];
   /** Where to put the pre-migration copy. Defaults to a `backups` folder next to the database file. */
   backupDir?: string;
 }
@@ -29,12 +31,23 @@ const FILE_RE = /^(\d+)_(.+)\.sql$/;
 
 /** Reads `NNN_description.sql` files in version order. Gaps and bad names are errors. */
 export function loadMigrations(dir: string = DEFAULT_MIGRATIONS_DIR): Migration[] {
-  const migrations = readdirSync(dir)
-    .filter((f) => f.endsWith('.sql'))
-    .map((f) => {
+  const files = Object.fromEntries(
+    readdirSync(dir)
+      .filter((f) => f.endsWith('.sql'))
+      .map((f) => [f, readFileSync(join(dir, f), 'utf8')]),
+  );
+  return parseMigrationFiles(files);
+}
+
+/** Turns `{ '001_init.sql': '...' }` (file name or path, to SQL text) into ordered migrations. Same rules as loadMigrations. */
+export function parseMigrationFiles(files: Readonly<Record<string, string>>): Migration[] {
+  const migrations = Object.entries(files)
+    .filter(([name]) => name.endsWith('.sql'))
+    .map(([name, sql]) => {
+      const f = basename(name.replaceAll('\\', '/')); // a Vite glob key is a path like ../migrations/001_init.sql
       const m = FILE_RE.exec(f);
       if (!m) throw new Error(`Migration file name must look like 001_name.sql: ${f}`);
-      return { version: Number(m[1]), description: m[2]!, sql: readFileSync(join(dir, f), 'utf8') };
+      return { version: Number(m[1]), description: m[2]!, sql };
     })
     .sort((a, b) => a.version - b.version);
 
@@ -59,7 +72,7 @@ export function currentSchemaVersion(db: Db): number {
  * A failed migration rolls back and throws; earlier migrations stay applied.
  */
 export async function migrate(db: Db, options: MigrateOptions = {}): Promise<MigrateResult> {
-  const all = loadMigrations(options.migrationsDir);
+  const all = options.migrations ? [...options.migrations] : loadMigrations(options.migrationsDir);
   const current = currentSchemaVersion(db);
 
   if (current > all.length) {

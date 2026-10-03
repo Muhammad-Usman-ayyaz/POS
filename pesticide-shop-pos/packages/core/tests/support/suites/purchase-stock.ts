@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { codeOf, ID, services, uuid, type ServiceWorld, type WorldFactory } from '../world.js';
+import { codeOf, errorOf, ID, services, uuid, type ServiceWorld, type WorldFactory } from '../world.js';
 
 export function definePurchaseTests(make: WorldFactory): void {
   describe('purchase', () => {
@@ -177,6 +177,32 @@ export function defineStockTests(make: WorldFactory): void {
           ['adjustment', 500],
           ['adjustment', -1500],
         ]);
+      });
+
+      it('records an adjustment in the audit log: who, which batch, how much, and the stock before and after', () => {
+        stock.adjust({ batch_id: ID.bA, qty_delta: -1500, created_by: ID.owner });
+        const movement = w.rows('stock_movements').at(-1)!;
+        expect(w.rows('audit_log')).toEqual([
+          expect.objectContaining({ user_id: ID.owner, action: 'stock_adjustment', table_name: 'stock_movements', row_id: movement.id }),
+        ]);
+        expect(JSON.parse(w.rows('audit_log')[0]!.details as string)).toEqual({ batch_id: ID.bA, qty_delta: -1500, stock_before: 8000, stock_after: 6500 });
+      });
+
+      it('records a write-off in the audit log', () => {
+        stock.writeOff({ batch_id: ID.bExpired, qty: 1000, kind: 'expired', created_by: ID.owner });
+        const movement = w.rows('stock_movements').at(-1)!;
+        expect(w.rows('audit_log')).toEqual([
+          expect.objectContaining({ user_id: ID.owner, action: 'stock_write_off', table_name: 'stock_movements', row_id: movement.id }),
+        ]);
+        expect(JSON.parse(w.rows('audit_log')[0]!.details as string)).toEqual({ batch_id: ID.bExpired, qty: 1000, kind: 'expired', stock_before: 1000, stock_after: 0 });
+      });
+
+      it('a refused adjustment leaves no audit row, and says how much stock there is', () => {
+        const e = errorOf(() => stock.adjust({ batch_id: ID.bA, qty_delta: -8001, created_by: ID.owner }));
+        expect(e.code).toBe('INSUFFICIENT_STOCK');
+        expect(e.params).toEqual({ available: 8000, requested: 8001, packSize: 1000, scope: 'batch' });
+        expect(errorOf(() => stock.writeOff({ batch_id: ID.bA, qty: 9000, kind: 'damage', created_by: ID.owner })).params).toEqual({ available: 8000, requested: 9000, packSize: 1000, scope: 'batch' });
+        expect(w.rows('audit_log')).toHaveLength(0);
       });
 
       it('never lets a batch go below zero', () => {

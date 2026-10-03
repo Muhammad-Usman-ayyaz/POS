@@ -112,6 +112,11 @@ export function defineAtomicityTests(make: WorldFactory): void {
         expectNothingWritten(table, nth, back(r));
       });
 
+      it('an approved return whose audit row cannot be written is undone', () => {
+        const r = sold();
+        expectNothingWritten('audit_log', 1, back(r));
+      });
+
       it('a failed return does not use up a return number or change what can still be returned', () => {
         const r = sold();
         w.failOnInsert('ledger_entries', 1);
@@ -129,6 +134,12 @@ export function defineAtomicityTests(make: WorldFactory): void {
 
       it('a supplier payment whose ledger row fails leaves no payment either', () => {
         expectNothingWritten('ledger_entries', 1, () => s.payment.payToSupplier({ party_id: ID.supplier, amount: 1000, method: 'cash', created_by: ID.owner }));
+      });
+
+      it('a stock adjustment or write-off whose audit row cannot be written is undone (no stock change without a record)', () => {
+        expectNothingWritten('audit_log', 1, () => s.stock.adjust({ batch_id: ID.bA, qty_delta: -500, created_by: ID.owner }));
+        expectNothingWritten('audit_log', 1, () => s.stock.writeOff({ batch_id: ID.bA, qty: 500, kind: 'damage', created_by: ID.owner }));
+        expect(w.stockOf(ID.bA)).toBe(8000);
       });
 
       it('new opening stock whose movement fails leaves no new batch', () => {

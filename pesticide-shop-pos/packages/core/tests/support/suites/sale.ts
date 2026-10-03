@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { calcInvoiceTotals } from '../../../src/index.js';
-import { codeOf, ID, services, uuid, type ServiceWorld, type WorldFactory } from '../world.js';
+import { codeOf, errorOf, ID, services, uuid, type ServiceWorld, type WorldFactory } from '../world.js';
 
 export function defineSaleTests(make: WorldFactory): void {
   describe('sale', () => {
@@ -263,6 +263,32 @@ export function defineSaleTests(make: WorldFactory): void {
             expect(codeOf(() => creditSale({ lines: [bottles(19)], ...over(ID.owner) }))).toBe('INSUFFICIENT_STOCK');
           });
         });
+      });
+    });
+
+    describe('errors carry what the UI needs to explain them', () => {
+      it('out of stock says how much there is, in base units, with the pack size', () => {
+        const e = errorOf(() => sale({ paid_amount: 950_000, lines: [bottles(19)] }));
+        expect(e.code).toBe('INSUFFICIENT_STOCK');
+        expect(e.params).toEqual({ available: 18_000, requested: 19_000, packSize: 1000, scope: 'product' });
+      });
+
+      it('a credit limit says the limit, what is owed and what the sale adds', () => {
+        setLimit(150_000);
+        s.khata.setOpeningBalance({ customer_id: ID.customer, amount: 100_000, created_by: ID.owner });
+        const e = errorOf(() => creditSale({ lines: [bottles(2)] }));
+        expect(e.code).toBe('CREDIT_LIMIT_EXCEEDED');
+        expect(e.params).toEqual({ limit: 150_000, owed: 100_000, adds: 100_000 });
+      });
+
+      it('overpaying and an oversized discount say the amounts', () => {
+        expect(errorOf(() => sale({ paid_amount: 50_001 })).params).toEqual({ paid: 50_001, total: 50_000 });
+        expect(errorOf(() => creditSale({ lines: [bottles(1, { line_discount: 50_001 })] })).params).toEqual({ discount: 50_001, linePrice: 50_000 });
+      });
+
+      it('a pack-only product says the pack size, and an expired manual batch says its expiry', () => {
+        expect(errorOf(() => sale({ paid_amount: 25_000, lines: [{ product_id: ID.bottle, qty: 500 }] })).params).toEqual({ packSize: 1000 });
+        expect(errorOf(() => sale({ paid_amount: 50_000, lines: [bottles(1, { batches: [{ batch_id: ID.bExpired, qty: 1000 }] })] })).params).toEqual({ expiry: '2020-01-01' });
       });
     });
 

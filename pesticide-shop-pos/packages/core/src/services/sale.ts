@@ -133,6 +133,7 @@ export function createSaleService(deps: ServiceDeps) {
               throw new DomainError(
                 'CREDIT_LIMIT_EXCEEDED',
                 `credit limit is ${customer.credit_limit}; the customer owes ${owed} and this sale adds ${unpaid}`,
+                { limit: customer.credit_limit, owed, adds: unpaid },
               );
             }
             approvals.push({

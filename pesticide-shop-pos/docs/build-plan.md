@@ -19,8 +19,13 @@ Folder structure, `001_init.sql`, schema checks, docs.
 - Services with unit tests: stock, purchase, sale (batch picking), payment, khata, return.
 
 ## Phase 3: Desktop shell (`apps/desktop`)
-- Electron main, preload, typed IPC, login screen, owner and staff roles.
-- Layout, navigation, English and Urdu switch with right-to-left support.
+Part 1 (done): the shell.
+- Electron main, preload and renderer (electron-vite, React, Tailwind, shadcn-style components). The typed API contract is in `packages/api-contract`; every input is validated with Zod in the main process.
+- First-launch setup (with the one-time owner recovery code), sign in, a session held in the main process, owner and staff roles. Owner-only rules are enforced in the main process.
+- Layout: sidebar (icon-only under 1366px), page placeholders, English and Urdu with right-to-left, remembered language, one catalogue of error messages, toast and inline error components.
+- Design system: `docs/design-system.md`. Native SQLite for Electron: `docs/native-sqlite.md`.
+- Audit log rows for sign-ins, owner overrides, approved returns, stock adjustments and write-offs, password resets.
+Later parts of this phase: none planned; the screens come in Phases 4 to 8.
 
 ## Phase 4: Catalog and stock in
 Categories, brands, products (loose and pack setup, prices, tax), suppliers, batches, purchases, stock list with low-stock and near-expiry.
@@ -39,6 +44,13 @@ Daily sales, pending payments, low stock, near-expiry, top products, profit (own
 
 ## Phase 9: Backup, restore, installer
 Backup module with destinations, retention, verification and alerts. Restore screen. Windows installer. Test a restore on a second PC.
+- **The installer must ship the native SQLite file** (`better_sqlite3.node`, the Electron build pinned in `apps/desktop/native-binaries.json`) and the `@node-rs/argon2` binding, unpacked outside the asar archive, at `<resources>/native/<platform>-<arch>-electron<abi>/`. Test an INSTALLED build, not only `npm run dev`. See `docs/native-sqlite.md` (it also compares this with letting electron-builder rebuild).
+- **Idle sign-out:** sign the user out after a period with no activity, and when the screen locks. Time to be chosen with the owner.
+- **Login lockout:** after several failed sign-ins in a row, make the next attempt wait (and show it). Failed sign-ins are already in `audit_log`.
+- Check the Content-Security-Policy of the packaged app (`npm run screenshots` reports violations in a built app).
+- **Two checks that the Phase 3 tests could not prove** (found by the test-skeptic review, left open on purpose):
+  - *Archive hash.* `apps/desktop/native-binaries.json` pins the SHA-256 of both the downloaded archive and the `.node` file inside it. Only the file hash is tested (offline); a wrong archive hash would not fail any test. Add a test or a CI step that downloads the archive and checks `tarballSha256`.
+  - *Atomic preferences write.* `PrefsStore` writes `preferences.json` to a temporary file and renames it over the old one, so a power cut cannot leave half a file. No test observes this: replacing it with a plain write still passes. Add a test that fails a write half way and checks that the old file is intact.
 
 ## Phase 10: Real-data trial
 Enter his real products and balances. Run in parallel with his paper register for a week. Fix what he finds.

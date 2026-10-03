@@ -96,10 +96,27 @@ export function createStockService(deps: ServiceDeps) {
       const input = parseInput(AdjustStockInput, rawInput);
       deps.uow.run((tx) => {
         activeUser(tx, input.created_by);
-        liveBatch(tx, input.batch_id);
+        const batch = liveBatch(tx, input.batch_id);
         const current = tx.stock.stockOfBatch(input.batch_id);
-        if (current + input.qty_delta < 0) throw new DomainError('INSUFFICIENT_STOCK', `batch has ${current}, cannot remove ${-input.qty_delta}`);
-        tx.stock.insert(rows.stock({ batch_id: input.batch_id, qty_delta: input.qty_delta, movement_type: 'adjustment', created_by: input.created_by }));
+        if (current + input.qty_delta < 0) {
+          throw new DomainError('INSUFFICIENT_STOCK', `batch has ${current}, cannot remove ${-input.qty_delta}`, {
+            available: current,
+            requested: -input.qty_delta,
+            packSize: tx.products.getById(batch.product_id)?.pack_size ?? 1,
+            scope: 'batch',
+          });
+        }
+        const movement = rows.stock({ batch_id: input.batch_id, qty_delta: input.qty_delta, movement_type: 'adjustment', created_by: input.created_by });
+        tx.stock.insert(movement);
+        tx.audit.insert(
+          rows.audit({
+            user_id: input.created_by,
+            action: 'stock_adjustment',
+            table_name: 'stock_movements',
+            row_id: movement.id,
+            details: { batch_id: input.batch_id, qty_delta: input.qty_delta, stock_before: current, stock_after: current + input.qty_delta },
+          }),
+        );
       });
     },
 
@@ -108,10 +125,27 @@ export function createStockService(deps: ServiceDeps) {
       const input = parseInput(WriteOffInput, rawInput);
       deps.uow.run((tx) => {
         activeUser(tx, input.created_by);
-        liveBatch(tx, input.batch_id);
+        const batch = liveBatch(tx, input.batch_id);
         const current = tx.stock.stockOfBatch(input.batch_id);
-        if (input.qty > current) throw new DomainError('INSUFFICIENT_STOCK', `batch has ${current}, cannot write off ${input.qty}`);
-        tx.stock.insert(rows.stock({ batch_id: input.batch_id, qty_delta: -input.qty, movement_type: input.kind, created_by: input.created_by }));
+        if (input.qty > current) {
+          throw new DomainError('INSUFFICIENT_STOCK', `batch has ${current}, cannot write off ${input.qty}`, {
+            available: current,
+            requested: input.qty,
+            packSize: tx.products.getById(batch.product_id)?.pack_size ?? 1,
+            scope: 'batch',
+          });
+        }
+        const movement = rows.stock({ batch_id: input.batch_id, qty_delta: -input.qty, movement_type: input.kind, created_by: input.created_by });
+        tx.stock.insert(movement);
+        tx.audit.insert(
+          rows.audit({
+            user_id: input.created_by,
+            action: 'stock_write_off',
+            table_name: 'stock_movements',
+            row_id: movement.id,
+            details: { batch_id: input.batch_id, qty: input.qty, kind: input.kind, stock_before: current, stock_after: current - input.qty },
+          }),
+        );
       });
     },
 

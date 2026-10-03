@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node", "vite/client"],
+    "lib": ["ES2023"]
+  },
+  "include": ["src/main", "src/preload", "tests", "electron.vite.config.ts", "native-binaries.json"]
+}

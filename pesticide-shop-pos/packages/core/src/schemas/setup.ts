@@ -34,6 +34,8 @@ const UserBase = z.object({
   name: z.string().min(1),
   username: z.string().min(1),
   password_hash: z.string().min(1),
+  /** Hash of the one-time recovery code. NULL when none was set. */
+  recovery_code_hash: z.string().nullable(),
   role: Role,
   is_active: Flag,
   ...syncScope,
@@ -42,8 +44,8 @@ const UserBase = z.object({
 export const User = UserBase;
 export type User = z.infer<typeof User>;
 
-/** What is safe to send to the UI: a user without the password hash. */
-export const PublicUser = UserBase.omit({ password_hash: true });
+/** What is safe to send to the UI: a user without the password hash or the recovery code hash. */
+export const PublicUser = UserBase.omit({ password_hash: true, recovery_code_hash: true });
 export type PublicUser = z.infer<typeof PublicUser>;
 
 export const Setting = z.object({

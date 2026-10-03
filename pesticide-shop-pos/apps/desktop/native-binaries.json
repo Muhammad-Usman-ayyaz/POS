@@ -1,0 +1,15 @@
+{
+  "_comment": "Pinned Electron-ABI build of better-sqlite3. See docs/native-sqlite.md. To upgrade: change the versions, run `npm run native -w @pos/desktop -- --print-hashes`, review, and paste the printed hashes here.",
+  "better-sqlite3": {
+    "version": "12.11.1",
+    "electron": "42.11.10",
+    "abi": 146,
+    "binaries": {
+      "win32-x64": {
+        "url": "https://github.com/WiseLibs/better-sqlite3/releases/download/v12.11.1/better-sqlite3-v12.11.1-electron-v146-win32-x64.tar.gz",
+        "tarballSha256": "3e9938391e2e496858f8ed55f8390180d1e08f0803c5447bbe0293f482a0f489",
+        "fileSha256": "24e2e3ca5a829572239718fbca35b873ba4975655d29c56a93f1880e3775d9b8"
+      }
+    }
+  }
+}

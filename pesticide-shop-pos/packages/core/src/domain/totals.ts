@@ -32,7 +32,7 @@ export function calcLine(input: LineInput): LineAmounts {
   if (!Number.isInteger(input.qty) || input.qty <= 0) throw new DomainError('INVALID_QUANTITY', `quantity must be a positive integer: ${input.qty}`);
   const gross = priceForQty(input.qty, input.unit_price, input.pack_size);
   if (input.line_discount < 0 || input.line_discount > gross) {
-    throw new DomainError('DISCOUNT_EXCEEDS_LINE', `discount ${input.line_discount} is more than the line price ${gross}`);
+    throw new DomainError('DISCOUNT_EXCEEDS_LINE', `discount ${input.line_discount} is more than the line price ${gross}`, { discount: input.line_discount, linePrice: gross });
   }
   const taxable = gross - input.line_discount;
   const tax_amount = taxOn(taxable, input.tax_rate_bp);
@@ -79,7 +79,7 @@ export function buildInvoiceLines(cart: CartLine, batches: readonly AllocatedBat
   const grosses = batches.map((b) => priceForQty(b.qty, cart.unit_price, cart.pack_size));
   const totalGross = grosses.reduce((a, b) => a + b, 0);
   if (cart.line_discount < 0 || cart.line_discount > totalGross) {
-    throw new DomainError('DISCOUNT_EXCEEDS_LINE', `discount ${cart.line_discount} is more than the line price ${totalGross}`);
+    throw new DomainError('DISCOUNT_EXCEEDS_LINE', `discount ${cart.line_discount} is more than the line price ${totalGross}`, { discount: cart.line_discount, linePrice: totalGross });
   }
   const discounts = splitProportional(cart.line_discount, grosses);
 
@@ -125,7 +125,7 @@ export function calcInvoiceTotals(lines: readonly { line_total: number; tax_amou
 /** The payment rules the invoices table enforces: no overpaying, and a walk-in pays in full. */
 export function checkInvoicePayment(args: { total: number; paid_amount: number; has_customer: boolean }): void {
   if (args.paid_amount < 0 || args.paid_amount > args.total) {
-    throw new DomainError('OVERPAID', `paid ${args.paid_amount} is more than the total ${args.total}`);
+    throw new DomainError('OVERPAID', `paid ${args.paid_amount} is more than the total ${args.total}`, { paid: args.paid_amount, total: args.total });
   }
   if (!args.has_customer && args.paid_amount !== args.total) {
     throw new DomainError('CREDIT_NEEDS_CUSTOMER', 'a walk-in sale must be paid in full; choose a customer to sell on credit');

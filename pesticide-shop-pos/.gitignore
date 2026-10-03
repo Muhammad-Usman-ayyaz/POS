@@ -9,3 +9,6 @@ backups/
 .env
 .DS_Store
 .vitest/
+
+apps/desktop/native/
+apps/desktop/.screenshots/

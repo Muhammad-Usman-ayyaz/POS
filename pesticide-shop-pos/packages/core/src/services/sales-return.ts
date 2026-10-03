@@ -57,12 +57,16 @@ export function createSalesReturnService(deps: ServiceDeps) {
 
         const items = tx.invoices.listItems(invoice.id);
         const returned = tx.salesReturns.returnedQtyByItem(invoice.id);
-        const sold: SoldLine[] = items.map((i) => ({
-          invoice_item_id: i.id,
-          qty: i.qty,
-          line_total: i.line_total,
-          qty_returned: returned.get(i.id) ?? 0,
-        }));
+        const sold: SoldLine[] = items.map((i) => {
+          const packSize = tx.products.getById(i.product_id)?.pack_size;
+          return {
+            invoice_item_id: i.id,
+            qty: i.qty,
+            line_total: i.line_total,
+            qty_returned: returned.get(i.id) ?? 0,
+            ...(packSize !== undefined ? { pack_size: packSize } : {}),
+          };
+        });
         const plan = planReturn({ invoice_status: invoice.status, lines: sold, requested: input.items });
 
         const header: NewRow<SalesReturn> = {
@@ -77,6 +81,16 @@ export function createSalesReturnService(deps: ServiceDeps) {
           ...deps.scope,
         };
         tx.salesReturns.insert(header);
+        // The owner approved this return: keep a record of who, what and how much.
+        tx.audit.insert(
+          rows.audit({
+            user_id: input.approved_by,
+            action: 'return_approved',
+            table_name: 'sales_returns',
+            row_id: header.id,
+            details: { return_no: header.return_no, invoice_id: invoice.id, total: plan.total, refund_method: 'khata_credit' },
+          }),
+        );
 
         const lines: NewRow<SalesReturnItem>[] = [];
         for (const line of plan.lines) {

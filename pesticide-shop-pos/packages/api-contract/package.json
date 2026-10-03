@@ -1,0 +1,12 @@
+{
+  "name": "@pos/api-contract",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The typed API between the UI and the shell that hosts it: channel names, strict Zod input schemas, output types and the error envelope. Pure TypeScript: no React, no Electron, no Node.",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@pos/core": "^0.1.0",
+    "zod": "^4.6.5"
+  }
+}

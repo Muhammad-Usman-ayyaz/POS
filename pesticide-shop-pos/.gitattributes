@@ -1,0 +1,23 @@
+# Text files are stored with LF line endings, whatever the operating system.
+* text=auto eol=lf
+
+# Binary files: never convert, never diff as text.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.xlsx binary
+*.xls  binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.db   binary
+*.db-wal binary
+*.db-shm binary
+*.node binary

@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const SRC = join(__dirname, '..', 'src');
-const FORBIDDEN = /from\s+['"](better-sqlite3|sqlite3|electron|react|react-dom|fs|path|child_process|os|node:[^'"]*)['"]/;
+const MODULES = `(better-sqlite3|sqlite3|electron|react|react-dom|fs|path|child_process|os|node:[^'"]*)`;
+// `from 'x'`, a bare `import 'x'` (side effect) and a dynamic `import('x')`
+const FORBIDDEN = new RegExp(`(from\\s+|import\\s+|import\\s*\\(\\s*)['"]${MODULES}['"]`);
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

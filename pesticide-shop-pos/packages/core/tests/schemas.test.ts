@@ -114,10 +114,11 @@ describe('StockMovement sign rules', () => {
 });
 
 describe('PublicUser', () => {
-  it('drops the password hash so it can go to the UI', () => {
-    const user = { id: randomUUID(), name: 'Owner', username: 'owner', password_hash: 'secret', role: 'owner' as const, is_active: 1 as const, ...scope(), ...meta() };
+  it('drops the password hash and the recovery code hash so it can go to the UI', () => {
+    const user = { id: randomUUID(), name: 'Owner', username: 'owner', password_hash: 'secret', recovery_code_hash: 'recovery-secret', role: 'owner' as const, is_active: 1 as const, ...scope(), ...meta() };
     expect(User.parse(user).password_hash).toBe('secret');
     expect(PublicUser.parse(user)).not.toHaveProperty('password_hash');
+    expect(PublicUser.parse(user)).not.toHaveProperty('recovery_code_hash');
   });
 });
 

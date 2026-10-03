@@ -11,6 +11,8 @@ export interface SoldLine {
   line_total: number;
   /** Sum of earlier sales_return_items for this row. */
   qty_returned: number;
+  /** Base units per pack, if known: lets an error say how many packs. */
+  pack_size?: number;
 }
 
 export interface ReturnRequestLine {
@@ -72,7 +74,11 @@ export function planReturn(args: {
     if (!sold) throw new DomainError('ITEM_NOT_ON_INVOICE', `item is not on this invoice: ${r.invoice_item_id}`);
     if (!Number.isInteger(r.qty) || r.qty <= 0) throw new DomainError('INVALID_QUANTITY', `quantity must be a positive integer: ${r.qty}`);
     if (r.qty > returnableQty(sold)) {
-      throw new DomainError('RETURN_EXCEEDS_SOLD', `only ${returnableQty(sold)} can still be returned, ${r.qty} requested`);
+      throw new DomainError('RETURN_EXCEEDS_SOLD', `only ${returnableQty(sold)} can still be returned, ${r.qty} requested`, {
+        returnable: returnableQty(sold),
+        requested: r.qty,
+        ...(sold.pack_size !== undefined ? { packSize: sold.pack_size } : {}),
+      });
     }
     return {
       invoice_item_id: r.invoice_item_id,

@@ -68,9 +68,9 @@ export function createPurchaseService(deps: ServiceDeps) {
         });
 
         const goods = lines.reduce((sum, l) => sum + l.line_cost, 0);
-        if (input.discount > goods) throw new DomainError('DISCOUNT_EXCEEDS_LINE', `discount ${input.discount} is more than the purchase ${goods}`);
+        if (input.discount > goods) throw new DomainError('DISCOUNT_EXCEEDS_LINE', `discount ${input.discount} is more than the purchase ${goods}`, { discount: input.discount, linePrice: goods });
         const total = goods - input.discount;
-        if (input.paid_amount > total) throw new DomainError('OVERPAID', `paid ${input.paid_amount} is more than the total ${total}`);
+        if (input.paid_amount > total) throw new DomainError('OVERPAID', `paid ${input.paid_amount} is more than the total ${total}`, { paid: input.paid_amount, total });
 
         const purchase: NewRow<Purchase> = {
           id: deps.ids.newId(),

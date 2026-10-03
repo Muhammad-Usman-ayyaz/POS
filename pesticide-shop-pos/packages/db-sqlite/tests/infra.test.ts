@@ -44,19 +44,20 @@ describe('connection', () => {
 });
 
 describe('migrations', () => {
-  it('loads the migrations in order: 001_init, then 002_invoice_payment_method', () => {
+  it('loads the migrations in order', () => {
     expect(loadMigrations().map((m) => [m.version, m.description])).toEqual([
       [1, 'init'],
       [2, 'invoice_payment_method'],
+      [3, 'user_recovery_code'],
     ]);
   });
 
   it('applies on a fresh database, records the version, and is a no-op the second time', async () => {
     const db = openDatabase(':memory:');
     const first = await migrate(db);
-    expect(first.applied).toEqual([1, 2]);
+    expect(first.applied).toEqual([1, 2, 3]);
     expect(first.backupPath).toBeNull();
-    expect(currentSchemaVersion(db)).toBe(2);
+    expect(currentSchemaVersion(db)).toBe(3);
     const second = await migrate(db);
     expect(second.applied).toEqual([]);
   });
@@ -69,7 +70,12 @@ describe('migrations', () => {
       return dir001;
     };
     const insertInvoice = (db: ReturnType<typeof openDatabase>, id: string, extra = '') => {
-      const ids = firstLaunchSetup(db, setupInput);
+      // plain rows, so this also works on a version-1 database that does not have later columns yet
+      const ids = { shopId: 's1', branchId: 'b1', deviceId: 'd1', ownerId: 'u1' };
+      db.prepare("INSERT INTO shops (id, name) VALUES ('s1', 'S')").run();
+      db.prepare("INSERT INTO branches (id, shop_id, name, code) VALUES ('b1', 's1', 'Main', 'A')").run();
+      db.prepare("INSERT INTO devices (id, branch_id, name, device_code) VALUES ('d1', 'b1', 'PC', 'A1')").run();
+      db.prepare("INSERT INTO users (id, name, username, password_hash, role, shop_id, branch_id, device_id) VALUES ('u1', 'O', 'o', 'x', 'owner', 's1', 'b1', 'd1')").run();
       const customer = 'c0000000-0000-4000-8000-000000000001';
       db.prepare("INSERT INTO customers (id, name_en, shop_id, branch_id, device_id) VALUES (?, 'C', ?, ?, ?)").run(customer, ids.shopId, ids.branchId, ids.deviceId);
       db.prepare(`INSERT INTO invoices (id, invoice_no, customer_id, created_by, subtotal, total, paid_amount, shop_id, branch_id, device_id${extra ? ', payment_method' : ''})
@@ -84,7 +90,7 @@ describe('migrations', () => {
       expect(() => db.prepare('SELECT payment_method FROM invoices').get()).toThrow(/no such column/);
 
       const result = await migrate(db);
-      expect(result.applied).toEqual([2]);
+      expect(result.applied).toEqual([2, 3]);
       expect(result.backupPath).not.toBeNull(); // the existing database was copied first
       expect(db.prepare("SELECT payment_method FROM invoices WHERE id = 'old-1'").get()).toEqual({ payment_method: 'cash' });
     });
