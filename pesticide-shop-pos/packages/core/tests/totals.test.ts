@@ -162,10 +162,12 @@ describe('calcInvoiceTotals', () => {
   });
 
   it('holds for 2000 odd invoices: the total is always the sum of the line totals, and each tax is part of its own line', () => {
-    let seed = 12_345;
+    // A fixed seed, so every run checks the same invoices. A failure prints the seed, the invoice number and its lines.
+    const SEED = 12_345;
+    let state = SEED;
     const next = (max: number) => {
-      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
-      return seed % max;
+      state = (Math.imul(state, 1_103_515_245) + 12_345) >>> 0; // exact 32-bit arithmetic: no precision is lost
+      return state % max;
     };
     const rates = [0, 500, 1800, 2500, 10_000];
     for (let n = 0; n < 2000; n++) {
@@ -175,9 +177,10 @@ describe('calcInvoiceTotals', () => {
       });
       const t = calcInvoiceTotals(lines);
       const sum = lines.reduce((s, l) => s + l.line_total, 0);
-      expect(t.subtotal + t.tax_total).toBe(sum);
-      expect(t.total).toBe(sum);
-      for (const l of lines) expect(l.tax_amount >= 0 && l.tax_amount <= l.line_total && l.net === l.line_total - l.tax_amount).toBe(true);
+      const where = `seed ${SEED}, invoice #${n}, lines ${JSON.stringify(lines)}, totals ${JSON.stringify(t)}`;
+      expect(t.subtotal + t.tax_total, where).toBe(sum);
+      expect(t.total, where).toBe(sum);
+      for (const l of lines) expect(l.tax_amount >= 0 && l.tax_amount <= l.line_total && l.net === l.line_total - l.tax_amount, where).toBe(true);
     }
   });
 
