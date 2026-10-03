@@ -46,6 +46,8 @@ function hooked(tx: Repositories, p: Instrument): Repositories {
   };
   return {
     ...tx,
+    productGroups: { ...tx.productGroups, insert: before('product_groups', tx.productGroups.insert) },
+    products: { ...tx.products, insert: before('products', tx.products.insert) },
     batches: { ...tx.batches, insert: before('batches', tx.batches.insert) },
     stock: { ...tx.stock, insert: before('stock_movements', tx.stock.insert) },
     invoices: { ...tx.invoices, insert: before('invoices', tx.invoices.insert), insertItem: before('invoice_items', tx.invoices.insertItem) },

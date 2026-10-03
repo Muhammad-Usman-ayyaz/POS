@@ -40,7 +40,7 @@ describe('the production build', () => {
   });
 
   it('contains no demo data: no demo products, customers or supplier, and no demo marker', () => {
-    const demo = ['Insecticide 1L', 'Insecticide 500ml', 'Fungicide 250ml', 'Weedicide 1L', 'DAP fertilizer', 'Vegetable seed', 'Rodenticide', 'Agri Dealer', 'Rashid', 'Imran', 'Bashir', 'Tariq', 'Sajid', 'demo_data', 'DEMO_MARKER_KEY'];
+    const demo = ['Insecticide X', 'Insecticide 1L', 'Insecticide 500ml', 'Fungicide 250ml', 'Weedicide 1L', 'DAP fertilizer', 'Vegetable seed', 'Rodenticide', 'Agri Dealer', 'Rashid', 'Imran', 'Bashir', 'Tariq', 'Sajid', 'demo_data', 'DEMO_MARKER_KEY'];
     for (const needle of demo) expect(where(needle), needle).toEqual([]);
   });
 

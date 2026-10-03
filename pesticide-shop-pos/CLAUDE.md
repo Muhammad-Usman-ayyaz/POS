@@ -27,10 +27,11 @@ Keep this separation. SQLite is the only adapter for the core ports. Supabase co
 - No hard deletes. Use `deleted_at`. Invoices are voided, never deleted.
 - The database maintains `version` and `updated_at`. Never set them in app code.
 - Cost price is copied onto each invoice line at sale time. Profit uses that copy.
+- A sellable size is a `products` row that belongs to a `product_groups` row. `products.name_en`, `name_ur`, `category_id` and `brand_id` are denormalized copies of the group's values: only the catalogue service writes them, and `v_product_group_mismatch` must stay empty.
 - Every sale, return, payment and purchase runs inside ONE database transaction so stock, invoice and ledger change together or not at all.
 
 ## Product decisions already made
-Loose and sealed sales both exist. Batch and expiry on every product. Retail and wholesale price. Payments reduce the customer's overall balance. Credit limit and due date on credit sales. Returns must link to an invoice and need owner approval. Discounts are per item only. Out-of-stock sales are blocked. Batch is picked earliest-expiry-first with manual override. Payment methods: cash, bank, Easypaisa, JazzCash. Selling prices include tax (it is never added on top). The tax rate is stored per product and the tax amount per invoice line. Near-expiry warning at 30 days. Owner-only: approve returns, change prices, view profit and cost. Thermal 80mm and A4 invoices. No data import from the old Django version.
+Loose and sealed sales both exist. A product is a group with one or more pack sizes (250 ml, 500 ml, 1 L); each size has its own stock, batches, prices, tax rate, barcode and minimum stock. Batch and expiry on every size. Retail and wholesale price. Payments reduce the customer's overall balance. Credit limit and due date on credit sales. Returns must link to an invoice and need owner approval. Discounts are per item only. Out-of-stock sales are blocked. Batch is picked earliest-expiry-first with manual override. Payment methods: cash, bank, Easypaisa, JazzCash. Selling prices include tax (it is never added on top). The tax rate is stored per product and the tax amount per invoice line. Near-expiry warning at 30 days. Owner-only: approve returns, change prices, view profit and cost. Thermal 80mm and A4 invoices. No data import from the old Django version.
 Full list: `docs/decisions.md`. Unanswered owner questions with the defaults to use: `docs/open-questions.md`.
 
 ## Conventions

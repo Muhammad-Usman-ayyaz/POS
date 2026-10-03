@@ -1,6 +1,6 @@
 # Database rules and service flows
 
-The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later numbered migrations (`002_invoice_payment_method.sql` adds `invoices.payment_method`; `003_user_recovery_code.sql` adds `users.recovery_code_hash`). Never edit an applied migration. The database refuses many bad writes by itself (negative stock, selling expired batches, over-returns, editing history). The services below create the rows. The database does NOT create stock or ledger rows automatically.
+The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later numbered migrations (`002_invoice_payment_method.sql` adds `invoices.payment_method`; `003_user_recovery_code.sql` adds `users.recovery_code_hash`; `004_product_groups.sql` adds product groups and pack sizes). Never edit an applied migration. The database refuses many bad writes by itself (negative stock, selling expired batches, over-returns, editing history). The services below create the rows. The database does NOT create stock or ledger rows automatically.
 
 ## Units and money
 - `products.base_unit` is ml, g or piece. `pack_size` is base units per pack (1L bottle = 1000 ml).
@@ -14,6 +14,18 @@ The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later number
 - `v_profit_by_day` counts revenue as `line_total - tax_amount` (the sale without its tax) and takes the matching share off for returns. It needed no change when prices became tax-inclusive.
 - Migration 001's header comment still shows the old formula (`... + tax_amount`). It is a comment only: no table, constraint or view depends on it, and an applied migration is never edited. This file is the rule.
 - Products with `allow_loose = 0` can only be sold in whole packs.
+
+## Products: groups and pack sizes (migration 004)
+A shopkeeper's "product" (Insecticide X) is a **product group**. Each pack size of it (250 ml, 500 ml, 1 L) is a row in `products`, so batches, stock movements, invoice lines and every foreign key work on SIZES exactly as before. Every size keeps its own stock, batches, prices, tax rate, barcode, SKU and `min_stock`, because sealed bottles of different sizes are different physical stock. There is no conversion between sizes.
+- `product_groups`: `name_en`, `name_ur`, `category_id`, `brand_id`, `notes`, `is_active`, and the usual editable columns (`version`, `updated_at`, `deleted_at`, change_log triggers, no hard delete). The group is the **source of truth** for names, category and brand.
+- `products.group_id` (which group) and `products.pack_label` ("500 ml"). The label may be empty only while the group has a single size; once a group has two or more live sizes every size needs a label, and labels are unique within the group.
+- **Denormalized copies.** `products.name_en`, `name_ur`, `category_id` and `brand_id` are copies of the group's values, kept so invoices, error messages and views that read `products.name_*` keep working: `name = group name` when the label is empty, otherwise `group name || ' ' || pack_label`, in each language; `category_id` and `brand_id` equal the group's. Only the catalogue service writes them, in the same transaction that changes the group or the label. `v_product_group_mismatch` lists any size where a copy has drifted and must stay empty.
+- **`group_id` is never NULL, but the column is declared nullable.** SQLite cannot add a NOT NULL foreign-key column to an existing table, and rebuilding `products` (which every other table references) needs foreign keys switched off outside the migration transaction. Two triggers (`trg_products_group_id_required_ins` and `_upd`) refuse a NULL on insert and on update instead. The Zod `Product.group_id` is strict, and `packages/db-sqlite/tests/schemas-match-db.test.ts` names this as its one exception (and checks that both triggers exist and work).
+- Rules the database enforces (the service checks the same ones first, to give a clear error): sizes of one group share a `base_unit` (so group stock can be added up); labels are unique per group among live sizes; a size cannot be active inside an inactive group, or live inside a deleted one; a group with active sizes cannot be deactivated and one with live sizes cannot be deleted. Barcodes and SKUs are unique across all sizes ever made.
+- **Backfill.** The migration gives every existing product its own group (a fresh UUID) with the product's names, category, brand, `is_active` and `deleted_at`, and `pack_label = ''`, so no name changes. Joining separate products into one is done with the `moveSize` service.
+- **Services** (`createCatalogueService`, owner only): `createGroup` (with optional first sizes), `updateGroup` (rewrites every size's copies), `addSize` (if the group's only size has an empty label, `existing_size_label` labels it in the same transaction), `updateSize`, `setSizeActive`, `setGroupActive` (deactivating switches off every size; reactivating switches on only the group), `moveSize` (same unit, unique label, names rewritten, an emptied source group is switched off, one audit row) and `search`. A size that has batches keeps its pack size and unit.
+- **Search** is done in core, the same on every backend: both languages, lower case, Eastern Arabic (٠-٩) and Urdu (۰-۹) digits read as 0-9, Arabic and Urdu letter variants (ي ى to ی, ك to ک, ه ة ۃ to ہ) read as one, diacritics and joiners dropped, "500 ml" the same as "500ml". Every word typed must match. A barcode or SKU matches only when typed or scanned in full.
+- **Printed invoices.** `invoice_items` stores `product_id`, not a name, so renaming a group would change how an old invoice reads. Before printing is built (Phase 5), a name snapshot must be stored on `invoice_items` at sale time (see `docs/build-plan.md`).
 
 ## Ledger sign
 Positive `amount_delta` means the customer owes more (or we owe the supplier more). Payments and returns are negative.
@@ -50,7 +62,7 @@ Insert `payments` (`in`) and `ledger_entries` (`payment`, minus amount). Payment
 - Opening stock: one `stock_movements` row, `movement_type = 'opening'`, per batch.
 
 ## Reports from views
-`v_batch_stock`, `v_product_stock` (total and sellable), `v_low_stock`, `v_near_expiry` (uses `settings.near_expiry_days`, default 30), `v_expired_stock`, `v_customer_balance`, `v_supplier_balance`, `v_invoice_item_returnable`, `v_profit_by_day`.
+`v_batch_stock`, `v_product_stock` (one row per SIZE: total and sellable stock, with its group and label), `v_low_stock` (per size, against that size's own `min_stock`), `v_group_stock` (a whole product: its sizes added up, size count, how many sizes are low), `v_product_group_mismatch` (must stay empty), `v_near_expiry` (uses `settings.near_expiry_days`, default 30), `v_expired_stock`, `v_customer_balance`, `v_supplier_balance`, `v_invoice_item_returnable`, `v_profit_by_day`.
 Overdue invoices are not a view yet: since payments hit the overall balance, treat payments as paying the oldest invoices first and calculate overdue in the service.
 
 ## First launch
@@ -64,6 +76,9 @@ The app must create the `shops`, `branches` and `devices` rows, the owner user, 
 | `login` / `login_failed` | every sign-in; failed ones say why (`unknown_user`, `wrong_password`, `inactive_user`) | the user, or NULL for an unknown name |
 | `price_override` / `credit_limit_override` | an owner approved a different price or a sale over the credit limit | the owner |
 | `return_approved` | an approved sales return | the owner |
+| `price_changed` / `tax_rate_changed` | a size's retail or wholesale price, or its tax rate, was changed (before and after are in `details`) | the owner |
+| `group_deactivated` / `group_reactivated` | a product was switched off (with the sizes it switched off) or on | the owner |
+| `size_moved` | a size was moved to another product (both groups, both labels, whether the old product was switched off) | the owner |
 | `stock_adjustment` / `stock_write_off` | a stock count correction or a write-off | who did it |
 | `owner_password_reset` / `owner_password_reset_failed` / `recovery_code_regenerated` | owner recovery | the owner, or NULL |
 

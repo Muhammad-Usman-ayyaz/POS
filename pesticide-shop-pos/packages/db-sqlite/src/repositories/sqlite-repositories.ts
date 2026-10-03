@@ -1,13 +1,17 @@
 import type {
   Batch,
   BatchWithStock,
+  Brand,
+  Category,
   Customer,
   DeviceScope,
   DocumentSequence,
+  GroupWithSizes,
   Invoice,
   InvoiceItem,
   LedgerEntry,
   Product,
+  ProductGroup,
   PublicUser,
   Repositories,
   Supplier,
@@ -29,7 +33,7 @@ const META_COLUMNS = ['created_at', 'updated_at', 'deleted_at', 'version'] as co
 const COLUMN_NAME = /^[a-z][a-z0-9_]*$/;
 
 type InsertableTable =
-  | 'batches' | 'stock_movements' | 'invoices' | 'invoice_items' | 'sales_returns' | 'sales_return_items'
+  | 'product_groups' | 'products' | 'batches' | 'stock_movements' | 'invoices' | 'invoice_items' | 'sales_returns' | 'sales_return_items'
   | 'purchases' | 'purchase_items' | 'payments' | 'ledger_entries' | 'audit_log';
 
 /** Columns of a user that are safe to hand to the services. The password hash is never selected. */
@@ -77,9 +81,60 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
     stmt(sql).run(...columns.map((c) => row[c]));
   };
 
+  /** UPDATE of the given columns of one row. Same checks as insert: the database owns id and the meta columns. */
+  const update = (table: 'products' | 'product_groups', id: string, patch: Record<string, unknown>): void => {
+    needTx('update ' + table);
+    const columns = Object.keys(patch);
+    for (const column of columns) {
+      if (column === 'id' || (META_COLUMNS as readonly string[]).includes(column)) {
+        throw new Error('service set ' + column + ' on ' + table + ': the database owns that column');
+      }
+      if (!COLUMN_NAME.test(column)) throw new Error('bad column name for ' + table + ': ' + column);
+    }
+    if (columns.length === 0) return;
+    const result = stmt('UPDATE ' + table + ' SET ' + columns.map((c) => c + ' = ?').join(', ') + ' WHERE id = ?').run(...columns.map((c) => patch[c]), id);
+    if (result.changes !== 1) throw new Error('update: no row ' + id + ' in ' + table);
+  };
+
   return {
+    categories: {
+      getById: (id) => one<Category>('categories', 'SELECT * FROM categories WHERE id = ?', id),
+    },
+
+    brands: {
+      getById: (id) => one<Brand>('brands', 'SELECT * FROM brands WHERE id = ?', id),
+    },
+
+    productGroups: {
+      getById: (id) => one<ProductGroup>('product groups', 'SELECT * FROM product_groups WHERE id = ?', id),
+      insert: (row) => insert('product_groups', row),
+      update: (id, patch) => update('product_groups', id, patch),
+      listWithSizes: (today) => {
+        const groups = all<ProductGroup>('product groups', 'SELECT * FROM product_groups WHERE deleted_at IS NULL ORDER BY COALESCE(name_en, name_ur), id');
+        // Stock is summed over live batches (expired ones are left out of stock_sellable), like v_product_stock.
+        const sizes = all<GroupWithSizes['sizes'][number]>(
+          'product groups',
+          `SELECT p.*,
+                  COALESCE((SELECT SUM(m.qty_delta) FROM stock_movements m JOIN batches b ON b.id = m.batch_id
+                             WHERE b.product_id = p.id AND b.deleted_at IS NULL), 0) AS stock_total,
+                  COALESCE((SELECT SUM(m.qty_delta) FROM stock_movements m JOIN batches b ON b.id = m.batch_id
+                             WHERE b.product_id = p.id AND b.deleted_at IS NULL AND b.expiry_date >= ?), 0) AS stock_sellable
+             FROM products p
+            WHERE p.deleted_at IS NULL
+            ORDER BY p.pack_size, p.id`,
+          today,
+        );
+        return groups.map((group) => ({ group, sizes: sizes.filter((s) => s.group_id === group.id) }));
+      },
+    },
+
     products: {
       getById: (id) => one<Product>('products', 'SELECT * FROM products WHERE id = ?', id),
+      listByGroup: (groupId) => all<Product>('products', 'SELECT * FROM products WHERE group_id = ? AND deleted_at IS NULL ORDER BY pack_size, id', groupId),
+      findByBarcode: (barcode) => one<Product>('products', 'SELECT * FROM products WHERE barcode = ?', barcode),
+      findBySku: (sku) => one<Product>('products', 'SELECT * FROM products WHERE sku = ?', sku),
+      insert: (row) => insert('products', row),
+      update: (id, patch) => update('products', id, patch),
     },
 
     batches: {

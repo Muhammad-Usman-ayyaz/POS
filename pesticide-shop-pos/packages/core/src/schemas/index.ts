@@ -1,4 +1,4 @@
-import { Brand, Batch, Category, Customer, Product, Supplier } from './catalog.js';
+import { Brand, Batch, Category, Customer, Product, ProductGroup, Supplier } from './catalog.js';
 import { Expense, LedgerEntry, Payment, StockMovement } from './ledger.js';
 import { Purchase, PurchaseItem, PurchaseReturn, PurchaseReturnItem } from './purchasing.js';
 import { Invoice, InvoiceItem, SalesReturn, SalesReturnItem } from './sales.js';
@@ -25,6 +25,7 @@ export const entitySchemas = {
   brands: Brand,
   suppliers: Supplier,
   customers: Customer,
+  product_groups: ProductGroup,
   products: Product,
   batches: Batch,
   purchases: Purchase,

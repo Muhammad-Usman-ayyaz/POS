@@ -18,7 +18,7 @@ import {
 import { createSqliteRepositories, createSqliteUnitOfWork, migrate, openDatabase, type Db } from '../../src/index.js';
 
 const TABLES: TableName[] = [
-  'products', 'batches', 'stock_movements', 'customers', 'suppliers', 'users', 'invoices', 'invoice_items', 'sales_returns',
+  'categories', 'brands', 'product_groups', 'products', 'batches', 'stock_movements', 'customers', 'suppliers', 'users', 'invoices', 'invoice_items', 'sales_returns',
   'sales_return_items', 'purchases', 'purchase_items', 'payments', 'ledger_entries', 'audit_log', 'number_sequences',
 ];
 
@@ -50,6 +50,9 @@ export async function createSqliteWorld(options: WorldOptions = {}): Promise<Sql
   for (const u of seed.users) insertSeed(db, 'users', { ...u, password_hash: 'not-a-real-hash' });
   for (const r of seed.suppliers) insertSeed(db, 'suppliers', r);
   for (const r of seed.customers) insertSeed(db, 'customers', r);
+  for (const r of seed.categories) insertSeed(db, 'categories', r);
+  for (const r of seed.brands) insertSeed(db, 'brands', r);
+  for (const r of seed.product_groups) insertSeed(db, 'product_groups', r);
   for (const r of seed.products) insertSeed(db, 'products', r);
   for (const r of seed.batches) insertSeed(db, 'batches', r);
 

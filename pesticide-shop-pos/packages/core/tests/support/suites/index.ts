@@ -1,6 +1,7 @@
 import { describe } from 'vitest';
 import type { WorldFactory } from '../world.js';
 import { defineAtomicityTests } from './atomicity.js';
+import { defineCatalogueTests } from './catalogue.js';
 import { defineContractTests } from './contract.js';
 import { definePaymentKhataTests } from './payment-khata.js';
 import { definePurchaseTests, defineStockTests } from './purchase-stock.js';
@@ -20,6 +21,7 @@ export function defineServiceSuites(label: string, make: WorldFactory): void {
     defineStockTests(make);
     definePaymentKhataTests(make);
     defineSalesReturnTests(make);
+    defineCatalogueTests(make);
     defineAtomicityTests(make);
     defineScenarioTests(make);
   });

@@ -1,6 +1,8 @@
 import type {
   AuditLog,
   Batch,
+  Brand,
+  Category,
   Customer,
   Invoice,
   InvoiceItem,
@@ -8,6 +10,7 @@ import type {
   Payment,
   PublicUser,
   Product,
+  ProductGroup,
   Purchase,
   PurchaseItem,
   SalesReturn,
@@ -15,7 +18,7 @@ import type {
   StockMovement,
   Supplier,
 } from '../schemas/index.js';
-import type { BatchWithStock, DocumentNumbers, NewRow } from './types.js';
+import type { BatchWithStock, DocumentNumbers, GroupWithSizes, NewRow, ProductGroupPatch, ProductPatch } from './types.js';
 
 // Repository interfaces. They are SYNCHRONOUS on purpose: better-sqlite3 is synchronous, and a SQLite
 // transaction cannot stay open across an `await`. Adapters hide all SQL; services never see it.
@@ -23,6 +26,33 @@ import type { BatchWithStock, DocumentNumbers, NewRow } from './types.js';
 
 export interface ProductRepository {
   getById(id: string): Product | undefined;
+  /** Live (not soft-deleted) sizes of one group, inactive ones included, smallest pack first. */
+  listByGroup(groupId: string): Product[];
+  /** Barcodes and SKUs are unique across every size ever made, so this looks at soft-deleted rows too. */
+  findByBarcode(barcode: string): Product | undefined;
+  findBySku(sku: string): Product | undefined;
+  insert(row: NewRow<Product>): void;
+  /** Changes only the columns given. The database keeps version and updated_at. */
+  update(id: string, patch: ProductPatch): void;
+}
+
+export interface ProductGroupRepository {
+  getById(id: string): ProductGroup | undefined;
+  insert(row: NewRow<ProductGroup>): void;
+  update(id: string, patch: ProductGroupPatch): void;
+  /**
+   * Every live group with its live sizes and their stock. `today` (YYYY-MM-DD) decides which batches are expired,
+   * so the clock stays injectable. Groups come back in name order.
+   */
+  listWithSizes(today: string): GroupWithSizes[];
+}
+
+export interface CategoryRepository {
+  getById(id: string): Category | undefined;
+}
+
+export interface BrandRepository {
+  getById(id: string): Brand | undefined;
 }
 
 export interface BatchRepository {
@@ -90,6 +120,9 @@ export interface LedgerRepository {
 
 /** Everything a service can reach inside one transaction. */
 export interface Repositories {
+  categories: CategoryRepository;
+  brands: BrandRepository;
+  productGroups: ProductGroupRepository;
   products: ProductRepository;
   batches: BatchRepository;
   stock: StockRepository;

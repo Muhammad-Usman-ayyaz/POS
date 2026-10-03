@@ -4,7 +4,7 @@
 //  - a repository used outside run() throws
 //  - a row with created_at, updated_at, deleted_at or version is refused: the database owns those
 //  - a few database rules are mirrored (no negative stock, no zero ledger entry)
-import type { Batch, Customer, Invoice, InvoiceItem, LedgerEntry, Product, PublicUser, Repositories, Supplier, UnitOfWork } from '../../src/index.js';
+import type { Batch, Brand, Category, Customer, Invoice, InvoiceItem, LedgerEntry, Product, ProductGroup, PublicUser, Repositories, Supplier, UnitOfWork } from '../../src/index.js';
 import { todayUtc, systemClock, addDays } from '../../src/index.js';
 import { Instrument, instrument } from './instrument.js';
 import { ID, idGenerator, SCOPE, seedData, testClock, type InsertTable, type Row, type ServiceWorld, type TableName, type WorldOptions } from './world.js';
@@ -14,6 +14,9 @@ const STAMP = '2026-01-01T00:00:00.000Z';
 const meta = { created_at: STAMP, updated_at: STAMP, deleted_at: null, version: 1 };
 
 interface FakeData {
+  categories: Category[];
+  brands: Brand[];
+  product_groups: ProductGroup[];
   products: Product[];
   batches: Batch[];
   stock_movements: Row[];
@@ -33,7 +36,7 @@ interface FakeData {
 }
 
 const emptyData = (): FakeData => ({
-  products: [], batches: [], stock_movements: [], customers: [], suppliers: [], users: [], invoices: [], invoice_items: [],
+  categories: [], brands: [], product_groups: [], products: [], batches: [], stock_movements: [], customers: [], suppliers: [], users: [], invoices: [], invoice_items: [],
   sales_returns: [], sales_return_items: [], purchases: [], purchase_items: [], payments: [], ledger_entries: [], audit_log: [],
   sequences: { invoice: 0, return: 0, purchase: 0 },
 });
@@ -58,6 +61,17 @@ class FakeStore {
     (this.data[table] as Row[]).push({ ...row, ...meta });
   }
 
+  /** Changes columns of one row, like an UPDATE. The database owns version and updated_at, so a service may not set them. */
+  update(table: 'products' | 'product_groups', id: string, patch: Row): void {
+    this.needTx('update ' + table);
+    for (const key of [...META_COLUMNS, 'id']) {
+      if (key in patch) throw new Error('service set ' + key + ' on ' + table + ': the database owns that column');
+    }
+    const row = (this.data[table] as Row[]).find((r) => r.id === id);
+    if (!row) throw new Error('update: no row ' + id + ' in ' + table);
+    Object.assign(row, patch, { version: (row.version as number) + 1 });
+  }
+
   stockOf(batchId: string): number {
     return this.data.stock_movements.filter((m) => m.batch_id === batchId).reduce((s, m) => s + (m.qty_delta as number), 0);
   }
@@ -67,10 +81,48 @@ class FakeStore {
   }
 }
 
+/** A row as a database hands it back: a fresh copy, so a later UPDATE cannot change what a service already read. */
+const copy = <T extends object>(row: T | undefined): T | undefined => (row === undefined ? undefined : { ...row });
+
 function createRepositories(store: FakeStore): Repositories {
   const byExpiryThenId = (a: Batch, b: Batch) => (a.expiry_date < b.expiry_date ? -1 : a.expiry_date > b.expiry_date ? 1 : a.id < b.id ? -1 : 1);
   return {
-    products: { getById: (id) => (store.needTx('products'), store.data.products.find((p) => p.id === id)) },
+    categories: { getById: (id) => (store.needTx('categories'), store.data.categories.find((c) => c.id === id)) },
+    brands: { getById: (id) => (store.needTx('brands'), store.data.brands.find((b) => b.id === id)) },
+    productGroups: {
+      getById: (id) => (store.needTx('product_groups'), copy(store.data.product_groups.find((g) => g.id === id))),
+      insert: (row) => store.insert('product_groups', row),
+      update: (id, patch) => store.update('product_groups', id, patch),
+      listWithSizes: (today) => {
+        store.needTx('product_groups');
+        const stockOf = (productId: string, onlyUnexpired: boolean): number =>
+          store.data.batches
+            .filter((b) => b.product_id === productId && b.deleted_at === null && (!onlyUnexpired || b.expiry_date >= today))
+            .reduce((sum, b) => sum + store.stockOf(b.id), 0);
+        const nameOf = (g: ProductGroup) => g.name_en ?? g.name_ur ?? '';
+        return store.data.product_groups
+          .filter((g) => g.deleted_at === null)
+          .sort((a, b) => (nameOf(a) < nameOf(b) ? -1 : nameOf(a) > nameOf(b) ? 1 : a.id < b.id ? -1 : 1))
+          .map((group) => ({
+            group: { ...group },
+            sizes: store.data.products
+              .filter((p) => p.group_id === group.id && p.deleted_at === null)
+              .sort((a, b) => a.pack_size - b.pack_size || (a.id < b.id ? -1 : 1))
+              .map((p) => ({ ...p, stock_total: stockOf(p.id, false), stock_sellable: stockOf(p.id, true) })),
+          }));
+      },
+    },
+    products: {
+      getById: (id) => (store.needTx('products'), copy(store.data.products.find((p) => p.id === id))),
+      listByGroup: (groupId) => (
+        store.needTx('products'),
+        store.data.products.filter((p) => p.group_id === groupId && p.deleted_at === null).sort((a, b) => a.pack_size - b.pack_size || (a.id < b.id ? -1 : 1)).map((p) => ({ ...p }))
+      ),
+      findByBarcode: (barcode) => (store.needTx('products'), copy(store.data.products.find((p) => p.barcode === barcode))),
+      findBySku: (sku) => (store.needTx('products'), copy(store.data.products.find((p) => p.sku === sku))),
+      insert: (row) => store.insert('products', row),
+      update: (id, patch) => store.update('products', id, patch),
+    },
     batches: {
       getById: (id) => (store.needTx('batches'), store.data.batches.find((b) => b.id === id)),
       getByProductAndNo: (productId, batchNo) => (store.needTx('batches'), store.data.batches.find((b) => b.product_id === productId && b.batch_no === batchNo)),
@@ -162,6 +214,9 @@ export function createFakeWorld(options: WorldOptions = {}): ServiceWorld {
   d.users.push(...(seed.users.map((r) => ({ ...r, ...meta })) as unknown as PublicUser[]));
   d.suppliers.push(...(seed.suppliers.map((r) => ({ ...r, ...meta })) as unknown as Supplier[]));
   d.customers.push(...(seed.customers.map((r) => ({ ...r, ...meta })) as unknown as Customer[]));
+  d.categories.push(...(seed.categories.map((r) => ({ ...r, ...meta })) as unknown as Category[]));
+  d.brands.push(...(seed.brands.map((r) => ({ ...r, ...meta })) as unknown as Brand[]));
+  d.product_groups.push(...(seed.product_groups.map((r) => ({ ...r, ...meta })) as unknown as ProductGroup[]));
   d.products.push(...(seed.products.map((r) => ({ ...r, ...meta })) as unknown as Product[]));
   d.batches.push(...(seed.batches.map((r) => ({ ...r, ...meta })) as unknown as Batch[]));
 

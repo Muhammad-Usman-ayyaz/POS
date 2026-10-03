@@ -182,3 +182,52 @@ describe('prices include tax (open question 6)', () => {
     }
   });
 });
+
+describe('product groups through the services, on a real database (open question 1)', () => {
+  it('create, stock, sell, rename, move and deactivate: the copied names never drift, group stock is the sum of the sizes, and the database never objects', async () => {
+    const t = await createSqliteWorld();
+    try {
+      const s = services(t);
+      const mismatches = () => t.db.prepare('SELECT * FROM v_product_group_mismatch').all();
+      const size = (label: string, packSize: number) => ({ pack_label: label, base_unit: 'ml' as const, pack_size: packSize, retail_price: packSize * 50, wholesale_price: packSize * 46, min_stock: packSize });
+
+      const x = s.catalogue.createGroup({ actor_id: ID.owner, name_en: 'Insecticide X', name_ur: 'کیڑے مار دوا ایکس', category_id: ID.catInsecticide, brand_id: ID.brandX, sizes: [size('250 ml', 250), size('500 ml', 500), size('1 L', 1000)] });
+      expect(mismatches()).toEqual([]);
+
+      const stock = (id: string, qty: number) => s.stock.openingStock({ product_id: id, batch_no: 'B1', expiry_date: t.day(200), cost_price: 1000, qty, created_by: ID.owner });
+      stock(x.sizes[0]!.id, 600); // 600 ml <= min 250? no: 600 > 250
+      stock(x.sizes[1]!.id, 400); // 400 <= min 500: low
+      stock(x.sizes[2]!.id, 5000);
+      s.sale.create({ created_by: ID.staff, paid_amount: 12_500, lines: [{ product_id: x.sizes[0]!.id, qty: 250 }] }); // one 250 ml pack
+
+      // the database's own view of the whole product equals the services' view of its sizes
+      const hit = s.catalogue.search({ query: 'insecticide x' })[0]!;
+      const sum = (pick: (p: (typeof hit.sizes)[number]) => number) => hit.sizes.reduce((total, p) => total + pick(p), 0);
+      expect(t.db.prepare('SELECT size_count, base_unit, stock_total, stock_sellable, low_size_count FROM v_group_stock WHERE group_id = ?').get(x.group.id)).toEqual({
+        size_count: 3, base_unit: 'ml', stock_total: sum((p) => p.stock_total), stock_sellable: sum((p) => p.stock_sellable), low_size_count: 1,
+      });
+      expect(sum((p) => p.stock_total)).toBe(350 + 400 + 5000);
+      expect((t.db.prepare('SELECT product_id FROM v_low_stock WHERE group_id = ?').all(x.group.id) as { product_id: string }[]).map((r) => r.product_id)).toEqual([x.sizes[1]!.id]);
+
+      s.catalogue.updateGroup({ actor_id: ID.owner, group_id: x.group.id, name_en: 'Insecticide Y', category_id: ID.catFertilizer, brand_id: null });
+      expect(mismatches()).toEqual([]);
+      s.catalogue.updateSize({ actor_id: ID.owner, product_id: x.sizes[1]!.id, changes: { pack_label: '0.5 L', retail_price: 26_000 } });
+      expect(mismatches()).toEqual([]);
+
+      // two separate products joined into one
+      const a = s.catalogue.createGroup({ actor_id: ID.owner, name_en: 'Other 2L', sizes: [{ ...size('', 2000) }] });
+      s.catalogue.moveSize({ actor_id: ID.owner, product_id: a.sizes[0]!.id, to_group_id: x.group.id, pack_label: '2 L' });
+      expect(mismatches()).toEqual([]);
+      expect(t.db.prepare('SELECT is_active FROM product_groups WHERE id = ?').get(a.group.id)).toEqual({ is_active: 0 });
+      expect(t.db.prepare('SELECT size_count FROM v_group_stock WHERE group_id = ?').get(x.group.id)).toEqual({ size_count: 4 });
+
+      s.catalogue.setGroupActive({ actor_id: ID.owner, id: x.group.id, is_active: false });
+      expect(t.db.prepare('SELECT COUNT(*) AS c FROM products WHERE group_id = ? AND is_active = 1').get(x.group.id)).toEqual({ c: 0 });
+      expect(t.db.pragma('foreign_key_check')).toEqual([]);
+      expect(t.db.pragma('integrity_check', { simple: true })).toBe('ok');
+      expect(mismatches()).toEqual([]);
+    } finally {
+      t.close();
+    }
+  });
+});

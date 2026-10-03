@@ -4,6 +4,8 @@
 |---|---|---|
 | Platform | Offline desktop app, Electron + SQLite, no server | Free to run. Backups handled by the app |
 | Units | Loose and sealed sales | Stock in base units with `pack_size` and `allow_loose` |
+| Pack sizes | One product with several pack sizes, for example Insecticide X in 250 ml, 500 ml and 1 L (owner's answer to question 1) | `product_groups` is the parent. Each size is still a `products` row with its own stock, batches, prices, tax rate, barcode and `min_stock`. Sizes of one product share a base unit and are told apart by `pack_label`. No conversion between sizes |
+| Catalogue changes | Only the owner changes the catalogue (default, open question 14) | Prices, tax rates, group (de)activation and moving a size are written to `audit_log` |
 | Batches | Batch and expiry on all products | Every stock movement has a batch |
 | Pricing | Retail and wholesale price | Two price columns. Invoice stores the price type used |
 | Payments | Reduce the customer's overall balance | Payments go to the ledger, not to one invoice |

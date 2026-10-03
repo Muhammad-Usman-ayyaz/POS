@@ -1,4 +1,4 @@
-import type { Batch } from '../schemas/index.js';
+import type { Batch, Product, ProductGroup } from '../schemas/index.js';
 
 /**
  * A row as a service writes it. The database owns `created_at`, `updated_at`, `deleted_at` and `version`,
@@ -8,6 +8,26 @@ export type NewRow<T> = Omit<T, 'created_at' | 'updated_at' | 'deleted_at' | 've
 
 /** A batch with its current stock: the sum of its stock movements, in base units. */
 export type BatchWithStock = Batch & { stock: number };
+
+/** Columns of a size (product row) a service may change. The database owns version and updated_at. */
+export type ProductPatch = Partial<
+  Pick<
+    Product,
+    'group_id' | 'pack_label' | 'category_id' | 'brand_id' | 'name_en' | 'name_ur' | 'sku' | 'barcode' | 'base_unit' | 'pack_size' | 'allow_loose' | 'retail_price' | 'wholesale_price' | 'tax_rate_bp' | 'min_stock' | 'is_active'
+  >
+>;
+
+/** Columns of a product group a service may change. */
+export type ProductGroupPatch = Partial<Pick<ProductGroup, 'name_en' | 'name_ur' | 'category_id' | 'brand_id' | 'notes' | 'is_active'>>;
+
+/** A size with its stock in base units, summed over its live batches. `stock_sellable` leaves out expired batches. */
+export type SizeWithStock = Product & { stock_total: number; stock_sellable: number };
+
+export interface GroupWithSizes {
+  group: ProductGroup;
+  /** Live sizes only (not soft-deleted), smallest pack first. Inactive sizes are included. */
+  sizes: SizeWithStock[];
+}
 
 /** Which shop, branch and device is running. Written onto every syncable row. */
 export interface DeviceScope {

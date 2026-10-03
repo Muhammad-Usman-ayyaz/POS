@@ -49,15 +49,17 @@ beforeAll(async () => {
   id.sup = ins('suppliers', { name_en: 'Agri Dealer', name_ur: 'ایگری ڈیلر' });
   id.cust = ins('customers', { name_en: 'Rashid', name_ur: 'راشد', village: 'Kot', credit_limit: 1_000_000 });
 
+  id.gBottle = ins('product_groups', { name_en: 'Insecticide 1L', name_ur: 'کیڑے مار' });
   id.bottle = ins('products', {
-    name_en: 'Insecticide 1L', name_ur: 'کیڑے مار', sku: 'INS1L', base_unit: 'ml',
+    group_id: id.gBottle, name_en: 'Insecticide 1L', name_ur: 'کیڑے مار', sku: 'INS1L', base_unit: 'ml',
     pack_size: 1000, allow_loose: 0, retail_price: 50_000, wholesale_price: 45_000, min_stock: 5000,
   });
   id.b1 = ins('batches', { product_id: id.bottle, supplier_id: id.sup, batch_no: 'B-001', expiry_date: future, cost_price: 40_000 });
   id.bOld = ins('batches', { product_id: id.bottle, supplier_id: id.sup, batch_no: 'B-OLD', expiry_date: past, cost_price: 40_000 });
 
+  id.gLoose = ins('product_groups', { name_en: 'Fertilizer 1kg', name_ur: 'کھاد' });
   id.loose = ins('products', {
-    name_en: 'Fertilizer 1kg', name_ur: 'کھاد', base_unit: 'g', pack_size: 1000,
+    group_id: id.gLoose, name_en: 'Fertilizer 1kg', name_ur: 'کھاد', base_unit: 'g', pack_size: 1000,
     allow_loose: 1, retail_price: 20_000, wholesale_price: 18_000,
   });
   id.b2 = ins('batches', { product_id: id.loose, batch_no: 'F-001', expiry_date: future, cost_price: 15_000 });
@@ -216,5 +218,129 @@ describe('sale, return and views', () => {
         expect(db.pragma('foreign_key_check')).toEqual([]);
       });
     });
+  });
+});
+
+describe('product groups and sizes (migration 004)', () => {
+  const g: Record<string, string> = {};
+
+  beforeAll(() => {
+    // Insecticide X: a 250 ml size that is low on stock and a 1 L size that is not, each with its own batch.
+    g.group = ins('product_groups', { name_en: 'Insecticide X', name_ur: 'کیڑے مار دوا ایکس' });
+    g.s250 = ins('products', {
+      group_id: g.group, pack_label: '250 ml', name_en: 'Insecticide X 250 ml', name_ur: 'کیڑے مار دوا ایکس 250 ml',
+      barcode: '8961000250250', base_unit: 'ml', pack_size: 250, retail_price: 14_500, wholesale_price: 13_000, min_stock: 1000,
+    });
+    g.s1l = ins('products', {
+      group_id: g.group, pack_label: '1 L', name_en: 'Insecticide X 1 L', name_ur: 'کیڑے مار دوا ایکس 1 L',
+      barcode: '8961000251000', base_unit: 'ml', pack_size: 1000, retail_price: 50_000, wholesale_price: 45_000, min_stock: 2000,
+    });
+    g.b250 = ins('batches', { product_id: g.s250, batch_no: 'X-250', expiry_date: future, cost_price: 11_500 });
+    g.b1l = ins('batches', { product_id: g.s1l, batch_no: 'X-1L', expiry_date: future, cost_price: 40_000 });
+    g.b1lOld = ins('batches', { product_id: g.s1l, batch_no: 'X-1L-OLD', expiry_date: past, cost_price: 40_000 });
+    ins('stock_movements', { batch_id: g.b250, qty_delta: 600, movement_type: 'purchase', created_by: id.owner });
+    ins('stock_movements', { batch_id: g.b1l, qty_delta: 5000, movement_type: 'purchase', created_by: id.owner });
+    ins('stock_movements', { batch_id: g.b1lOld, qty_delta: 300, movement_type: 'purchase', created_by: id.owner });
+    g.dormant = ins('product_groups', { name_en: 'Dormant product', is_active: 0 });
+    g.dormantSize = ins('products', { group_id: g.dormant, name_en: 'Dormant product', base_unit: 'ml', pack_size: 100, retail_price: 1, wholesale_price: 1, is_active: 0 });
+  });
+
+  it('every size keeps its own stock: the views show one row per size, with its group and label', () => {
+    const rows = db.prepare('SELECT product_id, pack_label, group_name_en, stock_total, stock_sellable FROM v_product_stock WHERE group_id = ? ORDER BY pack_size').all(g.group) as Row[];
+    expect(rows).toEqual([
+      { product_id: g.s250, pack_label: '250 ml', group_name_en: 'Insecticide X', stock_total: 600, stock_sellable: 600 },
+      { product_id: g.s1l, pack_label: '1 L', group_name_en: 'Insecticide X', stock_total: 5300, stock_sellable: 5000 }, // the expired 300 is not sellable
+    ]);
+  });
+
+  it('low stock is judged per size: the 250 ml is low (600 <= 1000), the 1 L is not (5000 > 2000)', () => {
+    expect(count('SELECT COUNT(*) c FROM v_low_stock WHERE product_id = ?', g.s250)).toBe(1);
+    expect(count('SELECT COUNT(*) c FROM v_low_stock WHERE product_id = ?', g.s1l)).toBe(0);
+  });
+
+  it('v_group_stock adds the sizes up: 2 sizes, 5900 ml, 5600 sellable, 1 size low', () => {
+    expect(one('SELECT size_count, base_unit, stock_total, stock_sellable, low_size_count FROM v_group_stock WHERE group_id = ?', g.group)).toEqual({
+      size_count: 2, base_unit: 'ml', stock_total: 5900, stock_sellable: 5600, low_size_count: 1,
+    });
+  });
+
+  it('a product with no sizes still shows in v_group_stock, with zero stock', () => {
+    const empty = ins('product_groups', { name_en: 'Empty product' });
+    expect(one('SELECT size_count, stock_total FROM v_group_stock WHERE group_id = ?', empty)).toEqual({ size_count: 0, stock_total: 0 });
+  });
+
+  it('v_product_group_mismatch is empty while the copied names match, and lists the sizes when the group is renamed without them', () => {
+    expect(db.prepare('SELECT * FROM v_product_group_mismatch').all()).toEqual([]);
+    db.prepare("UPDATE product_groups SET name_en = 'Insecticide Y' WHERE id = ?").run(g.group);
+    expect((db.prepare('SELECT product_id FROM v_product_group_mismatch').all() as Row[]).map((r) => r.product_id).sort()).toEqual([g.s250, g.s1l].sort());
+    db.prepare("UPDATE product_groups SET name_en = 'Insecticide X' WHERE id = ?").run(g.group);
+    expect(db.prepare('SELECT * FROM v_product_group_mismatch').all()).toEqual([]);
+  });
+
+  it('v_product_group_mismatch also catches a drifted category, brand or Urdu name', () => {
+    const cat = ins('categories', { name_en: 'Insecticide' });
+    db.prepare('UPDATE product_groups SET category_id = ? WHERE id = ?').run(cat, g.group);
+    expect(count('SELECT COUNT(*) c FROM v_product_group_mismatch')).toBe(2);
+    db.prepare('UPDATE products SET category_id = ? WHERE group_id = ?').run(cat, g.group);
+    expect(count('SELECT COUNT(*) c FROM v_product_group_mismatch')).toBe(0);
+    db.prepare("UPDATE product_groups SET name_ur = NULL WHERE id = ?").run(g.group);
+    expect(count('SELECT COUNT(*) c FROM v_product_group_mismatch')).toBe(2);
+    db.prepare("UPDATE product_groups SET name_ur = 'کیڑے مار دوا ایکس', category_id = NULL WHERE id = ?").run(g.group);
+    db.prepare('UPDATE products SET category_id = NULL WHERE group_id = ?').run(g.group);
+    expect(count('SELECT COUNT(*) c FROM v_product_group_mismatch')).toBe(0);
+  });
+
+  describe('rules that must refuse', () => {
+    // Ids are made in beforeAll, after the cases are listed, so every case builds its statement lazily.
+    const tryInsert = (make: () => Row) => () => ins('products', { name_en: 'X', base_unit: 'ml', pack_size: 100, retail_price: 1, wholesale_price: 1, ...make() });
+    const run = (sql: string, ...keys: string[]) => () => db.prepare(sql).run(...keys.map((k) => g[k] ?? id[k]));
+    const cases: [string, () => unknown, string][] = [
+      ['a size with no group', tryInsert(() => ({ group_id: null })), 'group_id is required'],
+      ['a size left out of any group (no group_id at all)', tryInsert(() => ({})), 'group_id is required'],
+      ['taking a size out of its group (group_id set to NULL)', run('UPDATE products SET group_id = NULL WHERE id = ?', 's250'), 'group_id is required'],
+      ['a size with a different unit in the same group', tryInsert(() => ({ group_id: g.group, pack_label: '500 g', base_unit: 'g' })), 'same base unit'],
+      ['changing a size to a different unit than its group-mates', run("UPDATE products SET base_unit = 'g' WHERE id = ?", 's250'), 'same base unit'],
+      ['two sizes with the same label', tryInsert(() => ({ group_id: g.group, pack_label: '250 ml' })), 'UNIQUE'],
+      ['a second size with no label in a group that has sizes', tryInsert(() => ({ group_id: g.group, pack_label: '' })), 'pack label'],
+      ['a labelled size added beside an unlabelled one', tryInsert(() => ({ group_id: id.gBottle, pack_label: '500 ml' })), 'pack label'],
+      ['removing the label of a size that has company', run("UPDATE products SET pack_label = '' WHERE id = ?", 's250'), 'pack label'],
+      ['an active size inside an inactive product', tryInsert(() => ({ group_id: g.dormant, pack_label: '', is_active: 1 })), 'inactive'],
+      ['switching a size on inside an inactive product', run('UPDATE products SET is_active = 1 WHERE id = ?', 'dormantSize'), 'inactive'],
+      ['a live size inside a deleted product', () => {
+        const deleted = ins('product_groups', { name_en: 'Gone', deleted_at: '2026-01-01T00:00:00.000Z' });
+        return ins('products', { group_id: deleted, name_en: 'X', base_unit: 'ml', pack_size: 100, retail_price: 1, wholesale_price: 1 });
+      }, 'deleted or inactive'],
+      ['deactivating a product that still has active sizes', run('UPDATE product_groups SET is_active = 0 WHERE id = ?', 'group'), 'deactivate its sizes first'],
+      ['deleting a product that still has sizes', run("UPDATE product_groups SET deleted_at = '2026-01-01T00:00:00.000Z' WHERE id = ?", 'group'), 'still has sizes'],
+      ['hard-deleting a product group', run('DELETE FROM product_groups WHERE id = ?', 'group'), 'hard delete'],
+      ['a group with no name at all', () => ins('product_groups', { name_en: null, name_ur: null }), 'check constraint'],
+    ];
+    it.each(cases)('blocks %s', (_label, fn, message) => {
+      expect(fn).toThrow(new RegExp(message, 'i'));
+    });
+  });
+
+  it('an unlabelled size is fine on its own, and a second size is fine once both have labels', () => {
+    expect(id.gBottle).toBeDefined();
+    const solo = ins('product_groups', { name_en: 'Solo' });
+    expect(() => ins('products', { group_id: solo, pack_label: '', name_en: 'Solo', base_unit: 'ml', pack_size: 100, retail_price: 1, wholesale_price: 1 })).not.toThrow();
+    db.prepare("UPDATE products SET pack_label = '100 ml' WHERE group_id = ?").run(solo);
+    expect(() => ins('products', { group_id: solo, pack_label: '200 ml', name_en: 'Solo 200 ml', base_unit: 'ml', pack_size: 200, retail_price: 1, wholesale_price: 1 })).not.toThrow();
+  });
+
+  it('a size can move to another product, and a second size may then be unlabelled only if its label is unique', () => {
+    const home = ins('product_groups', { name_en: 'Home' });
+    const mover = ins('products', { group_id: home, pack_label: '', name_en: 'Home', base_unit: 'ml', pack_size: 100, retail_price: 1, wholesale_price: 1 });
+    db.prepare("UPDATE products SET group_id = ?, pack_label = '100 ml' WHERE id = ?").run(g.group, mover);
+    expect(one('SELECT group_id FROM products WHERE id = ?', mover).group_id).toBe(g.group);
+    db.prepare("UPDATE product_groups SET is_active = 0 WHERE id = ?").run(home); // now empty: switching it off is allowed
+  });
+
+  it('groups are logged for sync and versioned like every other editable table', () => {
+    expect(count("SELECT COUNT(*) c FROM change_log WHERE table_name = 'product_groups' AND operation = 'insert' AND row_id = ?", g.group)).toBe(1);
+    const before = one('SELECT version FROM product_groups WHERE id = ?', g.group).version as number;
+    db.prepare("UPDATE product_groups SET notes = 'x' WHERE id = ?").run(g.group);
+    expect(one('SELECT version FROM product_groups WHERE id = ?', g.group).version).toBe(before + 1);
+    expect(count("SELECT COUNT(*) c FROM change_log WHERE table_name = 'product_groups' AND operation = 'update' AND row_id = ?", g.group)).toBeGreaterThanOrEqual(1);
   });
 });

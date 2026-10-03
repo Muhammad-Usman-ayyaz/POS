@@ -11,6 +11,7 @@ import {
   createPurchaseService,
   createSaleService,
   createSalesReturnService,
+  createCatalogueService,
   createStockService,
   DomainError,
   type Repositories,
@@ -25,18 +26,21 @@ export const ID = {
   owner: uuid(1), staff: uuid(2), inactive: uuid(5), supplier: uuid(3), customer: uuid(4),
   bottle: uuid(10), fert: uuid(11), taxed: uuid(12), retired: uuid(13),
   bA: uuid(20), bB: uuid(21), bExpired: uuid(22), bFert: uuid(23), bTaxed: uuid(24),
+  // product groups (their ids differ from the size ids on purpose: a mix-up of the two must show)
+  gBottle: uuid(30), gFert: uuid(31), gTaxed: uuid(32), gRetired: uuid(33),
+  catInsecticide: uuid(40), catFertilizer: uuid(41), brandX: uuid(42),
   scope: SCOPE,
 } as const;
 
 export type Row = Record<string, unknown>;
 
 export type TableName =
-  | 'products' | 'batches' | 'stock_movements' | 'customers' | 'suppliers' | 'users' | 'invoices' | 'invoice_items'
+  | 'categories' | 'brands' | 'product_groups' | 'products' | 'batches' | 'stock_movements' | 'customers' | 'suppliers' | 'users' | 'invoices' | 'invoice_items'
   | 'sales_returns' | 'sales_return_items' | 'purchases' | 'purchase_items' | 'payments' | 'ledger_entries'
   | 'audit_log' | 'number_sequences';
 
 /** Tables a service can insert into. A test can make the Nth insert into one of these fail. */
-export type InsertTable = Exclude<TableName, 'products' | 'customers' | 'suppliers' | 'users' | 'number_sequences'>;
+export type InsertTable = Exclude<TableName, 'categories' | 'brands' | 'customers' | 'suppliers' | 'users' | 'number_sequences'>;
 
 export interface WorldOptions {
   /** false: the same shop with no batches and no stock (for end-to-end scenarios that buy their own). Default true. */
@@ -87,6 +91,7 @@ export function services(w: ServiceWorld) {
     payment: createPaymentService(w.deps),
     khata: createKhataService(w.deps),
     salesReturn: createSalesReturnService(w.deps),
+    catalogue: createCatalogueService(w.deps),
   };
 }
 
@@ -117,6 +122,9 @@ export interface SeedData {
   users: Row[];
   suppliers: Row[];
   customers: Row[];
+  categories: Row[];
+  brands: Row[];
+  product_groups: Row[];
   products: Row[];
   batches: Row[];
   /** Opening stock, as `opening` movements. */
@@ -133,8 +141,9 @@ export function seedData(today: string, options: WorldOptions = {}): SeedData {
   const day = (n: number) => addDays(today, n);
   const s = SCOPE;
   const user = (id: string, o: Row = {}) => ({ id, name: 'User', username: `user-${id.slice(-3)}`, role: 'staff', is_active: 1, ...s, ...o });
+  const group = (id: string, o: Row = {}) => ({ id, name_en: 'Product', name_ur: null, category_id: null, brand_id: null, notes: null, is_active: 1, ...s, ...o });
   const product = (id: string, o: Row = {}) => ({
-    id, category_id: null, brand_id: null, name_en: 'Product', name_ur: null, sku: null, barcode: null, base_unit: 'ml', pack_size: 1000,
+    id, group_id: 'set-below', pack_label: '', category_id: null, brand_id: null, name_en: 'Product', name_ur: null, sku: null, barcode: null, base_unit: 'ml', pack_size: 1000,
     allow_loose: 0, retail_price: 50_000, wholesale_price: 45_000, tax_rate_bp: 0, min_stock: 0, is_active: 1, ...s, ...o,
   });
   const batch = (id: string, product_id: string, o: Row) => ({ id, product_id, supplier_id: null, ...s, ...o });
@@ -144,11 +153,20 @@ export function seedData(today: string, options: WorldOptions = {}): SeedData {
     users: [user(ID.owner, { name: 'Owner', role: 'owner' }), user(ID.staff), user(ID.inactive, { is_active: 0 })],
     suppliers: [{ id: ID.supplier, name_en: 'Agri Dealer', name_ur: null, phone: null, address: null, ...s }],
     customers: [{ id: ID.customer, name_en: 'Rashid', name_ur: null, phone: null, village: null, credit_limit: 1_000_000, default_price_type: 'retail', notes: null, ...s }],
+    categories: [{ id: ID.catInsecticide, name_en: 'Insecticide', name_ur: null, ...s }, { id: ID.catFertilizer, name_en: 'Fertilizer', name_ur: null, ...s }],
+    brands: [{ id: ID.brandX, name_en: 'Brand X', name_ur: null, ...s }],
+    // One group per seeded product (each product is a group with a single, unlabelled size).
+    product_groups: [
+      group(ID.gBottle, { name_en: 'Insecticide 1L' }),
+      group(ID.gFert, { name_en: 'Fertilizer 1kg' }),
+      group(ID.gTaxed, { name_en: 'Taxed 1L' }),
+      group(ID.gRetired, { name_en: 'Retired', is_active: 0 }),
+    ],
     products: [
-      product(ID.bottle, { name_en: 'Insecticide 1L' }),
-      product(ID.fert, { name_en: 'Fertilizer 1kg', base_unit: 'g', allow_loose: 1, retail_price: 20_000, wholesale_price: 18_000 }),
-      product(ID.taxed, { name_en: 'Taxed 1L', tax_rate_bp: 1800 }),
-      product(ID.retired, { name_en: 'Retired', is_active: 0 }),
+      product(ID.bottle, { group_id: ID.gBottle, name_en: 'Insecticide 1L' }),
+      product(ID.fert, { group_id: ID.gFert, name_en: 'Fertilizer 1kg', base_unit: 'g', allow_loose: 1, retail_price: 20_000, wholesale_price: 18_000 }),
+      product(ID.taxed, { group_id: ID.gTaxed, name_en: 'Taxed 1L', tax_rate_bp: 1800 }),
+      product(ID.retired, { group_id: ID.gRetired, name_en: 'Retired', is_active: 0 }),
     ],
     batches: withStock
       ? [

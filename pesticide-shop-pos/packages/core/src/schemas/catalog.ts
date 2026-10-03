@@ -46,9 +46,37 @@ export const Customer = z
   .refine(hasAName, { message: NAME_MESSAGE });
 export type Customer = z.infer<typeof Customer>;
 
+/**
+ * What the shopkeeper thinks of as one product, for example "Product A". Its pack sizes (250 ml, 500 ml, 1 L)
+ * are `Product` rows, each with its own stock, batches, prices, tax rate, barcode and minimum stock.
+ * The group is the source of truth for the names, category and brand that its sizes copy.
+ */
+export const ProductGroup = z
+  .object({
+    id: Id,
+    ...names,
+    category_id: Id.nullable(),
+    brand_id: Id.nullable(),
+    notes: z.string().nullable(),
+    is_active: Flag,
+    ...syncScope,
+    ...editableMeta,
+  })
+  .refine(hasAName, { message: NAME_MESSAGE });
+export type ProductGroup = z.infer<typeof ProductGroup>;
+
+/**
+ * One sellable pack size of a product group. `name_en`, `name_ur`, `category_id` and `brand_id` are DENORMALIZED
+ * COPIES of the group's values (name = group name + ' ' + pack_label): the catalogue service writes them, and the
+ * view v_product_group_mismatch lists any that drifted.
+ */
 export const Product = z
   .object({
     id: Id,
+    /** Never null in practice: two database triggers refuse a NULL. (The one named exception in the drift test.) */
+    group_id: Id,
+    /** The size as people say it, "500 ml". Empty only while the group has a single size. */
+    pack_label: z.string(),
     category_id: Id.nullable(),
     brand_id: Id.nullable(),
     ...names,

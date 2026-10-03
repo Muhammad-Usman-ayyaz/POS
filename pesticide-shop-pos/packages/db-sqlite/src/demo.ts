@@ -6,28 +6,33 @@ import { openDatabase, type Db } from './connection.js';
 // DEV AND TEST ONLY. This file is imported as '@pos/db-sqlite/demo', never from the package index, so the
 // desktop app's production bundle cannot reach it (a test builds the app and checks that it cannot).
 //
-// Demo shop data that matches the approved design mockups: eight products with batches, a supplier and five
-// customers with opening balances. It is used by `npm run dev:db` (so the screens have something to show)
+// Demo shop data that matches the approved design mockups: seven products (ten sellable sizes) with batches, a
+// supplier and five customers with opening balances. It is used by `npm run dev:db` (so the screens have something to show)
 // and by tests that need real products. It is plain SQL inserts, the same rows the real screens will create.
 
 export interface DemoIds {
   supplierId: string;
-  /** keys: insecticide1l, insecticide500, fungicide250, weedicide1l, dap50, fertilizer1kg, vegseed1kg, rodenticide100 */
+  /** keys: insecticideX, fertilizer, fungicide, weedicide, dap, vegseed, rodenticide */
+  groups: Record<string, string>;
+  /**
+   * One entry per pack SIZE (a sellable product row). keys: insecticide250, insecticide500, insecticide1l,
+   * fertilizer1kg, fertilizer50kg, fungicide250, weedicide1l, dap50, vegseed1kg, rodenticide100
+   */
   products: Record<string, string>;
-  /** one batch per product, same keys */
+  /** one batch per size, same keys as `products` */
   batches: Record<string, string>;
   /** keys: rashid, imran, bashir, tariq, sajid */
   customers: Record<string, string>;
 }
 
-interface DemoProduct {
+interface DemoSize {
   key: string;
-  category: string;
-  nameEn: string;
-  nameUr: string;
+  /** "500 ml". Empty for a product with a single size. */
+  label: string;
   baseUnit: 'ml' | 'g' | 'piece';
   packSize: number;
   allowLoose: 0 | 1;
+  barcode?: string;
   /** Paisa per pack. */
   cost: number;
   retail: number;
@@ -39,6 +44,14 @@ interface DemoProduct {
   expiry: string | number;
 }
 
+interface DemoGroup {
+  key: string;
+  category: string;
+  nameEn: string;
+  nameUr: string;
+  sizes: DemoSize[];
+}
+
 const CATEGORIES: [string, string][] = [
   ['Insecticide', 'کیڑے مار دوا'],
   ['Fungicide', 'پھپھوندی کش'],
@@ -48,15 +61,29 @@ const CATEGORIES: [string, string][] = [
   ['Rodenticide', 'چوہے مار دوا'],
 ];
 
-const PRODUCTS: DemoProduct[] = [
-  { key: 'insecticide1l', category: 'Insecticide', nameEn: 'Insecticide 1L', nameUr: 'کیڑے مار دوا', baseUnit: 'ml', packSize: 1000, allowLoose: 0, cost: 40_000, retail: 50_000, wholesale: 45_000, stock: 12_000, minStock: 5000, expiry: '2027-03-12' },
-  { key: 'insecticide500', category: 'Insecticide', nameEn: 'Insecticide 500ml', nameUr: 'کیڑے مار دوا', baseUnit: 'ml', packSize: 500, allowLoose: 0, cost: 21_500, retail: 27_000, wholesale: 24_500, stock: 10_000, minStock: 2500, expiry: '2027-01-18' },
-  { key: 'fungicide250', category: 'Fungicide', nameEn: 'Fungicide 250ml', nameUr: 'پھپھوندی کش', baseUnit: 'ml', packSize: 250, allowLoose: 0, cost: 28_000, retail: 35_000, wholesale: 32_000, stock: 2250, minStock: 500, expiry: 24 },
-  { key: 'weedicide1l', category: 'Weedicide', nameEn: 'Weedicide 1L', nameUr: 'جڑی بوٹی مار دوا', baseUnit: 'ml', packSize: 1000, allowLoose: 0, cost: 62_000, retail: 78_000, wholesale: 72_000, stock: 3000, minStock: 5000, expiry: '2027-06-04' },
-  { key: 'dap50', category: 'Fertilizer', nameEn: 'DAP fertilizer 50kg', nameUr: 'ڈی اے پی کھاد', baseUnit: 'g', packSize: 50_000, allowLoose: 0, cost: 1_180_000, retail: 1_250_000, wholesale: 1_220_000, stock: 700_000, minStock: 100_000, expiry: '2028-08-15' },
-  { key: 'fertilizer1kg', category: 'Fertilizer', nameEn: 'Fertilizer 1kg', nameUr: 'کھاد', baseUnit: 'g', packSize: 1000, allowLoose: 1, cost: 15_000, retail: 20_000, wholesale: 18_000, stock: 9750, minStock: 2000, expiry: '2027-09-30' },
-  { key: 'vegseed1kg', category: 'Seeds', nameEn: 'Vegetable seed 1kg', nameUr: 'سبزی کا بیج', baseUnit: 'g', packSize: 1000, allowLoose: 0, cost: 190_000, retail: 240_000, wholesale: 220_000, stock: 2000, minStock: 4000, expiry: '2026-12-10' },
-  { key: 'rodenticide100', category: 'Rodenticide', nameEn: 'Rodenticide 100g', nameUr: 'چوہے مار دوا', baseUnit: 'g', packSize: 100, allowLoose: 0, cost: 9000, retail: 13_000, wholesale: 11_500, stock: 100, minStock: 100, expiry: -17 },
+// Insecticide X is one product in three sizes, each with its own stock, prices and barcode. The fertilizer has a
+// 1 kg size that can be sold loose and a 50 kg bag that cannot. The rest are products with a single size.
+const GROUPS: DemoGroup[] = [
+  {
+    key: 'insecticideX', category: 'Insecticide', nameEn: 'Insecticide X', nameUr: 'کیڑے مار دوا ایکس',
+    sizes: [
+      { key: 'insecticide250', label: '250 ml', baseUnit: 'ml', packSize: 250, allowLoose: 0, barcode: '8961000250250', cost: 11_500, retail: 14_500, wholesale: 13_000, stock: 6000, minStock: 1000, expiry: '2027-02-20' },
+      { key: 'insecticide500', label: '500 ml', baseUnit: 'ml', packSize: 500, allowLoose: 0, barcode: '8961000250500', cost: 21_500, retail: 27_000, wholesale: 24_500, stock: 10_000, minStock: 2500, expiry: '2027-01-18' },
+      { key: 'insecticide1l', label: '1 L', baseUnit: 'ml', packSize: 1000, allowLoose: 0, barcode: '8961000251000', cost: 40_000, retail: 50_000, wholesale: 45_000, stock: 12_000, minStock: 5000, expiry: '2027-03-12' },
+    ],
+  },
+  {
+    key: 'fertilizer', category: 'Fertilizer', nameEn: 'Fertilizer', nameUr: 'کھاد',
+    sizes: [
+      { key: 'fertilizer1kg', label: '1 kg', baseUnit: 'g', packSize: 1000, allowLoose: 1, cost: 15_000, retail: 20_000, wholesale: 18_000, stock: 9750, minStock: 2000, expiry: '2027-09-30' },
+      { key: 'fertilizer50kg', label: '50 kg bag', baseUnit: 'g', packSize: 50_000, allowLoose: 0, cost: 380_000, retail: 410_000, wholesale: 400_000, stock: 250_000, minStock: 100_000, expiry: '2028-05-01' },
+    ],
+  },
+  { key: 'fungicide', category: 'Fungicide', nameEn: 'Fungicide 250ml', nameUr: 'پھپھوندی کش', sizes: [{ key: 'fungicide250', label: '', baseUnit: 'ml', packSize: 250, allowLoose: 0, cost: 28_000, retail: 35_000, wholesale: 32_000, stock: 2250, minStock: 500, expiry: 24 }] },
+  { key: 'weedicide', category: 'Weedicide', nameEn: 'Weedicide 1L', nameUr: 'جڑی بوٹی مار دوا', sizes: [{ key: 'weedicide1l', label: '', baseUnit: 'ml', packSize: 1000, allowLoose: 0, cost: 62_000, retail: 78_000, wholesale: 72_000, stock: 3000, minStock: 5000, expiry: '2027-06-04' }] },
+  { key: 'dap', category: 'Fertilizer', nameEn: 'DAP fertilizer 50kg', nameUr: 'ڈی اے پی کھاد', sizes: [{ key: 'dap50', label: '', baseUnit: 'g', packSize: 50_000, allowLoose: 0, cost: 1_180_000, retail: 1_250_000, wholesale: 1_220_000, stock: 700_000, minStock: 100_000, expiry: '2028-08-15' }] },
+  { key: 'vegseed', category: 'Seeds', nameEn: 'Vegetable seed 1kg', nameUr: 'سبزی کا بیج', sizes: [{ key: 'vegseed1kg', label: '', baseUnit: 'g', packSize: 1000, allowLoose: 0, cost: 190_000, retail: 240_000, wholesale: 220_000, stock: 2000, minStock: 4000, expiry: '2026-12-10' }] },
+  { key: 'rodenticide', category: 'Rodenticide', nameEn: 'Rodenticide 100g', nameUr: 'چوہے مار دوا', sizes: [{ key: 'rodenticide100', label: '', baseUnit: 'g', packSize: 100, allowLoose: 0, cost: 9000, retail: 13_000, wholesale: 11_500, stock: 100, minStock: 100, expiry: -17 }] },
 ];
 
 const CUSTOMERS: { key: string; nameEn: string; nameUr: string; village: string; limit: number; owes: number }[] = [
@@ -106,7 +133,7 @@ export function inspectExistingDatabase(path: string): ExistingDatabase {
 /** `today` is `YYYY-MM-DD`. Expiry dates in the mockups that depend on today ("24 days", "17 days ago") are relative to it. */
 export function seedDemoData(db: Db, scope: DeviceScope, ownerId: string, today: string): DemoIds {
   const s = [scope.shop_id, scope.branch_id, scope.device_id] as const;
-  const ids: DemoIds = { supplierId: randomUUID(), products: {}, batches: {}, customers: {} };
+  const ids: DemoIds = { supplierId: randomUUID(), groups: {}, products: {}, batches: {}, customers: {} };
 
   const insert = db.transaction(() => {
     // A marker, so tools can tell a demo database from a real shop's (see inspectExistingDatabase).
@@ -120,22 +147,30 @@ export function seedDemoData(db: Db, scope: DeviceScope, ownerId: string, today:
       db.prepare('INSERT INTO categories (id, name_en, name_ur, shop_id, branch_id, device_id) VALUES (?, ?, ?, ?, ?, ?)').run(id, en, ur, ...s);
     }
 
-    for (const p of PRODUCTS) {
-      const productId = randomUUID();
-      const batchId = randomUUID();
-      ids.products[p.key] = productId;
-      ids.batches[p.key] = batchId;
-      db.prepare(
-        `INSERT INTO products (id, category_id, name_en, name_ur, base_unit, pack_size, allow_loose, retail_price, wholesale_price, min_stock, shop_id, branch_id, device_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(productId, categoryIds.get(p.category), p.nameEn, p.nameUr, p.baseUnit, p.packSize, p.allowLoose, p.retail, p.wholesale, p.minStock, ...s);
-      db.prepare('INSERT INTO batches (id, product_id, supplier_id, batch_no, expiry_date, cost_price, shop_id, branch_id, device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-        batchId, productId, ids.supplierId, `${p.key.slice(0, 3).toUpperCase()}-001`, typeof p.expiry === 'number' ? addDays(today, p.expiry) : p.expiry, p.cost, ...s,
-      );
-      db.prepare(
-        `INSERT INTO stock_movements (id, batch_id, qty_delta, movement_type, created_by, shop_id, branch_id, device_id)
-         VALUES (?, ?, ?, 'opening', ?, ?, ?, ?)`,
-      ).run(randomUUID(), batchId, p.stock, ownerId, ...s);
+    for (const g of GROUPS) {
+      const groupId = randomUUID();
+      ids.groups[g.key] = groupId;
+      db.prepare('INSERT INTO product_groups (id, name_en, name_ur, category_id, shop_id, branch_id, device_id) VALUES (?, ?, ?, ?, ?, ?, ?)').run(groupId, g.nameEn, g.nameUr, categoryIds.get(g.category), ...s);
+      for (const size of g.sizes) {
+        const productId = randomUUID();
+        const batchId = randomUUID();
+        ids.products[size.key] = productId;
+        ids.batches[size.key] = batchId;
+        // The size's name is a copy: group name + pack label (see migration 004).
+        const nameEn = size.label === '' ? g.nameEn : `${g.nameEn} ${size.label}`;
+        const nameUr = size.label === '' ? g.nameUr : `${g.nameUr} ${size.label}`;
+        db.prepare(
+          `INSERT INTO products (id, group_id, pack_label, category_id, name_en, name_ur, barcode, base_unit, pack_size, allow_loose, retail_price, wholesale_price, min_stock, shop_id, branch_id, device_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(productId, groupId, size.label, categoryIds.get(g.category), nameEn, nameUr, size.barcode ?? null, size.baseUnit, size.packSize, size.allowLoose, size.retail, size.wholesale, size.minStock, ...s);
+        db.prepare('INSERT INTO batches (id, product_id, supplier_id, batch_no, expiry_date, cost_price, shop_id, branch_id, device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+          batchId, productId, ids.supplierId, `${size.key.slice(0, 3).toUpperCase()}-001`, typeof size.expiry === 'number' ? addDays(today, size.expiry) : size.expiry, size.cost, ...s,
+        );
+        db.prepare(
+          `INSERT INTO stock_movements (id, batch_id, qty_delta, movement_type, created_by, shop_id, branch_id, device_id)
+           VALUES (?, ?, ?, 'opening', ?, ?, ?, ?)`,
+        ).run(randomUUID(), batchId, size.stock, ownerId, ...s);
+      }
     }
 
     for (const c of CUSTOMERS) {

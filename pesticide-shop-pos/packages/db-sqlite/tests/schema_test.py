@@ -1,4 +1,4 @@
-"""Loads 001_init.sql into an in-memory SQLite database and checks the business rules.
+"""Loads every migration (001, 002, ...) in order into an in-memory SQLite database and checks the business rules.
 
 Run:  python test_database.py
 """
@@ -12,7 +12,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 db = sqlite3.connect(":memory:", isolation_level=None)
 db.row_factory = sqlite3.Row
 db.execute("PRAGMA foreign_keys = ON")
-db.executescript(open(os.path.join(HERE, "..", "migrations", "001_init.sql")).read())
+MIGRATIONS = os.path.join(HERE, "..", "migrations")
+for name in sorted(f for f in os.listdir(MIGRATIONS) if f.endswith(".sql")):
+    db.executescript(open(os.path.join(MIGRATIONS, name), encoding="utf8").read())
 
 passed = failed = 0
 
@@ -77,12 +79,14 @@ future = (date.today() + timedelta(days=365)).isoformat()
 soon = (date.today() + timedelta(days=10)).isoformat()
 past = "2020-01-01"
 
-bottle = ins("products", name_en="Insecticide 1L", name_ur="کیڑے مار", sku="INS1L", base_unit="ml",
+g_bottle = ins("product_groups", name_en="Insecticide 1L", name_ur="کیڑے مار")
+bottle = ins("products", group_id=g_bottle, name_en="Insecticide 1L", name_ur="کیڑے مار", sku="INS1L", base_unit="ml",
              pack_size=1000, allow_loose=0, retail_price=50_000, wholesale_price=45_000, min_stock=5000)
 b1 = ins("batches", product_id=bottle, supplier_id=sup, batch_no="B-001", expiry_date=future, cost_price=40_000)
 b_old = ins("batches", product_id=bottle, supplier_id=sup, batch_no="B-OLD", expiry_date=past, cost_price=40_000)
 
-loose = ins("products", name_en="Fertilizer 1kg", name_ur="کھاد", base_unit="g", pack_size=1000,
+g_loose = ins("product_groups", name_en="Fertilizer 1kg", name_ur="کھاد")
+loose = ins("products", group_id=g_loose, name_en="Fertilizer 1kg", name_ur="کھاد", base_unit="g", pack_size=1000,
             allow_loose=1, retail_price=20_000, wholesale_price=18_000)
 b2 = ins("batches", product_id=loose, batch_no="F-001", expiry_date=future, cost_price=15_000)
 b3 = ins("batches", product_id=loose, batch_no="F-NEAR", expiry_date=soon, cost_price=15_000)
@@ -198,6 +202,93 @@ check("expired batch is not counted as sellable", (ps["stock_total"], ps["stock_
 check("low stock is empty at 12000 vs min 5000", one("SELECT COUNT(*) c FROM v_low_stock WHERE product_id=?", bottle)["c"] == 0)
 db.execute("UPDATE products SET min_stock = 20000 WHERE id=?", (bottle,))
 check("low stock appears when minimum is raised", one("SELECT COUNT(*) c FROM v_low_stock WHERE product_id=?", bottle)["c"] == 1)
+
+print("\n--- product groups and sizes (migration 004) ---")
+# Insecticide X: a 250 ml size that is low on stock and a 1 L size that is not, each with its own batch.
+x_group = ins("product_groups", name_en="Insecticide X", name_ur="کیڑے مار دوا ایکس")
+x250 = ins("products", group_id=x_group, pack_label="250 ml", name_en="Insecticide X 250 ml", name_ur="کیڑے مار دوا ایکس 250 ml",
+           barcode="8961000250250", base_unit="ml", pack_size=250, retail_price=14_500, wholesale_price=13_000, min_stock=1000)
+x1l = ins("products", group_id=x_group, pack_label="1 L", name_en="Insecticide X 1 L", name_ur="کیڑے مار دوا ایکس 1 L",
+          barcode="8961000251000", base_unit="ml", pack_size=1000, retail_price=50_000, wholesale_price=45_000, min_stock=2000)
+xb250 = ins("batches", product_id=x250, batch_no="X-250", expiry_date=future, cost_price=11_500)
+xb1l = ins("batches", product_id=x1l, batch_no="X-1L", expiry_date=future, cost_price=40_000)
+xb1l_old = ins("batches", product_id=x1l, batch_no="X-1L-OLD", expiry_date=past, cost_price=40_000)
+ins("stock_movements", batch_id=xb250, qty_delta=600, movement_type="purchase", created_by=owner)
+ins("stock_movements", batch_id=xb1l, qty_delta=5000, movement_type="purchase", created_by=owner)
+ins("stock_movements", batch_id=xb1l_old, qty_delta=300, movement_type="purchase", created_by=owner)
+dormant = ins("product_groups", name_en="Dormant product", is_active=0)
+dormant_size = ins("products", group_id=dormant, name_en="Dormant product", base_unit="ml", pack_size=100,
+                   retail_price=1, wholesale_price=1, is_active=0)
+
+rows = [dict(r) for r in db.execute("SELECT product_id, pack_label, group_name_en, stock_total, stock_sellable FROM v_product_stock WHERE group_id=? ORDER BY pack_size", (x_group,))]
+check("every size keeps its own stock (the expired 300 ml is not sellable)", rows == [
+    {"product_id": x250, "pack_label": "250 ml", "group_name_en": "Insecticide X", "stock_total": 600, "stock_sellable": 600},
+    {"product_id": x1l, "pack_label": "1 L", "group_name_en": "Insecticide X", "stock_total": 5300, "stock_sellable": 5000}], rows)
+check("low stock is per size: the 250 ml is low", one("SELECT COUNT(*) c FROM v_low_stock WHERE product_id=?", x250)["c"] == 1)
+check("low stock is per size: the 1 L is not", one("SELECT COUNT(*) c FROM v_low_stock WHERE product_id=?", x1l)["c"] == 0)
+gs = dict(one("SELECT size_count, base_unit, stock_total, stock_sellable, low_size_count FROM v_group_stock WHERE group_id=?", x_group))
+check("v_group_stock adds the sizes up", gs == {"size_count": 2, "base_unit": "ml", "stock_total": 5900, "stock_sellable": 5600, "low_size_count": 1}, gs)
+empty = ins("product_groups", name_en="Empty product")
+check("a product with no sizes shows in v_group_stock with zero stock",
+      dict(one("SELECT size_count, stock_total FROM v_group_stock WHERE group_id=?", empty)) == {"size_count": 0, "stock_total": 0})
+
+check("v_product_group_mismatch is empty while copies match", db.execute("SELECT * FROM v_product_group_mismatch").fetchall() == [])
+db.execute("UPDATE product_groups SET name_en='Insecticide Y' WHERE id=?", (x_group,))
+check("renaming a group without its sizes is caught by v_product_group_mismatch",
+      sorted(r["product_id"] for r in db.execute("SELECT product_id FROM v_product_group_mismatch")) == sorted([x250, x1l]))
+db.execute("UPDATE product_groups SET name_en='Insecticide X' WHERE id=?", (x_group,))
+check("...and is empty again once the name is back", db.execute("SELECT * FROM v_product_group_mismatch").fetchall() == [])
+cat = ins("categories", name_en="Insecticide")
+db.execute("UPDATE product_groups SET category_id=? WHERE id=?", (cat, x_group))
+check("a drifted category copy is caught", one("SELECT COUNT(*) c FROM v_product_group_mismatch")["c"] == 2)
+db.execute("UPDATE products SET category_id=? WHERE group_id=?", (cat, x_group))
+check("...and cleared by copying it", one("SELECT COUNT(*) c FROM v_product_group_mismatch")["c"] == 0)
+db.execute("UPDATE product_groups SET category_id=NULL WHERE id=?", (x_group,))
+db.execute("UPDATE products SET category_id=NULL WHERE group_id=?", (x_group,))
+
+def insert_size(**vals):
+    base = dict(name_en="X", base_unit="ml", pack_size=100, retail_price=1, wholesale_price=1)
+    base.update(vals)
+    return lambda: ins("products", **base)
+
+expect_fail("a size with no group is blocked", insert_size(group_id=None), "group_id is required")
+expect_fail("a size with no group_id at all is blocked", insert_size(), "group_id is required")
+expect_fail("taking a size out of its group is blocked", lambda: db.execute("UPDATE products SET group_id=NULL WHERE id=?", (x250,)), "group_id is required")
+expect_fail("a size with a different unit in the same group is blocked", insert_size(group_id=x_group, pack_label="500 g", base_unit="g"), "same base unit")
+expect_fail("changing a size to a different unit than its group-mates is blocked", lambda: db.execute("UPDATE products SET base_unit='g' WHERE id=?", (x250,)), "same base unit")
+expect_fail("two sizes with the same label are blocked", insert_size(group_id=x_group, pack_label="250 ml"), "unique")
+expect_fail("a second size with no label is blocked", insert_size(group_id=x_group, pack_label=""), "pack label")
+expect_fail("a labelled size beside an unlabelled one is blocked", insert_size(group_id=g_bottle, pack_label="500 ml"), "pack label")
+expect_fail("removing the label of a size that has company is blocked", lambda: db.execute("UPDATE products SET pack_label='' WHERE id=?", (x250,)), "pack label")
+expect_fail("an active size inside an inactive product is blocked", insert_size(group_id=dormant, pack_label="", is_active=1), "inactive")
+expect_fail("switching a size on inside an inactive product is blocked", lambda: db.execute("UPDATE products SET is_active=1 WHERE id=?", (dormant_size,)), "inactive")
+gone = ins("product_groups", name_en="Gone", deleted_at="2026-01-01T00:00:00.000Z")
+expect_fail("a live size inside a deleted product is blocked", insert_size(group_id=gone), "deleted or inactive")
+expect_fail("deactivating a product that still has active sizes is blocked", lambda: db.execute("UPDATE product_groups SET is_active=0 WHERE id=?", (x_group,)), "deactivate its sizes first")
+expect_fail("deleting a product that still has sizes is blocked", lambda: db.execute("UPDATE product_groups SET deleted_at='2026-01-01T00:00:00.000Z' WHERE id=?", (x_group,)), "still has sizes")
+expect_fail("hard-deleting a product group is blocked", lambda: db.execute("DELETE FROM product_groups WHERE id=?", (x_group,)), "hard delete")
+expect_fail("a group with no name at all is blocked", lambda: ins("product_groups", name_en=None, name_ur=None), "check constraint")
+
+solo = ins("product_groups", name_en="Solo")
+insert_size(group_id=solo, pack_label="", name_en="Solo")()
+db.execute("UPDATE products SET pack_label='100 ml' WHERE group_id=?", (solo,))
+try:
+    insert_size(group_id=solo, pack_label="200 ml", name_en="Solo 200 ml", pack_size=200)()
+    check("an unlabelled size is fine alone, and a second size is fine once both have labels", True)
+except sqlite3.Error as e:
+    check("an unlabelled size is fine alone, and a second size is fine once both have labels", False, str(e))
+
+home = ins("product_groups", name_en="Home")
+mover = insert_size(group_id=home, pack_label="", name_en="Home")()
+db.execute("UPDATE products SET group_id=?, pack_label='100 ml' WHERE id=?", (x_group, mover))
+check("a size can move to another product", one("SELECT group_id FROM products WHERE id=?", mover)["group_id"] == x_group)
+db.execute("UPDATE product_groups SET is_active=0 WHERE id=?", (home,))
+check("a product left with no sizes can be switched off", one("SELECT is_active FROM product_groups WHERE id=?", home)["is_active"] == 0)
+
+check("groups are logged for sync", one("SELECT COUNT(*) c FROM change_log WHERE table_name='product_groups' AND operation='insert' AND row_id=?", x_group)["c"] == 1)
+v_before = one("SELECT version FROM product_groups WHERE id=?", x_group)["version"]
+db.execute("UPDATE product_groups SET notes='x' WHERE id=?", (x_group,))
+check("an update to a group bumps its version", one("SELECT version FROM product_groups WHERE id=?", x_group)["version"] == v_before + 1)
 
 print("\n--- sync support ---")
 v = one("SELECT version FROM products WHERE id=?", bottle)["version"]

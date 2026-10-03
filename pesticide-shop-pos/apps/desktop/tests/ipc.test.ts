@@ -172,7 +172,7 @@ describe('the whole path: typed client -> IPC -> validation -> real handlers -> 
       const error = await spoof({ batch_id: shop.demo.batches['insecticide1l']!, qty_delta: -1000, [key]: shop.staffId });
       expect(error, key).toMatchObject({ code: 'INVALID_INPUT' });
     }
-    expect(shop.count('stock_movements')).toBe(8); // only the eight opening movements: nothing was adjusted
+    expect(shop.count('stock_movements')).toBe(Object.keys(shop.demo.batches).length); // only the opening movements (one per demo size): nothing was adjusted
   });
 
   it('the cashier cannot type a price: unit_price on a line is refused', async () => {

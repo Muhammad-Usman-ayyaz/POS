@@ -28,10 +28,16 @@ Part 1 (done): the shell.
 Later parts of this phase: none planned; the screens come in Phases 4 to 8.
 
 ## Phase 4: Catalog and stock in
-Categories, brands, products (loose and pack setup, prices, tax), suppliers, batches, purchases, stock list with low-stock and near-expiry.
+Categories, brands, products as groups with pack sizes (each size has its own prices, tax, barcode, minimum stock and loose option; the catalogue service and search are done), suppliers, batches, purchases, stock list with low-stock and near-expiry.
+- **Test when a service adds soft delete** (no service soft-deletes a size or a category yet, so these paths are written but unproven):
+  - A label can be reused after the size that had it is soft-deleted (`uq_products_group_label` only covers live sizes).
+  - The soft-delete trigger paths on `products` (`UPDATE OF deleted_at`): a deleted size no longer counts for the same-unit, label-required and live-in-group rules, and cannot be un-deleted into a group that now clashes.
+  - `createGroup` and `updateGroup` refuse a soft-deleted category or brand (`checkCategoryAndBrand` in `packages/core/src/services/catalogue.ts`).
+  - A group that still has live sizes cannot be soft-deleted, and one with only deleted sizes can.
 
 ## Phase 5: POS and invoices
 Fast keyboard-friendly billing, product search in English and Urdu, batch auto-pick with override, discounts per item, retail or wholesale, tax, thermal and A4 printing.
+- **Requirement before printing is built: store a product name snapshot on `invoice_items` at sale time** (`name_en` and `name_ur`, as the size was called when it was sold, group name plus pack label). `invoice_items` keeps only `product_id`, and names now come from `product_groups`, so renaming a group would otherwise change how every old invoice reads and prints. Add it in its own migration with the sale service change and tests (an old invoice keeps its old name after a rename). It was deliberately NOT done in migration 004.
 
 ## Phase 6: Customers and Khata
 Customers, credit limit and due date, payments, customer statement (printable and shareable), opening balances.

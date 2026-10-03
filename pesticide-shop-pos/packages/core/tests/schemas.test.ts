@@ -7,7 +7,7 @@ const meta = () => ({ created_at: '2026-10-01T10:00:00.000Z', updated_at: '2026-
 const lineMeta = () => ({ created_at: '2026-10-01T10:00:00.000Z', version: 1 });
 
 const product = () => ({
-  id: randomUUID(), category_id: null, brand_id: null, name_en: 'Insecticide 1L', name_ur: 'کیڑے مار', sku: 'INS1L', barcode: null,
+  id: randomUUID(), group_id: randomUUID(), pack_label: '1 L', category_id: null, brand_id: null, name_en: 'Insecticide 1L', name_ur: 'کیڑے مار', sku: 'INS1L', barcode: null,
   base_unit: 'ml' as const, pack_size: 1000, allow_loose: 0 as const, retail_price: 50_000, wholesale_price: 45_000,
   tax_rate_bp: 1800, min_stock: 5000, is_active: 1 as const, ...scope(), ...meta(),
 });
@@ -123,7 +123,7 @@ describe('PublicUser', () => {
 });
 
 describe('entitySchemas', () => {
-  it('has a schema for each of the 27 tables', () => {
-    expect(Object.keys(entitySchemas)).toHaveLength(27);
+  it('has a schema for each of the 28 tables', () => {
+    expect(Object.keys(entitySchemas)).toHaveLength(28);
   });
 });

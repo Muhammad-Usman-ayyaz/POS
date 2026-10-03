@@ -4,7 +4,7 @@ Use the default until he answers. Record his answer here and update `docs/decisi
 
 | # | Question | Why it matters | Default for now | Owner's answer |
 |---|---|---|---|---|
-| 1 | Are 500ml and 1L bottles separate products or one product with pack sizes? | Prices on products or on a pack table | Separate products | |
+| 1 | Are 500ml and 1L bottles separate products or one product with pack sizes? **RESOLVED** | Prices on products or on a pack table | Was: separate products | **One product with several pack sizes** (for example Insecticide X in 250 ml, 500 ml and 1 L). Each size keeps its own stock, batches, prices, tax rate, barcode and minimum stock, because bottles of different sizes are different physical stock. Recorded in `docs/decisions.md` and `docs/database-rules.md` (migration 004) |
 | 2 | Does he buy from suppliers on credit? | Show the supplier ledger in the UI | Tables exist, UI hidden | |
 | 3 | Track shop expenses and daily cash closing? | Expenses and cash closing screens | `expenses` table exists, UI hidden | |
 | 4 | Farmer details: father's name, CNIC, second phone, guarantor? | More optional customer columns | Name, phone, village, notes | |
@@ -17,3 +17,4 @@ Use the default until he answers. Record his answer here and update `docs/decisi
 | 11 | Cash refunds: when a customer returns goods and is paid back in cash, what is recorded, and can it be more than they paid? | Needed before cash refunds are coded (see also 8) | Not built. Returns only credit the customer's Khata | |
 | 12 | Can staff adjust stock, write off damaged or expired goods, enter opening stock, or enter a customer's opening balance? | Decides who may change stock and balances by hand | Owner only. To relax it, add `'staff'` to that capability in `apps/desktop/src/main/permissions.ts` (one line each, plus the tests in `apps/desktop/tests/permissions.test.ts`). Every such change is in `audit_log` either way | |
 | 13 | Is the tax rate the same for every product, or different per product? (Left over from question 6) | Whether the product form needs a tax rate field, and which rate a new product starts with | Per product: `tax_rate_bp` on each product (0 unless set), copied onto each invoice line. Prices include tax either way | |
+| 14 | Can staff add or edit products, sizes, prices and tax rates? | Decides who may change the catalogue | Owner only (the catalogue service refuses anyone else). To relax it, change the check in `packages/core/src/services/catalogue.ts` and `apps/desktop/src/main/permissions.ts`. Price and tax-rate changes, switching a product off and moving a size are in `audit_log` either way | |
