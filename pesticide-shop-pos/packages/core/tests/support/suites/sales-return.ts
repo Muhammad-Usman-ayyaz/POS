@@ -107,8 +107,8 @@ export function defineSalesReturnTests(make: WorldFactory): void {
 
       it('refunds at the price charged: discount and tax come back in proportion', () => {
         const sold = s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: ID.taxed, qty: 10_000, line_discount: 10_000 }] });
-        expect(sold.items[0]!.line_total).toBe(578_200);
-        expect(ret(sold.invoice.id, sold.items[0]!.id, 2000).sales_return.total).toBe(115_640);
+        expect(sold.items[0]!.line_total).toBe(490_000); // price includes tax; the tax inside is 74746
+        expect(ret(sold.invoice.id, sold.items[0]!.id, 2000).sales_return.total).toBe(98_000); // one fifth
       });
 
       it('refunds ignore a price that changed after the sale', () => {

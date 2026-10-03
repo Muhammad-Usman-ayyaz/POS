@@ -1,11 +1,11 @@
 import { DomainError } from '../errors.js';
-import { priceForQty, splitProportional, taxOn } from '../money/index.js';
+import { priceForQty, splitProportional, taxIncludedIn } from '../money/index.js';
 import type { Allocation } from './allocation.js';
 
 export interface LineInput {
   /** Base units. */
   qty: number;
-  /** Paisa per pack. */
+  /** Paisa per pack, tax included. */
   unit_price: number;
   pack_size: number;
   /** Paisa taken off this line. Discounts are per item only. */
@@ -14,19 +14,21 @@ export interface LineInput {
 }
 
 export interface LineAmounts {
-  /** qty * unit_price / pack_size, rounded once. */
+  /** qty * unit_price / pack_size, rounded once. Tax is already inside it. */
   gross: number;
   line_discount: number;
-  /** gross - line_discount. Tax is charged on this. */
-  taxable: number;
-  tax_amount: number;
-  /** taxable + tax_amount. This is what the database stores as line_total. */
+  /** gross - line_discount. What the customer pays for the line; the database stores it as line_total. */
   line_total: number;
+  /** The part of line_total that is tax: ROUND(line_total * rate / (10000 + rate)). */
+  tax_amount: number;
+  /** line_total - tax_amount: the line without its tax. */
+  net: number;
 }
 
 /**
- * line_total = ROUND(qty * unit_price / pack_size) - line_discount + tax_amount.
- * Tax is added on top of the discounted price (open question 6: inclusive pricing is not decided).
+ * Prices include tax (open question 6, answered by the owner), so tax is never added on top:
+ * line_total = ROUND(qty * unit_price / pack_size) - line_discount, and tax_amount is the part of that
+ * total which is tax, taken out of the discounted line.
  */
 export function calcLine(input: LineInput): LineAmounts {
   if (!Number.isInteger(input.qty) || input.qty <= 0) throw new DomainError('INVALID_QUANTITY', `quantity must be a positive integer: ${input.qty}`);
@@ -34,9 +36,9 @@ export function calcLine(input: LineInput): LineAmounts {
   if (input.line_discount < 0 || input.line_discount > gross) {
     throw new DomainError('DISCOUNT_EXCEEDS_LINE', `discount ${input.line_discount} is more than the line price ${gross}`, { discount: input.line_discount, linePrice: gross });
   }
-  const taxable = gross - input.line_discount;
-  const tax_amount = taxOn(taxable, input.tax_rate_bp);
-  return { gross, line_discount: input.line_discount, taxable, tax_amount, line_total: taxable + tax_amount };
+  const line_total = gross - input.line_discount;
+  const tax_amount = taxIncludedIn(line_total, input.tax_rate_bp);
+  return { gross, line_discount: input.line_discount, line_total, tax_amount, net: line_total - tax_amount };
 }
 
 /** One line the cashier rang up, before batches are chosen. */
@@ -63,7 +65,9 @@ export interface InvoiceLineDraft {
   cost_price: number;
   line_discount: number;
   tax_rate_bp: number;
+  /** The tax inside line_total. */
   tax_amount: number;
+  /** What the customer pays for this row, tax included. */
   line_total: number;
 }
 
@@ -111,7 +115,11 @@ export interface InvoiceTotals {
   total: number;
 }
 
-/** subtotal = sum(line_total - tax_amount), tax_total = sum(tax_amount), total = subtotal + tax_total. */
+/**
+ * subtotal = sum(line_total - tax_amount), tax_total = sum(tax_amount), total = subtotal + tax_total.
+ * Every line's tax is rounded once on its own and the invoice only adds those up, so the total is exactly
+ * the sum of the line totals (what v_invoice_mismatch checks), whatever the rounding did.
+ */
 export function calcInvoiceTotals(lines: readonly { line_total: number; tax_amount: number }[]): InvoiceTotals {
   let subtotal = 0;
   let tax_total = 0;

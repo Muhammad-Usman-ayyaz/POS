@@ -155,3 +155,30 @@ describe('a failure part-way through a sale leaves nothing written in the real d
     expect(w.db.pragma('foreign_key_check')).toEqual([]);
   });
 });
+
+describe('prices include tax (open question 6)', () => {
+  it('a taxed sale and a partial return: the database constraints, v_invoice_mismatch and v_profit_by_day all agree', async () => {
+    const t = await createSqliteWorld(); // the usual shop, with stock of a product that has 18 percent tax
+    try {
+      const s = services(t);
+      // 10 packs at Rs 500 (tax included), Rs 100 discount: the customer pays 490000, of which 74746 is tax
+      const sold = s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: ID.taxed, qty: 10_000, line_discount: 10_000 }] });
+      expect(t.rows('invoices')[0]).toMatchObject({ subtotal: 415_254, tax_total: 74_746, total: 490_000 }); // total = subtotal + tax_total = the line
+      expect(t.rows('invoice_items')[0]).toMatchObject({ line_total: 490_000, tax_amount: 74_746, tax_rate_bp: 1800 });
+      expect(t.db.prepare('SELECT * FROM v_invoice_mismatch').all()).toEqual([]);
+      expect(t.rows('ledger_entries').at(-1)).toMatchObject({ entry_type: 'invoice', amount_delta: 490_000 }); // the customer owes the price, not price + tax
+
+      // revenue is the sale without its tax; cost is 10 packs at Rs 400
+      expect(t.db.prepare('SELECT revenue, cost, profit FROM v_profit_by_day').all()).toEqual([{ revenue: 415_254, cost: 400_000, profit: 15_254 }]);
+
+      // 2 packs back: Rs 980 refunded, and the revenue that comes off is the net part of it (98000 * 415254 / 490000 = 83050.8)
+      const back = s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'resellable' }] });
+      expect(back.sales_return.total).toBe(98_000);
+      expect(t.rows('ledger_entries').at(-1)).toMatchObject({ entry_type: 'return', amount_delta: -98_000 });
+      expect(t.db.prepare('SELECT revenue, cost, profit FROM v_profit_by_day').all()).toEqual([{ revenue: 332_203, cost: 320_000, profit: 12_203 }]);
+      expect(t.db.prepare('SELECT * FROM v_invoice_mismatch').all()).toEqual([]);
+    } finally {
+      t.close();
+    }
+  });
+});

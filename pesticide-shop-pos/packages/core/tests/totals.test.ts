@@ -13,13 +13,23 @@ const code = (fn: () => unknown): string | undefined => {
 describe('calcLine', () => {
   const base = { pack_size: 1000, line_discount: 0, tax_rate_bp: 0 };
 
-  it('10 bottles at Rs 500 is Rs 5000', () => {
+  it('0 percent tax: 10 bottles at Rs 500 is Rs 5000, with no tax in it (the same as before tax was included)', () => {
     expect(calcLine({ ...base, qty: 10_000, unit_price: 50_000 })).toEqual({
       gross: 500_000,
       line_discount: 0,
-      taxable: 500_000,
-      tax_amount: 0,
       line_total: 500_000,
+      tax_amount: 0,
+      net: 500_000,
+    });
+  });
+
+  it('a line of Rs 1,180 at 18 percent is Rs 1,180: Rs 180 tax and Rs 1,000 without it', () => {
+    expect(calcLine({ qty: 1000, unit_price: 118_000, pack_size: 1000, line_discount: 0, tax_rate_bp: 1800 })).toEqual({
+      gross: 118_000,
+      line_discount: 0,
+      line_total: 118_000, // tax is NOT added on top
+      tax_amount: 18_000,
+      net: 100_000,
     });
   });
 
@@ -27,21 +37,24 @@ describe('calcLine', () => {
     expect(calcLine({ ...base, qty: 250, unit_price: 20_000 }).line_total).toBe(5000);
   });
 
-  it('tax is charged on the price after the discount, then added', () => {
-    // 500000 - 10000 = 490000 taxable; 18% = 88200; total 578200
+  it('a discounted taxed line: the discount comes off the price, and the tax is taken out of what is left', () => {
+    // 500000 - 10000 = 490000 paid. Tax inside: 490000 * 1800 / 11800 = 74745.76 -> 74746. Without tax: 415254.
     expect(calcLine({ qty: 10_000, unit_price: 50_000, pack_size: 1000, line_discount: 10_000, tax_rate_bp: 1800 })).toEqual({
       gross: 500_000,
       line_discount: 10_000,
-      taxable: 490_000,
-      tax_amount: 88_200,
-      line_total: 578_200,
+      line_total: 490_000,
+      tax_amount: 74_746,
+      net: 415_254,
     });
   });
 
-  it('follows the documented formula: ROUND(qty*price/pack) - discount + tax', () => {
+  it('follows the documented formula: line_total = ROUND(qty*price/pack) - discount, tax_amount = ROUND(line_total*rate/(10000+rate))', () => {
     const r = calcLine({ qty: 333, unit_price: 12_345, pack_size: 1000, line_discount: 100, tax_rate_bp: 1800 });
-    expect(r.gross).toBe(Math.round((333 * 12_345) / 1000));
-    expect(r.line_total).toBe(r.gross - 100 + r.tax_amount);
+    expect(r.gross).toBe(Math.round((333 * 12_345) / 1000)); // 4110.885 -> 4111
+    expect(r.line_total).toBe(r.gross - 100); // 4011: no tax added
+    expect(r.tax_amount).toBe(Math.round((r.line_total * 1800) / 11_800)); // 611.8 -> 612
+    expect(r.tax_amount).toBe(612);
+    expect(r.net).toBe(r.line_total - r.tax_amount);
   });
 
   it('allows a 100 percent discount', () => {
@@ -96,10 +109,23 @@ describe('buildInvoiceLines', () => {
     expect(lines.every((l) => l.line_total === 0)).toBe(true);
   });
 
-  it('applies the product tax rate to every row', () => {
+  it('applies the product tax rate to every row, and tax does not change what the rows cost', () => {
     const lines = buildInvoiceLines({ ...cart, tax_rate_bp: 1800 }, twoBatches);
-    expect(lines.map((l) => l.tax_amount)).toEqual([27_000, 9000]);
+    expect(lines.map((l) => l.line_total)).toEqual([150_000, 50_000]); // the same as at 0 percent
+    expect(lines.map((l) => l.tax_amount)).toEqual([22_881, 7627]); // 150000*1800/11800 = 22881.4, 50000*1800/11800 = 7627.1
     expect(lines.every((l) => l.tax_rate_bp === 1800)).toBe(true);
+  });
+
+  it('a taxed line over two batches: each row takes its share of the discount, then its tax out of its own total', () => {
+    // 4 packs at Rs 1,180: rows 3 packs (354000) and 1 pack (118000). Discount 1000 shared 750 / 250.
+    const taxed: CartLine = { ...cart, unit_price: 118_000, line_discount: 1000, tax_rate_bp: 1800 };
+    const lines = buildInvoiceLines(taxed, twoBatches);
+    expect(lines.map((l) => [l.batch_id, l.line_discount, l.line_total, l.tax_amount])).toEqual([
+      ['B', 750, 353_250, 53_886], // 353250 * 1800 / 11800 = 53885.6
+      ['A', 250, 117_750, 17_962], // 117750 * 1800 / 11800 = 17961.9
+    ]);
+    expect(calcInvoiceTotals(lines)).toEqual({ subtotal: 399_152, tax_total: 71_848, total: 471_000 });
+    expect(471_000).toBe(4 * 118_000 - 1000); // the customer pays the price less the discount, whatever the split
   });
 
   it('rejects batches that do not add up to the line, and a discount over the price', () => {
@@ -109,13 +135,50 @@ describe('buildInvoiceLines', () => {
 });
 
 describe('calcInvoiceTotals', () => {
-  it('subtotal is the lines without tax, total adds the tax', () => {
+  it('subtotal is the lines without their tax, tax_total is the tax inside them, and the total is the lines as priced', () => {
     expect(
       calcInvoiceTotals([
-        { line_total: 578_200, tax_amount: 88_200 },
+        { line_total: 490_000, tax_amount: 74_746 },
         { line_total: 5000, tax_amount: 0 },
       ]),
-    ).toEqual({ subtotal: 495_000, tax_total: 88_200, total: 583_200 });
+    ).toEqual({ subtotal: 420_254, tax_total: 74_746, total: 495_000 });
+  });
+
+  it('rounding each line cannot make subtotal + tax_total differ from the sum of the line totals', () => {
+    // Three lines of 5 paisa at 18 percent: each holds 0.76 paisa of tax, rounded to 1. Taking the tax of the whole 15 paisa
+    // instead would give 2, not 3. Only the per-line figures are stored, so they are what the invoice adds up.
+    const lines = [1, 2, 3].map(() => calcLine({ qty: 1, unit_price: 5, pack_size: 1, line_discount: 0, tax_rate_bp: 1800 }));
+    expect(lines.map((l) => [l.line_total, l.tax_amount, l.net])).toEqual([[5, 1, 4], [5, 1, 4], [5, 1, 4]]);
+    const totals = calcInvoiceTotals(lines);
+    expect(totals).toEqual({ subtotal: 12, tax_total: 3, total: 15 });
+    expect(totals.subtotal + totals.tax_total).toBe(lines.reduce((s, l) => s + l.line_total, 0));
+  });
+
+  it('the line without its tax is the line total minus the tax, never rounded separately (it would invent a paisa)', () => {
+    // At 100 percent a 1 paisa line holds 0.5 paisa of tax and 0.5 without: both would round up to 1, making 2 paisa.
+    const line = calcLine({ qty: 1, unit_price: 1, pack_size: 1, line_discount: 0, tax_rate_bp: 10_000 });
+    expect(line).toMatchObject({ line_total: 1, tax_amount: 1, net: 0 });
+    expect(calcInvoiceTotals([line])).toEqual({ subtotal: 0, tax_total: 1, total: 1 });
+  });
+
+  it('holds for 2000 odd invoices: the total is always the sum of the line totals, and each tax is part of its own line', () => {
+    let seed = 12_345;
+    const next = (max: number) => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed % max;
+    };
+    const rates = [0, 500, 1800, 2500, 10_000];
+    for (let n = 0; n < 2000; n++) {
+      const lines = Array.from({ length: 1 + next(4) }, () => {
+        const gross = 1 + next(300_000);
+        return calcLine({ qty: 1, unit_price: gross, pack_size: 1, line_discount: next(gross + 1), tax_rate_bp: rates[next(rates.length)]! });
+      });
+      const t = calcInvoiceTotals(lines);
+      const sum = lines.reduce((s, l) => s + l.line_total, 0);
+      expect(t.subtotal + t.tax_total).toBe(sum);
+      expect(t.total).toBe(sum);
+      for (const l of lines) expect(l.tax_amount >= 0 && l.tax_amount <= l.line_total && l.net === l.line_total - l.tax_amount).toBe(true);
+    }
   });
 
   it('an empty invoice is all zeros', () => {

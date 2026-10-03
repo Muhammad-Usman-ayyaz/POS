@@ -5,10 +5,14 @@ The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later number
 ## Units and money
 - `products.base_unit` is ml, g or piece. `pack_size` is base units per pack (1L bottle = 1000 ml).
 - Quantities (`qty`, `qty_delta`, `min_stock`) are integers in the base unit.
-- Prices (`retail_price`, `wholesale_price`, `cost_price`, `unit_price`) are paisa per pack.
-- `line_total = ROUND(qty * unit_price / pack_size) - line_discount + tax_amount`. Round once per line.
-- `invoices.subtotal = SUM(line_total - tax_amount)`, `tax_total = SUM(tax_amount)`, `total = subtotal + tax_total`. The view `v_invoice_mismatch` must stay empty.
-- `tax_rate_bp` is basis points. 1800 means 18 percent.
+- Prices (`retail_price`, `wholesale_price`, `unit_price`, `cost_price`) are paisa per pack. **Selling prices (retail, wholesale, `unit_price`) include tax.** Tax is never added on top.
+- `line_total = ROUND(qty * unit_price / pack_size) - line_discount`. Round once per line. This is what the customer pays for the line, tax included.
+- `tax_amount = ROUND(line_total * tax_rate_bp / (10000 + tax_rate_bp))`: the tax that is inside `line_total`, taken out of the discounted line. Rounded once, halves up. A line of Rs 1,180 at 18 percent has Rs 180 tax and Rs 1,000 without it.
+- `invoices.subtotal = SUM(line_total - tax_amount)`, `tax_total = SUM(tax_amount)`, `total = subtotal + tax_total`, which is exactly `SUM(line_total)`. The view `v_invoice_mismatch` (total against the sum of the lines) must stay empty. Each line's tax is rounded on its own and the invoice only adds them up, so rounding can never make the two differ. The line without tax is `line_total - tax_amount`, never rounded separately.
+- A cart line over two batches is two `invoice_items` rows. The discount is shared between them by price, and each row has its own `line_total` and `tax_amount`.
+- `tax_rate_bp` is basis points. 1800 means 18 percent. It is set per product and copied onto each invoice line.
+- `v_profit_by_day` counts revenue as `line_total - tax_amount` (the sale without its tax) and takes the matching share off for returns. It needed no change when prices became tax-inclusive.
+- Migration 001's header comment still shows the old formula (`... + tax_amount`). It is a comment only: no table, constraint or view depends on it, and an applied migration is never edited. This file is the rule.
 - Products with `allow_loose = 0` can only be sold in whole packs.
 
 ## Ledger sign

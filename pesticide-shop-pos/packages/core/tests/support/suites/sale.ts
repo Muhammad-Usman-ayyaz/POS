@@ -147,9 +147,10 @@ export function defineSaleTests(make: WorldFactory): void {
           expect(JSON.parse(w.rows('audit_log')[0]!.details as string)).toMatchObject({ product_id: ID.bottle, price_type: 'retail', list_price: 50_000, unit_price: 40_000 });
         });
 
-        it('works with discount and tax, and the cost price still comes from the batch', () => {
-          const r = sale({ paid_amount: 472_000, lines: [{ product_id: ID.taxed, qty: 10_000, ...owner(40_000) }] });
-          expect(r.items[0]).toMatchObject({ unit_price: 40_000, cost_price: 40_000, tax_amount: 72_000, line_total: 472_000 });
+        it('works with tax, and the cost price still comes from the batch', () => {
+          // 10 packs at the approved Rs 400 = 400000, tax included: 400000 * 1800 / 11800 = 61016.9 -> 61017
+          const r = sale({ paid_amount: 400_000, lines: [{ product_id: ID.taxed, qty: 10_000, ...owner(40_000) }] });
+          expect(r.items[0]).toMatchObject({ unit_price: 40_000, cost_price: 40_000, tax_amount: 61_017, line_total: 400_000 });
         });
 
         it('only an active owner can approve it', () => {
@@ -365,10 +366,17 @@ export function defineSaleTests(make: WorldFactory): void {
     });
 
     describe('discount and tax', () => {
-      it('discount is per item, tax is charged on the discounted price', () => {
-        const r = sale({ paid_amount: 578_200, lines: [{ product_id: ID.taxed, qty: 10_000, line_discount: 10_000 }] });
-        expect(r.items[0]).toMatchObject({ line_discount: 10_000, tax_rate_bp: 1800, tax_amount: 88_200, line_total: 578_200 });
-        expect(r.invoice).toMatchObject({ subtotal: 490_000, tax_total: 88_200, total: 578_200 });
+      it('discount is per item, the price already includes tax, and the tax is taken out of the discounted line', () => {
+        // 10 packs at Rs 500 = 500000, less 10000 discount = 490000 paid. Tax inside: 490000 * 1800 / 11800 = 74745.8 -> 74746
+        const r = sale({ paid_amount: 490_000, lines: [{ product_id: ID.taxed, qty: 10_000, line_discount: 10_000 }] });
+        expect(r.items[0]).toMatchObject({ line_discount: 10_000, tax_rate_bp: 1800, tax_amount: 74_746, line_total: 490_000 });
+        expect(r.invoice).toMatchObject({ subtotal: 415_254, tax_total: 74_746, total: 490_000 });
+      });
+
+      it('a taxed product costs exactly its list price: tax is never added on top', () => {
+        const r = sale({ paid_amount: 50_000, lines: [{ product_id: ID.taxed, qty: 1000 }] });
+        expect(r.invoice.total).toBe(50_000);
+        expect(r.items[0]).toMatchObject({ line_total: 50_000, tax_amount: 7627, tax_rate_bp: 1800 }); // 50000 * 1800 / 11800 = 7627.1
       });
 
       it('the invoice total always equals the sum of its lines (the v_invoice_mismatch rule)', () => {

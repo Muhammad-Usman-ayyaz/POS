@@ -31,9 +31,12 @@ export function priceForQty(qty: number, unitPrice: number, packSize: number): n
   return roundDiv(mul(qty, unitPrice), packSize);
 }
 
-/** Tax on an amount. `rateBp` is basis points: 1800 is 18 percent. Rounded once. */
-export function taxOn(amount: number, rateBp: number): number {
-  return roundDiv(mul(amount, rateBp), 10_000);
+/**
+ * The tax that is already inside a tax-inclusive amount. `rateBp` is basis points: 1800 is 18 percent, so
+ * Rs 1,180 holds Rs 180 of tax (1180 * 1800 / 11800). Rounded once, halves up.
+ */
+export function taxIncludedIn(inclusiveAmount: number, rateBp: number): number {
+  return roundDiv(mul(inclusiveAmount, rateBp), 10_000 + rateBp);
 }
 
 /**

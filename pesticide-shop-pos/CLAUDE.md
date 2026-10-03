@@ -30,7 +30,7 @@ Keep this separation. SQLite is the only adapter for the core ports. Supabase co
 - Every sale, return, payment and purchase runs inside ONE database transaction so stock, invoice and ledger change together or not at all.
 
 ## Product decisions already made
-Loose and sealed sales both exist. Batch and expiry on every product. Retail and wholesale price. Payments reduce the customer's overall balance. Credit limit and due date on credit sales. Returns must link to an invoice and need owner approval. Discounts are per item only. Out-of-stock sales are blocked. Batch is picked earliest-expiry-first with manual override. Payment methods: cash, bank, Easypaisa, JazzCash. Sales tax is stored per product and per invoice line. Near-expiry warning at 30 days. Owner-only: approve returns, change prices, view profit and cost. Thermal 80mm and A4 invoices. No data import from the old Django version.
+Loose and sealed sales both exist. Batch and expiry on every product. Retail and wholesale price. Payments reduce the customer's overall balance. Credit limit and due date on credit sales. Returns must link to an invoice and need owner approval. Discounts are per item only. Out-of-stock sales are blocked. Batch is picked earliest-expiry-first with manual override. Payment methods: cash, bank, Easypaisa, JazzCash. Selling prices include tax (it is never added on top). The tax rate is stored per product and the tax amount per invoice line. Near-expiry warning at 30 days. Owner-only: approve returns, change prices, view profit and cost. Thermal 80mm and A4 invoices. No data import from the old Django version.
 Full list: `docs/decisions.md`. Unanswered owner questions with the defaults to use: `docs/open-questions.md`.
 
 ## Conventions

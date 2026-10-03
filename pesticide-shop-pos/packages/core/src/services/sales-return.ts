@@ -63,6 +63,7 @@ export function createSalesReturnService(deps: ServiceDeps) {
             invoice_item_id: i.id,
             qty: i.qty,
             line_total: i.line_total,
+            tax_amount: i.tax_amount,
             qty_returned: returned.get(i.id) ?? 0,
             ...(packSize !== undefined ? { pack_size: packSize } : {}),
           };

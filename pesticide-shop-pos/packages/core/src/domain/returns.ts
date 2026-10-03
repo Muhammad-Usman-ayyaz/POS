@@ -7,8 +7,10 @@ export interface SoldLine {
   invoice_item_id: string;
   /** Sold, in base units. */
   qty: number;
-  /** Paisa the customer was charged for this row: after discount, including tax. */
+  /** Paisa the customer was charged for this row: after discount, tax included. */
   line_total: number;
+  /** The tax inside line_total. */
+  tax_amount: number;
   /** Sum of earlier sales_return_items for this row. */
   qty_returned: number;
   /** Base units per pack, if known: lets an error say how many packs. */
@@ -24,7 +26,10 @@ export interface ReturnRequestLine {
 export interface PlannedReturnLine {
   invoice_item_id: string;
   qty: number;
+  /** Paisa given back, tax included. */
   refund_amount: number;
+  /** The part of refund_amount that is tax. */
+  tax_refund: number;
   condition: ReturnCondition;
   /** Only resellable goods go back into sellable stock. */
   restock: boolean;
@@ -39,18 +44,24 @@ export function returnableQty(line: SoldLine): number {
   return line.qty - line.qty_returned;
 }
 
-/** What the customer was charged for the first `qty` units of this row. */
-function chargedFor(line: SoldLine, qty: number): number {
-  return roundDiv(mul(line.line_total, qty), line.qty);
+/** What the customer was charged for the first `qty` units of this row (`of` is line_total or tax_amount). */
+function chargedFor(line: SoldLine, qty: number, of: 'line_total' | 'tax_amount'): number {
+  return roundDiv(mul(line[of], qty), line.qty);
 }
 
 /**
  * Refund for returning `qty` more units of a row, at the price originally charged (not today's price).
- * The discount and tax come back in proportion. Computed as the difference of running totals, so the
- * refunds from several partial returns add up to exactly line_total once everything is returned.
+ * The refund is a share of line_total, which already has the discount taken off and the tax inside, so
+ * both come back in proportion. Computed as the difference of running totals, so the refunds from several
+ * partial returns add up to exactly line_total once everything is returned.
  */
 export function refundFor(line: SoldLine, qty: number): number {
-  return chargedFor(line, line.qty_returned + qty) - chargedFor(line, line.qty_returned);
+  return chargedFor(line, line.qty_returned + qty, 'line_total') - chargedFor(line, line.qty_returned, 'line_total');
+}
+
+/** The tax inside that refund, worked out the same way, so all the tax comes back and never more. */
+export function taxRefundFor(line: SoldLine, qty: number): number {
+  return chargedFor(line, line.qty_returned + qty, 'tax_amount') - chargedFor(line, line.qty_returned, 'tax_amount');
 }
 
 /**
@@ -84,6 +95,7 @@ export function planReturn(args: {
       invoice_item_id: r.invoice_item_id,
       qty: r.qty,
       refund_amount: refundFor(sold, r.qty),
+      tax_refund: taxRefundFor(sold, r.qty),
       condition: r.condition,
       restock: r.condition === 'resellable',
     };

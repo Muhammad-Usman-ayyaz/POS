@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DomainError, formatPaisa, mul, parseRupees, priceForQty, roundDiv, splitProportional, taxOn } from '../src/index.js';
+import { DomainError, formatPaisa, mul, parseRupees, priceForQty, roundDiv, splitProportional, taxIncludedIn } from '../src/index.js';
 
 describe('roundDiv', () => {
   it.each([
@@ -42,14 +42,19 @@ describe('priceForQty (price is per pack, rounded once)', () => {
   it('can be zero for a tiny quantity', () => expect(priceForQty(1, 5, 1000)).toBe(0));
 });
 
-describe('taxOn (basis points)', () => {
-  it('18 percent of Rs 1000', () => expect(taxOn(100_000, 1800)).toBe(18_000));
-  it('zero rate is zero tax', () => expect(taxOn(123_456, 0)).toBe(0));
-  it('rounds to the nearest paisa', () => {
-    expect(taxOn(3000, 1800)).toBe(540);
-    expect(taxOn(5, 1800)).toBe(1); // 0.9
-    expect(taxOn(1, 5000)).toBe(1); // 0.5 rounds up
-    expect(taxOn(1, 4999)).toBe(0);
+describe('taxIncludedIn (tax taken out of a tax-inclusive amount, basis points)', () => {
+  it('Rs 1,180 at 18 percent holds Rs 180 of tax', () => expect(taxIncludedIn(118_000, 1800)).toBe(18_000));
+  it('zero rate is zero tax', () => expect(taxIncludedIn(123_456, 0)).toBe(0));
+  it('is not 18 percent of the amount: that would be tax added on top', () => {
+    expect(taxIncludedIn(100_000, 1800)).toBe(15_254); // 100000 * 1800 / 11800 = 15254.2, not 18000
+  });
+  it('rounds to the nearest paisa, halves up', () => {
+    expect(taxIncludedIn(3000, 1800)).toBe(458); // 457.6 rounds up
+    expect(taxIncludedIn(5, 1800)).toBe(1); // 0.76 rounds up
+    expect(taxIncludedIn(1, 5000)).toBe(0); // 0.33 rounds down
+    expect(taxIncludedIn(1, 4999)).toBe(0);
+    expect(taxIncludedIn(1, 10_000)).toBe(1); // exactly 0.5 rounds up
+    expect(taxIncludedIn(3, 5000)).toBe(1); // exactly 1
   });
 });
 

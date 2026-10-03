@@ -20,6 +20,7 @@
 | Payment methods | Cash, bank, Easypaisa, JazzCash | Optional reference number |
 | Batch choice | Automatic with manual override | Earliest expiry first |
 | Tax | Sales tax on invoices | Rate per product, amount saved per line |
+| Tax and prices | Selling prices already include tax (owner's answer to question 6) | `line_total` is the price less the discount and tax is never added on top. `tax_amount` is the tax inside `line_total`. `subtotal` is the total without tax, and `total` is the sum of the lines. A return refunds from `line_total` in proportion, so its tax comes back in proportion too |
 | Near expiry | Warn at 30 days | `settings.near_expiry_days` |
 | Migration | Start fresh, no Django import | Old version used as reference only |
 | ORM | None. Plain SQL migrations and typed repositories | Triggers and views live in SQL |
