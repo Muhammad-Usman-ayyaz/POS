@@ -386,12 +386,12 @@ export function defineCatalogueTests(make: WorldFactory): void {
         expect(w.snapshot()).toEqual(before);
       });
 
-      it('minimum stock, loose selling and codes change without an audit row, and each size is changed alone', () => {
+      it('minimum stock, loose selling and codes change, and each size is changed alone', () => {
         const x = makeX();
         s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[0]!.id, changes: { min_stock: 3000, allow_loose: 1, sku: 'NEW-SKU' } });
         expect(row('products', x.sizes[0]!.id)).toMatchObject({ min_stock: 3000, allow_loose: 1, sku: 'NEW-SKU' });
         expect(row('products', x.sizes[1]!.id)).toMatchObject({ min_stock: 0, allow_loose: 0, sku: null }); // the neighbours are untouched
-        expect(auditActions()).toEqual([]);
+        expect(auditActions()).toEqual(['size_changed']); // what was changed is in the audit log: see "audit of catalogue changes"
       });
 
       it('a barcode left out of the change is left alone; null or empty clears it; setting its own value is fine', () => {
@@ -475,8 +475,10 @@ export function defineCatalogueTests(make: WorldFactory): void {
         s.catalogue.setGroupActive({ actor_id: owner, id: x.group.id, is_active: false });
         expect(row('product_groups', x.group.id).is_active).toBe(0);
         for (const p of x.sizes) expect(row('products', p.id).is_active).toBe(0);
-        expect(w.rows('audit_log')).toEqual([expect.objectContaining({ user_id: owner, action: 'group_deactivated', table_name: 'product_groups', row_id: x.group.id })]);
-        const details = JSON.parse(w.rows('audit_log')[0]!.details as string) as { group_id: string; sizes_deactivated: string[] };
+        expect(auditActions()).toEqual(['size_deactivated', 'group_deactivated']); // the first is the single-size switch-off above
+        const groupRow = w.rows('audit_log').find((a) => a.action === 'group_deactivated')!;
+        expect(groupRow).toMatchObject({ user_id: owner, table_name: 'product_groups', row_id: x.group.id });
+        const details = JSON.parse(groupRow.details as string) as { group_id: string; sizes_deactivated: string[] };
         expect(details.group_id).toBe(x.group.id);
         expect([...details.sizes_deactivated].sort()).toEqual([x.sizes[1]!.id, x.sizes[2]!.id].sort());
       });
@@ -499,7 +501,7 @@ export function defineCatalogueTests(make: WorldFactory): void {
         expect(x.sizes.map((p) => row('products', p.id).is_active)).toEqual([0, 0, 0]);
         s.catalogue.setSizeActive({ actor_id: owner, id: x.sizes[0]!.id, is_active: true });
         expect(row('products', x.sizes[0]!.id).is_active).toBe(1);
-        expect(auditActions()).toEqual(['group_deactivated', 'group_reactivated']);
+        expect(auditActions()).toEqual(['group_deactivated', 'group_reactivated', 'size_activated']);
       });
 
       it('doing nothing (already off, already on) writes nothing', () => {
@@ -555,7 +557,7 @@ export function defineCatalogueTests(make: WorldFactory): void {
         expect(row('product_groups', y.group.id).is_active).toBe(1); // still has its 200 ml
       });
 
-      it('joining two single-size products: the target size must get a label too, in the same transaction, and one audit row is written', () => {
+      it('joining two single-size products: the target size must get a label too, in the same transaction, and both changes are audited', () => {
         const { a, b } = twoSeparate();
         const before = w.snapshot();
         const e = errorOf(() => s.catalogue.moveSize({ actor_id: owner, product_id: a.sizes[0]!.id, to_group_id: b.group.id, pack_label: '500 ml' }));
@@ -566,7 +568,7 @@ export function defineCatalogueTests(make: WorldFactory): void {
         s.catalogue.moveSize({ actor_id: owner, product_id: a.sizes[0]!.id, to_group_id: b.group.id, pack_label: '500 ml', existing_size_label: '1 L' });
         expect(row('products', b.sizes[0]!.id)).toMatchObject({ pack_label: '1 L', name_en: 'Insecticide 1L 1 L' });
         expect(row('products', a.sizes[0]!.id)).toMatchObject({ group_id: b.group.id, pack_label: '500 ml', name_en: 'Insecticide 1L 500 ml', category_id: ID.catFertilizer, brand_id: ID.brandX });
-        expect(w.rows('audit_log')).toHaveLength(1);
+        expect(auditActions()).toEqual(['size_changed', 'size_moved']); // the relabelling of the size already there, then the move
       });
 
       it('writes one audit row with the owner, both groups, both labels and whether the old product was switched off', () => {
@@ -639,6 +641,216 @@ export function defineCatalogueTests(make: WorldFactory): void {
         expect(row('products', a.sizes[0]!.id)).toMatchObject({ group_id: a.group.id, pack_label: '' });
         expect(row('products', b.sizes[0]!.id).pack_label).toBe('');
         expect(row('product_groups', a.group.id).is_active).toBe(1);
+      });
+    });
+
+    describe('audit of catalogue changes (every change names the fields, with the old and new values)', () => {
+      interface Detail { product_id?: string; group_id: string; fields: string[]; before: Row; after: Row }
+      const detail = (a: Row): Detail => JSON.parse(a.details as string) as Detail;
+      const only = (action: string): Row => {
+        const found = w.rows('audit_log').filter((a) => a.action === action);
+        expect(found, action).toHaveLength(1);
+        return found[0]!;
+      };
+      const solo = () => s.catalogue.createGroup({ actor_id: owner, name_en: 'Solo', sizes: [size('', 1000, { barcode: 'SOLO-1', sku: 'SOLO-SKU' })] });
+
+      describe('updateSize', () => {
+        it.each([
+          ['pack_label', () => makeX(), 1, { pack_label: '0.5 L' }, '500 ml', '0.5 L'],
+          ['sku', () => makeX(), 1, { sku: 'S-1' }, null, 'S-1'],
+          ['barcode', () => makeX(), 1, { barcode: '999' }, '8961000250500', '999'],
+          ['min_stock', () => makeX(), 1, { min_stock: 1234 }, 0, 1234],
+          ['pack_size', () => makeX(), 1, { pack_size: 400 }, 500, 400],
+          ['base_unit', () => solo(), 0, { base_unit: 'g' }, 'ml', 'g'],
+          ['allow_loose', () => makeX(), 1, { allow_loose: 1 }, 0, 1],
+        ] as const)('a change to %s writes one size_changed row with the field name, the old value and the new value', (field, make, which, changes, oldValue, newValue) => {
+          const g = make();
+          const target = g.sizes[which]!;
+          s.catalogue.updateSize({ actor_id: owner, product_id: target.id, changes: changes as never });
+          expect(auditActions()).toEqual(['size_changed']);
+          const a = only('size_changed');
+          expect(a).toMatchObject({ user_id: owner, table_name: 'products', row_id: target.id });
+          expect(detail(a)).toEqual({ product_id: target.id, group_id: g.group.id, fields: [field], before: { [field]: oldValue }, after: { [field]: newValue } });
+        });
+
+        it('several fields at once are one row, listing every changed field, and only the ones that changed', () => {
+          const x = makeX();
+          s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[0]!.id, changes: { pack_label: '0.25 L', min_stock: 900, barcode: '8961000250250', sku: 'N1' } }); // the barcode is unchanged
+          const d = detail(only('size_changed'));
+          expect(d.fields).toEqual(['pack_label', 'sku', 'min_stock']);
+          expect(d.before).toEqual({ pack_label: '250 ml', sku: null, min_stock: 0 });
+          expect(d.after).toEqual({ pack_label: '0.25 L', sku: 'N1', min_stock: 900 });
+        });
+
+        it('clearing a barcode records the old barcode and null', () => {
+          const x = makeX();
+          s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[0]!.id, changes: { barcode: null } });
+          expect(detail(only('size_changed'))).toMatchObject({ fields: ['barcode'], before: { barcode: '8961000250250' }, after: { barcode: null } });
+        });
+
+        it('the audit row points at the SIZE and names its GROUP, never the other way round', () => {
+          const x = makeX();
+          s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[2]!.id, changes: { min_stock: 7 } });
+          const a = only('size_changed');
+          expect(a.row_id).toBe(x.sizes[2]!.id);
+          expect(a.row_id).not.toBe(x.group.id);
+          expect(detail(a).product_id).toBe(x.sizes[2]!.id);
+          expect(detail(a).group_id).toBe(x.group.id);
+        });
+
+        it('a price change and a label change together are two rows: price_changed (prices only) and size_changed (label only)', () => {
+          const x = makeX();
+          s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[1]!.id, changes: { retail_price: 26_000, pack_label: '0.5 L' } });
+          expect(auditActions()).toEqual(['price_changed', 'size_changed']);
+          expect(detail(only('size_changed')).fields).toEqual(['pack_label']);
+          expect(JSON.stringify(detail(only('price_changed')))).not.toContain('pack_label');
+        });
+
+        it('writing the value a field already has, or leaving fields out, writes no audit row', () => {
+          const x = makeX();
+          s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[1]!.id, changes: { pack_label: '500 ml', sku: null, barcode: '8961000250500', min_stock: 0, pack_size: 500, base_unit: 'ml', allow_loose: 0 } });
+          s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[1]!.id, changes: {} });
+          expect(w.rows('audit_log')).toEqual([]);
+        });
+
+        it('a refused change writes no audit row', () => {
+          const x = makeX();
+          expect(codeOf(() => s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[0]!.id, changes: { barcode: '8961000250500', min_stock: 5 } }))).toBe('DUPLICATE_BARCODE');
+          expect(codeOf(() => s.catalogue.updateSize({ actor_id: ID.staff, product_id: x.sizes[0]!.id, changes: { min_stock: 5 } }))).toBe('NOT_AUTHORIZED');
+          expect(w.rows('audit_log')).toEqual([]);
+        });
+
+        it('is all or nothing: if the audit row cannot be written, the field keeps its old value', () => {
+          const x = makeX();
+          const before = w.snapshot();
+          w.failOnInsert('audit_log', 1);
+          expect(() => s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[0]!.id, changes: { min_stock: 5, pack_label: '0.25 L' } })).toThrow('injected failure');
+          w.clearFailure();
+          expect(w.snapshot()).toEqual(before);
+          expect(row('products', x.sizes[0]!.id)).toMatchObject({ min_stock: 0, pack_label: '250 ml', name_en: 'Insecticide X 250 ml' });
+        });
+      });
+
+      describe('setSizeActive', () => {
+        it('switching one size off and on writes size_deactivated and size_activated with the old and new flag, by the owner', () => {
+          const x = makeX();
+          const id = x.sizes[1]!.id;
+          s.catalogue.setSizeActive({ actor_id: owner, id, is_active: false });
+          s.catalogue.setSizeActive({ actor_id: owner, id, is_active: true });
+          expect(auditActions()).toEqual(['size_deactivated', 'size_activated']);
+          const [off, on] = w.rows('audit_log');
+          expect(off).toMatchObject({ user_id: owner, table_name: 'products', row_id: id });
+          expect(detail(off!)).toEqual({ product_id: id, group_id: x.group.id, fields: ['is_active'], before: { is_active: 1 }, after: { is_active: 0 } });
+          expect(detail(on!)).toEqual({ product_id: id, group_id: x.group.id, fields: ['is_active'], before: { is_active: 0 }, after: { is_active: 1 } });
+        });
+
+        it('switching a size to the state it is already in, or a refused switch, writes no audit row', () => {
+          const x = makeX();
+          s.catalogue.setSizeActive({ actor_id: owner, id: x.sizes[0]!.id, is_active: true });
+          expect(codeOf(() => s.catalogue.setSizeActive({ actor_id: ID.staff, id: x.sizes[0]!.id, is_active: false }))).toBe('NOT_AUTHORIZED');
+          s.catalogue.setGroupActive({ actor_id: owner, id: x.group.id, is_active: false });
+          const before = w.rows('audit_log').length;
+          expect(codeOf(() => s.catalogue.setSizeActive({ actor_id: owner, id: x.sizes[0]!.id, is_active: true }))).toBe('GROUP_INACTIVE');
+          expect(w.rows('audit_log')).toHaveLength(before);
+          expect(auditActions()).toEqual(['group_deactivated']);
+        });
+
+        it('is all or nothing: if the audit row cannot be written, the size stays as it was', () => {
+          const x = makeX();
+          const before = w.snapshot();
+          w.failOnInsert('audit_log', 1);
+          expect(() => s.catalogue.setSizeActive({ actor_id: owner, id: x.sizes[0]!.id, is_active: false })).toThrow('injected failure');
+          w.clearFailure();
+          expect(w.snapshot()).toEqual(before);
+          expect(row('products', x.sizes[0]!.id).is_active).toBe(1);
+        });
+      });
+
+      describe('updateGroup', () => {
+        it('a rename writes one group_changed row with the field names and the old and new names, by the owner', () => {
+          const x = makeX();
+          s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, name_en: 'Insecticide Y', name_ur: 'کیڑے مار دوا وائی' });
+          expect(auditActions()).toEqual(['group_changed']);
+          const a = only('group_changed');
+          expect(a).toMatchObject({ user_id: owner, table_name: 'product_groups', row_id: x.group.id });
+          expect(detail(a)).toEqual({
+            group_id: x.group.id, fields: ['name_en', 'name_ur'],
+            before: { name_en: 'Insecticide X', name_ur: 'کیڑے مار دوا ایکس' }, after: { name_en: 'Insecticide Y', name_ur: 'کیڑے مار دوا وائی' },
+          });
+        });
+
+        it('only the fields that changed are listed (renaming the English name alone lists name_en alone)', () => {
+          const x = makeX();
+          s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, name_en: 'Insecticide Y', name_ur: 'کیڑے مار دوا ایکس' });
+          expect(detail(only('group_changed'))).toMatchObject({ fields: ['name_en'], before: { name_en: 'Insecticide X' }, after: { name_en: 'Insecticide Y' } });
+        });
+
+        it('a category, brand or notes change is audited the same way', () => {
+          const x = makeX();
+          s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, category_id: ID.catFertilizer, brand_id: null, notes: 'keep dry' });
+          expect(detail(only('group_changed'))).toEqual({
+            group_id: x.group.id, fields: ['category_id', 'brand_id', 'notes'],
+            before: { category_id: ID.catInsecticide, brand_id: ID.brandX, notes: null }, after: { category_id: ID.catFertilizer, brand_id: null, notes: 'keep dry' },
+          });
+        });
+
+        it('renaming the product does not also write a row for every size (their names follow the group)', () => {
+          const x = makeX();
+          s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, name_en: 'Insecticide Y' });
+          expect(w.rows('audit_log')).toHaveLength(1);
+        });
+
+        it('a change that changes nothing, or is refused, writes no audit row', () => {
+          const x = makeX();
+          s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, name_en: 'Insecticide X', notes: '', category_id: ID.catInsecticide });
+          expect(codeOf(() => s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, name_en: 'Zed', category_id: uuid(999) }))).toBe('NOT_FOUND');
+          expect(codeOf(() => s.catalogue.updateGroup({ actor_id: ID.staff, group_id: x.group.id, name_en: 'Zed' }))).toBe('NOT_AUTHORIZED');
+          expect(codeOf(() => s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, name_en: null, name_ur: null }))).toBe('INVALID_INPUT');
+          expect(w.rows('audit_log')).toEqual([]);
+        });
+
+        it('is all or nothing: if the audit row cannot be written, the group and every size keep their old names', () => {
+          const x = makeX();
+          const before = w.snapshot();
+          w.failOnInsert('audit_log', 1);
+          expect(() => s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, name_en: 'Insecticide Y' })).toThrow('injected failure');
+          w.clearFailure();
+          expect(w.snapshot()).toEqual(before);
+          expect(row('product_groups', x.group.id).name_en).toBe('Insecticide X');
+          for (const p of x.sizes) expect(row('products', p.id).name_en).toMatch(/^Insecticide X /);
+        });
+      });
+
+      describe('the label given to the only size when another joins', () => {
+        const single = () => s.catalogue.createGroup({ actor_id: owner, name_en: 'Weedicide Z', sizes: [size('', 1000)] });
+
+        it('addSize audits the existing size getting its label (old empty label, new label), on that size', () => {
+          const g = single();
+          s.catalogue.addSize({ actor_id: owner, group_id: g.group.id, size: size('500 ml', 500), existing_size_label: '1 L' });
+          const a = only('size_changed');
+          expect(a).toMatchObject({ user_id: owner, table_name: 'products', row_id: g.sizes[0]!.id });
+          expect(detail(a)).toEqual({ product_id: g.sizes[0]!.id, group_id: g.group.id, fields: ['pack_label'], before: { pack_label: '' }, after: { pack_label: '1 L' } });
+          expect(auditActions()).toEqual(['size_changed']); // the new size itself is a creation, not a change
+        });
+
+        it('addSize that fails after the relabelling leaves no audit row and no relabelling', () => {
+          const g = single();
+          const before = w.snapshot();
+          w.failOnInsert('products', 1);
+          expect(() => s.catalogue.addSize({ actor_id: owner, group_id: g.group.id, size: size('500 ml', 500), existing_size_label: '1 L' })).toThrow('injected failure');
+          w.clearFailure();
+          expect(w.snapshot()).toEqual(before);
+        });
+
+        it('moveSize audits the relabelling of the size already in the target, in the TARGET group, before the move', () => {
+          const a = s.catalogue.createGroup({ actor_id: owner, name_en: 'Insecticide 500ml', sizes: [size('', 500)] });
+          const b = s.catalogue.createGroup({ actor_id: owner, name_en: 'Insecticide 1L', sizes: [size('', 1000)] });
+          s.catalogue.moveSize({ actor_id: owner, product_id: a.sizes[0]!.id, to_group_id: b.group.id, pack_label: '500 ml', existing_size_label: '1 L' });
+          expect(auditActions()).toEqual(['size_changed', 'size_moved']);
+          const relabel = only('size_changed');
+          expect(relabel.row_id).toBe(b.sizes[0]!.id);
+          expect(detail(relabel)).toEqual({ product_id: b.sizes[0]!.id, group_id: b.group.id, fields: ['pack_label'], before: { pack_label: '' }, after: { pack_label: '1 L' } });
+        });
       });
     });
 

@@ -11,7 +11,10 @@ import { found, ownerUser, parseInput, rowFactory, type ServiceDeps } from './su
 // Every size is a `products` row, so sales, purchases and returns work on sizes exactly as before.
 //
 // Rules this file keeps (the database enforces the same ones, as a second line of defence):
-//  - only an active owner may change the catalogue; price and tax-rate changes, group (de)activation and moves are audited
+//  - only an active owner may change the catalogue, and every change is written to audit_log in the same transaction:
+//    price_changed, tax_rate_changed, size_changed (label, SKU, barcode, minimum stock, pack size, unit, loose selling),
+//    size_activated / size_deactivated, group_changed (names, category, brand, notes), group_deactivated / group_reactivated, size_moved.
+//    Field changes list the field names with their old and new values. Creating a group or a size is not a change.
 //  - the group is the source of truth for names, category and brand; each size holds COPIES, rewritten here in the
 //    same transaction whenever the group (or the size's label) changes
 //  - sizes of one group share a base unit, have unique labels, and have labels at all once there are two or more
@@ -133,6 +136,36 @@ const isLive = (row: { deleted_at: string | null }): boolean => row.deleted_at =
 
 export function createCatalogueService(deps: ServiceDeps) {
   const rows = rowFactory(deps);
+
+  // ---------- audit rows for changes ----------
+
+  /** The fields that really changed, as the old and the new values. `pairs` is [field, old, new]. */
+  const changedFields = (pairs: readonly (readonly [string, unknown, unknown])[]): { before: Record<string, unknown>; after: Record<string, unknown> } => {
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    for (const [field, from, to] of pairs) {
+      if (from !== to) {
+        before[field] = from;
+        after[field] = to;
+      }
+    }
+    return { before, after };
+  };
+
+  /** One audit row naming the changed fields with their old and new values. Writes nothing when no field changed. */
+  const auditFields = (
+    tx: Repositories,
+    actorId: string,
+    action: string,
+    table: 'products' | 'product_groups',
+    rowId: string,
+    ids: Record<string, string>,
+    change: { before: Record<string, unknown>; after: Record<string, unknown> },
+  ): void => {
+    const fields = Object.keys(change.after);
+    if (fields.length === 0) return;
+    tx.audit.insert(rows.audit({ user_id: actorId, action, table_name: table, row_id: rowId, details: { ...ids, fields, before: change.before, after: change.after } }));
+  };
 
   // ---------- reads inside the transaction ----------
 
@@ -258,7 +291,7 @@ export function createCatalogueService(deps: ServiceDeps) {
       });
     },
 
-    /** Renames a product or changes its category, brand or notes. Every size's copies are rewritten. Owner only. */
+    /** Renames a product or changes its category, brand or notes. Every size's copies are rewritten. Audited (field names, old and new values). Owner only. */
     updateGroup(rawInput: UpdateGroupInput): GroupResult {
       const input = parseInput(UpdateGroupInput, rawInput);
       return deps.uow.run((tx) => {
@@ -276,6 +309,8 @@ export function createCatalogueService(deps: ServiceDeps) {
         checkCategoryAndBrand(tx, patch.category_id, patch.brand_id);
         if (Object.keys(patch).length > 0) tx.productGroups.update(group.id, patch);
         for (const size of tx.products.listByGroup(group.id)) syncSize(tx, next, size);
+        auditFields(tx, input.actor_id, 'group_changed', 'product_groups', group.id, { group_id: group.id },
+          changedFields(Object.entries(patch).map(([field, to]) => [field, group[field as keyof ProductGroup], to] as const)));
         return { group: found(tx.productGroups.getById(group.id), 'product', group.id), sizes: tx.products.listByGroup(group.id) };
       });
     },
@@ -304,13 +339,16 @@ export function createCatalogueService(deps: ServiceDeps) {
         checkLabels([...labels, { id: 'new', label: input.size.pack_label }]);
 
         // The existing size gets its label first, so the database never sees two sizes with an empty one.
-        if (lone) syncSize(tx, group, lone, input.existing_size_label!);
+        if (lone) {
+          syncSize(tx, group, lone, input.existing_size_label!);
+          auditFields(tx, input.actor_id, 'size_changed', 'products', lone.id, { product_id: lone.id, group_id: group.id }, changedFields([['pack_label', lone.pack_label, input.existing_size_label!]]));
+        }
         const size = insertSize(tx, group, input.size);
         return { size, sizes: tx.products.listByGroup(group.id) };
       });
     },
 
-    /** Changes one size. Price and tax-rate changes are written to the audit log. Owner only. */
+    /** Changes one size. Price, tax-rate and other field changes are written to the audit log (old and new values). Owner only. */
     updateSize(rawInput: UpdateSizeInput): Product {
       const input = parseInput(UpdateSizeInput, rawInput);
       return deps.uow.run((tx) => {
@@ -353,6 +391,15 @@ export function createCatalogueService(deps: ServiceDeps) {
           audit('price_changed', { retail_price: size.retail_price, wholesale_price: size.wholesale_price }, { retail_price: patch.retail_price ?? size.retail_price, wholesale_price: patch.wholesale_price ?? size.wholesale_price });
         }
         if (taxChanged) audit('tax_rate_changed', { tax_rate_bp: size.tax_rate_bp }, { tax_rate_bp: patch.tax_rate_bp! });
+        auditFields(tx, input.actor_id, 'size_changed', 'products', size.id, { product_id: size.id, group_id: group.id }, changedFields([
+          ['pack_label', size.pack_label, label],
+          ['sku', size.sku, patch.sku !== undefined ? patch.sku : size.sku],
+          ['barcode', size.barcode, patch.barcode !== undefined ? patch.barcode : size.barcode],
+          ['min_stock', size.min_stock, patch.min_stock ?? size.min_stock],
+          ['pack_size', size.pack_size, patch.pack_size ?? size.pack_size],
+          ['base_unit', size.base_unit, patch.base_unit ?? size.base_unit],
+          ['allow_loose', size.allow_loose, patch.allow_loose ?? size.allow_loose],
+        ]));
 
         if (Object.keys(patch).length > 0) tx.products.update(size.id, patch);
         syncSize(tx, group, { ...size, ...patch }, label);
@@ -360,7 +407,7 @@ export function createCatalogueService(deps: ServiceDeps) {
       });
     },
 
-    /** Turns one size on or off. A size cannot be turned on inside an inactive product. Owner only. */
+    /** Turns one size on or off. A size cannot be turned on inside an inactive product. Audited. Owner only. */
     setSizeActive(rawInput: SetActiveInput): void {
       const input = parseInput(SetActiveInput, rawInput);
       deps.uow.run((tx) => {
@@ -372,6 +419,7 @@ export function createCatalogueService(deps: ServiceDeps) {
           throw new DomainError('GROUP_INACTIVE', 'this product is inactive: reactivate it first');
         }
         tx.products.update(size.id, { is_active: want });
+        auditFields(tx, input.actor_id, want === 1 ? 'size_activated' : 'size_deactivated', 'products', size.id, { product_id: size.id, group_id: size.group_id }, changedFields([['is_active', size.is_active, want]]));
       });
     },
 
@@ -411,7 +459,8 @@ export function createCatalogueService(deps: ServiceDeps) {
     /**
      * Moves a size into another product, for example to join "Insecticide 500ml" and "Insecticide 1L" into one
      * product. The sizes must share a base unit and labels must stay unique. The size's names are rewritten, and
-     * if its old product is left with no sizes that product is switched off. One transaction, one audit row. Owner only.
+     * if its old product is left with no sizes that product is switched off. One transaction. Audited: one size_moved row, plus a
+     * size_changed row if the size already in the target had to be given a label. Owner only.
      */
     moveSize(rawInput: MoveSizeInput): Product {
       const input = parseInput(MoveSizeInput, rawInput);
@@ -435,7 +484,10 @@ export function createCatalogueService(deps: ServiceDeps) {
         const label = input.pack_label ?? size.pack_label;
         checkLabels([...targets.map((t) => ({ id: t.id, label: t.id === lone?.id ? input.existing_size_label! : t.pack_label })), { id: size.id, label }]);
 
-        if (lone) syncSize(tx, to, lone, input.existing_size_label!);
+        if (lone) {
+          syncSize(tx, to, lone, input.existing_size_label!);
+          auditFields(tx, input.actor_id, 'size_changed', 'products', lone.id, { product_id: lone.id, group_id: to.id }, changedFields([['pack_label', lone.pack_label, input.existing_size_label!]]));
+        }
         const want = copiesOf(to, label);
         tx.products.update(size.id, { group_id: to.id, pack_label: label, ...want });
 
