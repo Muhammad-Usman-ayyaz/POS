@@ -1088,6 +1088,12 @@ export function defineCatalogueTests(make: WorldFactory): void {
         expect(() => repos.productGroups.listCatalogue()).toThrow(/outside a unit of work/);
         expect(() => repos.productGroups.catalogueSignature()).toThrow(/outside a unit of work/);
         expect(() => repos.productGroups.stockOfSizes([ID.bottle], w.today)).toThrow(/outside a unit of work/);
+        expect(() => repos.productGroups.sizeStatuses(w.today)).toThrow(/outside a unit of work/);
+        expect(() => repos.productGroups.changeToken()).toThrow(/outside a unit of work/);
+        expect(() => repos.settings.getInt('x', 1)).toThrow(/outside a unit of work/);
+        expect(() => repos.categories.list()).toThrow(/outside a unit of work/);
+        expect(() => repos.brands.list()).toThrow(/outside a unit of work/);
+        expect(() => repos.suppliers.list()).toThrow(/outside a unit of work/);
         expect(() => repos.products.update(ID.bottle, { min_stock: 1 })).toThrow(/outside a unit of work/);
         for (const column of ['version', 'updated_at', 'created_at', 'deleted_at', 'id']) {
           expect(() => w.deps.uow.run((tx) => tx.products.update(ID.bottle, { [column]: 'x' } as never)), column).toThrow(`service set ${column}`);
@@ -1180,6 +1186,65 @@ export function defineCatalogueTests(make: WorldFactory): void {
         changeAndCheck(() => s.catalogue.setSizeActive({ actor_id: owner, id: x.sizes[0]!.id, is_active: false }));
         changeAndCheck(() => s.catalogue.createGroup({ actor_id: owner, name_en: 'Another' }));
         changeAndCheck(() => w.update('products', x.sizes[2]!.id, { deleted_at: '2026-01-01T00:00:00.000Z' })); // a soft delete
+      });
+
+      it('sizeStatuses agrees with listWithSizes on every size, and a size with no batches is simply not in the map', () => {
+        const x = makeX();
+        stockSize(x.sizes[0]!.id, 600, 'A', 50);
+        stockSize(x.sizes[0]!.id, 300, 'OLD', -10);
+        stockSize(x.sizes[2]!.id, 4000, 'B', 200);
+        w.deps.uow.run((tx) => {
+          const statuses = tx.productGroups.sizeStatuses(w.today);
+          for (const g of tx.productGroups.listWithSizes(w.today)) {
+            for (const p of g.sizes) {
+              const st = statuses.get(p.id);
+              expect(st?.stock_total ?? 0, p.name_en ?? '').toBe(p.stock_total);
+              expect(st?.stock_sellable ?? 0, p.name_en ?? '').toBe(p.stock_sellable);
+            }
+          }
+          expect(statuses.has(x.sizes[1]!.id)).toBe(false); // no batches at all
+          expect(statuses.get(x.sizes[0]!.id)).toEqual({
+            stock_total: 900, stock_sellable: 600, expired_stock: 300, next_expiry: w.day(-10), next_sellable_expiry: w.day(50),
+            batch_count: 2, stocked_batch_count: 2, next_cost: 1000,
+          });
+        });
+      });
+
+      it('changeToken moves on every kind of write, never moves on a read, and never goes back, even after a rollback', () => {
+        const x = makeX();
+        const token = () => w.deps.uow.run((tx) => tx.productGroups.changeToken());
+        const t0 = token();
+        expect(token()).toBe(t0); // reading it, and reading anything, changes nothing
+        w.deps.uow.run((tx) => { tx.productGroups.listCatalogue(); tx.products.getById(x.sizes[0]!.id); });
+        expect(token()).toBe(t0);
+
+        const seen = [t0];
+        const moved = (change: () => void) => {
+          change();
+          const t = token();
+          expect(t).toBeGreaterThan(seen[seen.length - 1]!);
+          seen.push(t);
+        };
+        moved(() => stockSize(x.sizes[0]!.id, 500)); // stock in
+        moved(() => s.sale.create({ created_by: ID.staff, paid_amount: 12_500, lines: [{ product_id: x.sizes[0]!.id, qty: 250 }] })); // a sale
+        moved(() => s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[0]!.id, changes: { min_stock: 3 } })); // a catalogue edit
+        moved(() => w.setSetting('near_expiry_days', '12')); // a setting
+
+        const before = token();
+        w.failOnInsert('audit_log', 1);
+        expect(() => s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[0]!.id, changes: { min_stock: 4 } })).toThrow('injected failure');
+        w.clearFailure();
+        expect(token()).toBeGreaterThanOrEqual(before); // a rolled-back write may count, but the token never goes back
+      });
+
+      it('settings.getInt gives the number, or the fallback when the setting is missing or is not a whole number', () => {
+        w.deps.uow.run((tx) => expect(tx.settings.getInt('near_expiry_days', 30)).toBe(30));
+        w.setSetting('near_expiry_days', '12');
+        w.deps.uow.run((tx) => expect(tx.settings.getInt('near_expiry_days', 30)).toBe(12));
+        for (const bad of ['', 'soon', '1.5x']) {
+          w.setSetting('near_expiry_days', bad);
+          w.deps.uow.run((tx) => expect(tx.settings.getInt('near_expiry_days', 30), JSON.stringify(bad)).toBe(bad === '1.5x' ? 1 : 30));
+        }
       });
 
       it('update changes only the columns given, and an unknown row is an error', () => {

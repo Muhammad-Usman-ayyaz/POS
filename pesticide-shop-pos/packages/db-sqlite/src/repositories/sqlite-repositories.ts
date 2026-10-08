@@ -14,6 +14,7 @@ import type {
   ProductGroup,
   PublicUser,
   Repositories,
+  SizeStatus,
   Supplier,
 } from '@pos/core';
 import type { Statement } from 'better-sqlite3';
@@ -33,7 +34,7 @@ const META_COLUMNS = ['created_at', 'updated_at', 'deleted_at', 'version'] as co
 const COLUMN_NAME = /^[a-z][a-z0-9_]*$/;
 
 type InsertableTable =
-  | 'product_groups' | 'products' | 'batches' | 'stock_movements' | 'invoices' | 'invoice_items' | 'sales_returns' | 'sales_return_items'
+  | 'suppliers' | 'categories' | 'brands' | 'product_groups' | 'products' | 'batches' | 'stock_movements' | 'invoices' | 'invoice_items' | 'sales_returns' | 'sales_return_items'
   | 'purchases' | 'purchase_items' | 'payments' | 'ledger_entries' | 'audit_log';
 
 /** Columns of a user that are safe to hand to the services. The password hash is never selected. */
@@ -97,12 +98,24 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
   };
 
   return {
+    settings: {
+      getInt: (key, fallback) => {
+        const row = one<{ value: string | null }>('settings', 'SELECT value FROM settings WHERE "key" = ? AND deleted_at IS NULL', key);
+        const n = row?.value == null ? Number.NaN : Number.parseInt(row.value, 10);
+        return Number.isInteger(n) ? n : fallback;
+      },
+    },
+
     categories: {
       getById: (id) => one<Category>('categories', 'SELECT * FROM categories WHERE id = ?', id),
+      list: () => all<Category>('categories', 'SELECT * FROM categories WHERE deleted_at IS NULL ORDER BY COALESCE(name_en, name_ur), id'),
+      insert: (row) => insert('categories', row),
     },
 
     brands: {
       getById: (id) => one<Brand>('brands', 'SELECT * FROM brands WHERE id = ?', id),
+      list: () => all<Brand>('brands', 'SELECT * FROM brands WHERE deleted_at IS NULL ORDER BY COALESCE(name_en, name_ur), id'),
+      insert: (row) => insert('brands', row),
     },
 
     productGroups: {
@@ -159,6 +172,36 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
         )!;
         return `${r.pc}:${r.pv}:${r.gc}:${r.gv}`;
       },
+      changeToken: () => {
+        needTx('product groups');
+        return (stmt('SELECT total_changes() AS t').get() as { t: number }).t;
+      },
+      sizeStatuses: (today) => {
+        needTx('product groups');
+        // ONE pass. Per batch: its stock. Then per size: totals, expired stock, soonest expiry, counts. The batch that sells first
+        // (earliest unexpired batch with stock, ties by id) is the smallest "expiry|id|cost" text, so its cost rides along.
+        const rows = stmt(
+          `WITH bs AS (
+             SELECT b.id AS id, b.product_id AS product_id, b.expiry_date AS expiry_date, b.cost_price AS cost_price, COALESCE(SUM(m.qty_delta), 0) AS stock
+               FROM batches b LEFT JOIN stock_movements m ON m.batch_id = b.id
+              WHERE b.deleted_at IS NULL
+              GROUP BY b.id)
+           SELECT product_id,
+                  SUM(stock) AS stock_total,
+                  SUM(CASE WHEN expiry_date >= @today THEN stock ELSE 0 END) AS stock_sellable,
+                  SUM(CASE WHEN expiry_date < @today THEN stock ELSE 0 END) AS expired_stock,
+                  MIN(CASE WHEN stock > 0 THEN expiry_date END) AS next_expiry,
+                  MIN(CASE WHEN stock > 0 AND expiry_date >= @today THEN expiry_date END) AS next_sellable_expiry,
+                  COUNT(*) AS batch_count,
+                  SUM(CASE WHEN stock > 0 THEN 1 ELSE 0 END) AS stocked_batch_count,
+                  MIN(CASE WHEN stock > 0 AND expiry_date >= @today THEN expiry_date || '|' || id || '|' || cost_price END) AS first_batch
+             FROM bs
+            GROUP BY product_id`,
+        ).all({ today }) as (Omit<SizeStatus, 'next_cost'> & { product_id: string; first_batch: string | null })[];
+        return new Map(
+          rows.map(({ product_id, first_batch, ...rest }) => [product_id, { ...rest, next_cost: first_batch === null ? null : Number(first_batch.slice(first_batch.lastIndexOf('|') + 1)) }]),
+        );
+      },
       stockOfSizes: (productIds, today) => {
         needTx('product groups');
         const result = new Map<string, { stock_total: number; stock_sellable: number }>(productIds.map((id) => [id, { stock_total: 0, stock_sellable: 0 }]));
@@ -213,6 +256,8 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
 
     suppliers: {
       getById: (id) => one<Supplier>('suppliers', 'SELECT * FROM suppliers WHERE id = ?', id),
+      list: () => all<Supplier>('suppliers', 'SELECT * FROM suppliers WHERE deleted_at IS NULL ORDER BY COALESCE(name_en, name_ur), id'),
+      insert: (row) => insert('suppliers', row),
     },
 
     users: {

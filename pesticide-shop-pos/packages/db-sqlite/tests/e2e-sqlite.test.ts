@@ -231,3 +231,34 @@ describe('product groups through the services, on a real database (open question
     }
   });
 });
+
+describe('the Products screen flags agree with the database views (open question 1 + M2)', () => {
+  it('low, near-expiry and expired sizes are exactly the sizes in v_low_stock, v_near_expiry and v_expired_stock', async () => {
+    const t = await createSqliteWorld();
+    try {
+      const s = services(t);
+      const size = (label: string, packSize: number, min: number) => ({ pack_label: label, base_unit: 'ml' as const, pack_size: packSize, retail_price: packSize * 50, wholesale_price: packSize * 46, min_stock: min });
+      const x = s.catalogue.createGroup({ actor_id: ID.owner, name_en: 'Insecticide X', sizes: [size('250 ml', 250, 1000), size('500 ml', 500, 2500), size('1 L', 1000, 5000), size('2 L', 2000, 100)] });
+      const batch = (id: string, qty: number, days: number, no: string) => s.stock.openingStock({ product_id: id, batch_no: no, expiry_date: t.day(days), cost_price: 1000, qty, created_by: ID.owner });
+      batch(x.sizes[0]!.id, 100, 10, 'A'); // low and near expiry
+      batch(x.sizes[1]!.id, 9000, 400, 'B'); // fine
+      batch(x.sizes[2]!.id, 100, -2, 'C'); // low and expired
+      batch(x.sizes[3]!.id, 9000, 30, 'D'); // near expiry (day 30)
+      batch(x.sizes[3]!.id, 50, 31, 'E');
+      s.catalogue.setSizeActive({ actor_id: ID.owner, id: x.sizes[1]!.id, is_active: false }); // a switched-off size
+
+      const flagged = (flag: 'low' | 'near_expiry' | 'expired') =>
+        new Set(s.catalogue.list({ include_inactive: true }).hits.flatMap((h) => h.sizes.filter((z) => z.flags[flag]).map((z) => z.id)));
+      const ids = (sql: string) => new Set((t.db.prepare(sql).all() as { product_id: string }[]).map((r) => r.product_id));
+
+      expect(flagged('low')).toEqual(ids('SELECT product_id FROM v_low_stock'));
+      expect(flagged('near_expiry')).toEqual(ids('SELECT product_id FROM v_near_expiry JOIN batches b ON b.id = v_near_expiry.batch_id'.replace('SELECT product_id', 'SELECT b.product_id AS product_id')));
+      expect(flagged('expired')).toEqual(ids('SELECT product_id FROM v_expired_stock'));
+      // and the chip counts are those sets' sizes (active sizes only)
+      const counts = s.catalogue.list().counts;
+      expect(counts.low).toBe((t.db.prepare('SELECT COUNT(*) AS c FROM v_low_stock').get() as { c: number }).c);
+    } finally {
+      t.close();
+    }
+  });
+});

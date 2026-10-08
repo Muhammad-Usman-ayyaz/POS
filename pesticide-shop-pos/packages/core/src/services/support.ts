@@ -164,9 +164,13 @@ export function pickOrCreateBatch(
   const existing = tx.batches.getByProductAndNo(want.product_id, want.batch_no);
   if (existing) {
     if (existing.expiry_date !== want.expiry_date || existing.cost_price !== want.cost_price) {
+      // `kind` says what the screen may offer. A different COST always needs a new batch number (cost history is never rewritten).
+      // Only a different EXPIRY with the same cost may be settled by using the existing expiry.
+      const kind = existing.cost_price !== want.cost_price ? 'cost' : 'expiry';
       throw new DomainError(
         'BATCH_CONFLICT',
         `batch ${want.batch_no} already exists with expiry ${existing.expiry_date} and cost ${existing.cost_price}`,
+        { kind, batchNo: want.batch_no, existingExpiry: existing.expiry_date, newExpiry: want.expiry_date, existingCost: existing.cost_price, newCost: want.cost_price },
       );
     }
     return existing.id;

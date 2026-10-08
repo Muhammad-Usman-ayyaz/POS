@@ -16,6 +16,8 @@ export const PurchaseInput = z.object({
   discount: NonNegPaisa.default(0),
   /** Paid to the supplier now. */
   paid_amount: NonNegPaisa.default(0),
+  /** Pay the whole total now (the total is worked out here, after the discount). Do not also give paid_amount. */
+  pay_in_full: z.boolean().optional(),
   payment_method: PaymentMethod.default('cash'),
   reference_no: z.string().min(1).optional(),
   created_by: Id,
@@ -70,7 +72,9 @@ export function createPurchaseService(deps: ServiceDeps) {
         const goods = lines.reduce((sum, l) => sum + l.line_cost, 0);
         if (input.discount > goods) throw new DomainError('DISCOUNT_EXCEEDS_LINE', `discount ${input.discount} is more than the purchase ${goods}`, { discount: input.discount, linePrice: goods });
         const total = goods - input.discount;
-        if (input.paid_amount > total) throw new DomainError('OVERPAID', `paid ${input.paid_amount} is more than the total ${total}`, { paid: input.paid_amount, total });
+        if (input.pay_in_full && input.paid_amount !== 0) throw new DomainError('INVALID_INPUT', 'give either pay_in_full or paid_amount, not both');
+        const paid = input.pay_in_full ? total : input.paid_amount;
+        if (paid > total) throw new DomainError('OVERPAID', `paid ${paid} is more than the total ${total}`, { paid: paid, total });
 
         const purchase: NewRow<Purchase> = {
           id: deps.ids.newId(),
@@ -79,7 +83,7 @@ export function createPurchaseService(deps: ServiceDeps) {
           purchase_date: input.purchase_date ?? todayUtc(deps.clock),
           discount: input.discount,
           total,
-          paid_amount: input.paid_amount,
+          paid_amount: paid,
           ...deps.scope,
         };
         tx.purchases.insert(purchase);
@@ -115,13 +119,13 @@ export function createPurchaseService(deps: ServiceDeps) {
           );
         }
         let payment_id: string | null = null;
-        if (input.paid_amount > 0) {
+        if (paid > 0) {
           const payment = rows.payment({
             party_type: 'supplier',
             party_id: input.supplier_id,
             method: input.payment_method,
             ...(input.reference_no ? { reference_no: input.reference_no } : {}),
-            amount: input.paid_amount,
+            amount: paid,
             direction: 'out',
             paid_at: now,
             created_by: input.created_by,
@@ -129,7 +133,7 @@ export function createPurchaseService(deps: ServiceDeps) {
           tx.payments.insert(payment);
           payment_id = payment.id;
           tx.ledger.insert(
-            rows.ledger({ party_type: 'supplier', party_id: input.supplier_id, entry_type: 'payment', amount_delta: -input.paid_amount, ref_type: 'payment', ref_id: payment.id, entry_date: now, created_by: input.created_by }),
+            rows.ledger({ party_type: 'supplier', party_id: input.supplier_id, entry_type: 'payment', amount_delta: -paid, ref_type: 'payment', ref_id: payment.id, entry_date: now, created_by: input.created_by }),
           );
         }
 

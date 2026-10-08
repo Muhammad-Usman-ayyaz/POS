@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCatalogueIndex, normalizeSearchText, searchCatalogue, searchIndex, sizeDisplayName, tidyText, type GroupWithSizes, type ProductGroup, type SizeWithStock } from '../src/index.js';
+import { buildCatalogueIndex, NO_STOCK, normalizeSearchText, searchCatalogue, searchIndex, sizeDisplayName, sizeFlags, summarizeSizes, tidyText, type GroupWithSizes, type ListedSize, type ProductGroup, type SizeStatus, type SizeWithStock } from '../src/index.js';
 
 describe('sizeDisplayName', () => {
   it('joins the group name and the pack label with one space', () => {
@@ -336,5 +336,65 @@ describe('buildCatalogueIndex + searchIndex give the same answers as the plain, 
     searchIndex(index, 'کھاد');
     searchIndex(index, '', { include_inactive: true });
     expect(searchIndex(index, 'insecticide', { limit: 10 })).toEqual(first);
+  });
+});
+
+// ---------- what is wrong with a size, and a summary of a product ----------
+
+describe('sizeFlags', () => {
+  const TODAY = '2026-10-08';
+  const status = (o: Partial<SizeStatus> = {}): SizeStatus => ({ ...NO_STOCK, ...o });
+  const on = { is_active: 1 as const, min_stock: 1000 };
+
+  it('LOW: sellable stock at or under the minimum; one over is fine; a size that is off is never low', () => {
+    expect(sizeFlags(on, status({ stock_sellable: 1000 }), TODAY, 30).low).toBe(true);
+    expect(sizeFlags(on, status({ stock_sellable: 999 }), TODAY, 30).low).toBe(true);
+    expect(sizeFlags(on, status({ stock_sellable: 1001 }), TODAY, 30).low).toBe(false);
+    expect(sizeFlags({ is_active: 0, min_stock: 1000 }, status({ stock_sellable: 0 }), TODAY, 30).low).toBe(false);
+  });
+
+  it('LOW uses sellable stock, not the total (expired stock does not help)', () => {
+    expect(sizeFlags(on, status({ stock_total: 50_000, stock_sellable: 10, expired_stock: 49_990 }), TODAY, 30).low).toBe(true);
+  });
+
+  it('NEAR EXPIRY: the soonest sellable expiry is within the window; the last day counts, the day after does not; no date means no', () => {
+    expect(sizeFlags(on, status({ next_sellable_expiry: '2026-10-08' }), TODAY, 30).near_expiry).toBe(true); // today
+    expect(sizeFlags(on, status({ next_sellable_expiry: '2026-11-07' }), TODAY, 30).near_expiry).toBe(true); // today + 30
+    expect(sizeFlags(on, status({ next_sellable_expiry: '2026-11-08' }), TODAY, 30).near_expiry).toBe(false); // today + 31
+    expect(sizeFlags(on, status({ next_sellable_expiry: null }), TODAY, 30).near_expiry).toBe(false);
+    expect(sizeFlags(on, status({ next_sellable_expiry: '2026-10-20' }), TODAY, 5).near_expiry).toBe(false); // a shorter window
+    expect(sizeFlags(on, status({ next_sellable_expiry: '2026-10-20' }), TODAY, 12).near_expiry).toBe(true);
+    expect(sizeFlags(on, status({ next_sellable_expiry: '2026-12-31' }), '2026-12-25', 30).near_expiry).toBe(true); // across a month end
+    expect(sizeFlags(on, status({ next_sellable_expiry: '2027-01-10' }), '2026-12-25', 30).near_expiry).toBe(true); // across a year end
+  });
+
+  it('EXPIRED: any stock left in an expired batch', () => {
+    expect(sizeFlags(on, status({ expired_stock: 1 }), TODAY, 30).expired).toBe(true);
+    expect(sizeFlags(on, status({ expired_stock: 0 }), TODAY, 30).expired).toBe(false);
+  });
+});
+
+describe('summarizeSizes', () => {
+  const listed = (o: Partial<ListedSize>): ListedSize =>
+    ({ id: 'x', base_unit: 'ml', retail_price: 100, wholesale_price: 90, stock_total: 0, stock_sellable: 0, flags: { low: false, near_expiry: false, expired: false }, ...o }) as ListedSize;
+
+  it('adds stock up, finds the price ranges, and counts the flagged sizes', () => {
+    const summary = summarizeSizes([
+      listed({ retail_price: 500, wholesale_price: 450, stock_total: 100, stock_sellable: 80, flags: { low: true, near_expiry: false, expired: true } }),
+      listed({ retail_price: 150, wholesale_price: 140, stock_total: 50, stock_sellable: 50, flags: { low: true, near_expiry: true, expired: false } }),
+      listed({ retail_price: 300, wholesale_price: 280, stock_total: 25, stock_sellable: 25 }),
+    ]);
+    expect(summary).toEqual({
+      size_count: 3, base_unit: 'ml', stock_total: 175, stock_sellable: 155, retail_min: 150, retail_max: 500, wholesale_min: 140, wholesale_max: 450,
+      low_sizes: 2, near_expiry_sizes: 1, expired_sizes: 1,
+    });
+  });
+
+  it('one size has the same low and high; no sizes has no unit and no ranges', () => {
+    expect(summarizeSizes([listed({ retail_price: 700, wholesale_price: 650 })])).toMatchObject({ retail_min: 700, retail_max: 700, wholesale_min: 650, wholesale_max: 650 });
+    expect(summarizeSizes([])).toEqual({
+      size_count: 0, base_unit: null, stock_total: 0, stock_sellable: 0, retail_min: null, retail_max: null, wholesale_min: null, wholesale_max: null,
+      low_sizes: 0, near_expiry_sizes: 0, expired_sizes: 0,
+    });
   });
 });

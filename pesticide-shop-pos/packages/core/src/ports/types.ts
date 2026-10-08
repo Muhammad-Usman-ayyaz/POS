@@ -29,6 +29,28 @@ export interface SizeStock {
   stock_sellable: number;
 }
 
+/**
+ * Everything the Products screen needs to know about one size's stock, worked out from its batches and movements.
+ * Base units for quantities, paisa per pack for cost, `YYYY-MM-DD` for dates.
+ */
+export interface SizeStatus {
+  stock_total: number;
+  /** Stock in batches that have not expired. */
+  stock_sellable: number;
+  /** Stock still sitting in batches that HAVE expired. */
+  expired_stock: number;
+  /** The earliest expiry among batches that still have stock, expired ones included. Null when nothing is in stock. */
+  next_expiry: string | null;
+  /** The earliest expiry among batches that still have stock and have not expired. */
+  next_sellable_expiry: string | null;
+  /** Live batches this size has ever had (with or without stock). Any batch locks the pack size. */
+  batch_count: number;
+  /** Live batches that still have stock. */
+  stocked_batch_count: number;
+  /** Cost per pack of the batch that sells first (earliest unexpired batch with stock). Null when there is none. OWNER ONLY. */
+  next_cost: number | null;
+}
+
 /** A product group with its live sizes and NO stock figures. Changes only when the catalogue is edited, not when stock moves. */
 export interface CatalogueGroup {
   group: ProductGroup;

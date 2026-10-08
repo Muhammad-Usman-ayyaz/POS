@@ -78,6 +78,80 @@ export function definePurchaseTests(make: WorldFactory): void {
       expect(w.snapshot()).toEqual(before);
     });
 
+    describe('BATCH_CONFLICT says exactly what clashed, so the screen can offer the right choices', () => {
+      // Batch A exists for the bottle: expiry in 120 days, cost Rs 400 a pack (40000)
+      const clash = (over: object) => errorOf(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, items: [item({ batch_no: 'A', expiry_date: w.day(120), cost_price: 40_000, ...over })] }));
+
+      it('a different EXPIRY with the same cost: kind "expiry", with the existing and the typed expiry and the cost', () => {
+        const e = clash({ expiry_date: w.day(200) });
+        expect(e.code).toBe('BATCH_CONFLICT');
+        expect(e.params).toEqual({ kind: 'expiry', batchNo: 'A', existingExpiry: w.day(120), newExpiry: w.day(200), existingCost: 40_000, newCost: 40_000 });
+      });
+
+      it('a different COST with the same expiry: kind "cost" (cost history is never rewritten, so only a new batch number will do)', () => {
+        const e = clash({ cost_price: 41_000 });
+        expect(e.params).toEqual({ kind: 'cost', batchNo: 'A', existingExpiry: w.day(120), newExpiry: w.day(120), existingCost: 40_000, newCost: 41_000 });
+      });
+
+      it('BOTH different: kind "cost" (using the existing expiry would still leave the cost clashing)', () => {
+        const e = clash({ expiry_date: w.day(300), cost_price: 99 });
+        expect(e.params).toMatchObject({ kind: 'cost', existingExpiry: w.day(120), newExpiry: w.day(300), existingCost: 40_000, newCost: 99 });
+      });
+
+      it('the same batch number on ANOTHER size is not a clash: batch numbers are per size', () => {
+        expect(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, items: [item({ product_id: ID.fert, batch_no: 'A', expiry_date: w.day(10), cost_price: 1 })] })).not.toThrow();
+      });
+
+      it('opening stock says the same thing', () => {
+        const stock = services(w).stock;
+        const e = errorOf(() => stock.openingStock({ product_id: ID.bottle, batch_no: 'A', expiry_date: w.day(121), cost_price: 40_000, qty: 1000, created_by: ID.owner }));
+        expect(e.params).toMatchObject({ kind: 'expiry', batchNo: 'A', existingExpiry: w.day(120), newExpiry: w.day(121) });
+      });
+
+      it('after the screen retries with the existing expiry (kind "expiry"), or a new batch number, the purchase goes through', () => {
+        const e = clash({ expiry_date: w.day(200) });
+        const existing = e.params['existingExpiry'] as string;
+        expect(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, items: [item({ batch_no: 'A', expiry_date: existing, cost_price: 40_000 })] })).not.toThrow();
+        expect(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, items: [item({ batch_no: 'A-2', expiry_date: w.day(200), cost_price: 40_000 })] })).not.toThrow();
+      });
+    });
+
+    describe('pay_in_full: the whole total, after the discount, is paid now', () => {
+      it('writes a payment equal to the total and a ledger that nets to zero, with paid_amount = total', () => {
+        const r = purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, pay_in_full: true, discount: 10_000, items: [item()] }); // 5 packs at Rs 420 = 210000, less 10000
+        expect(r.purchase).toMatchObject({ total: 200_000, paid_amount: 200_000 });
+        expect(w.rows('payments')).toEqual([expect.objectContaining({ party_type: 'supplier', direction: 'out', amount: 200_000, method: 'cash' })]);
+        expect(supplierBalance()).toBe(0);
+      });
+
+      it('uses the payment method given', () => {
+        purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, pay_in_full: true, payment_method: 'bank', reference_no: 'TT-1', items: [item()] });
+        expect(w.rows('payments')[0]).toMatchObject({ method: 'bank', reference_no: 'TT-1', amount: 210_000 });
+      });
+
+      it('is not allowed together with paid_amount, and writes nothing', () => {
+        const before = w.snapshot();
+        expect(codeOf(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, pay_in_full: true, paid_amount: 5000, items: [item()] }))).toBe('INVALID_INPUT');
+        expect(w.snapshot()).toEqual(before);
+      });
+
+      it('false (or left out) pays nothing now, and a free purchase (total 0) writes no payment', () => {
+        purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, pay_in_full: false, items: [item()] });
+        expect(w.rows('payments')).toHaveLength(0);
+        expect(supplierBalance()).toBe(210_000);
+        purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, pay_in_full: true, items: [item({ batch_no: 'FREE', cost_price: 0 })] });
+        expect(w.rows('payments')).toHaveLength(0);
+      });
+
+      it('a failure after the payment would be written undoes everything', () => {
+        const before = w.snapshot();
+        w.failOnInsert('ledger_entries', 2); // the purchase ledger row is #1; the payment ledger row #2 fails
+        expect(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, pay_in_full: true, items: [item()] })).toThrow('injected failure');
+        w.clearFailure();
+        expect(w.snapshot()).toEqual(before);
+      });
+    });
+
     it('a conflict on the SECOND item undoes the first item too', () => {
       const before = w.snapshot();
       expect(

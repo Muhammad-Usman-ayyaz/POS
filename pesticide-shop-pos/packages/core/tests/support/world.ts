@@ -40,7 +40,7 @@ export type TableName =
   | 'audit_log' | 'number_sequences';
 
 /** Tables a service can insert into. A test can make the Nth insert into one of these fail. */
-export type InsertTable = Exclude<TableName, 'categories' | 'brands' | 'customers' | 'suppliers' | 'users' | 'number_sequences'>;
+export type InsertTable = Exclude<TableName, 'customers' | 'users' | 'number_sequences'>;
 
 export interface WorldOptions {
   /** false: the same shop with no batches and no stock (for end-to-end scenarios that buy their own). Default true. */
@@ -70,6 +70,8 @@ export interface ServiceWorld {
   update(table: TableName, id: string, patch: Row): void;
   /** Put stock on a batch as seed data. */
   addStock(batchId: string, qty: number): void;
+  /** Write a setting (for example near_expiry_days), as the settings screen would. */
+  setSetting(key: string, value: string): void;
 
   /** Make the Nth insert (1-based, counted per unit of work) into `table` throw. */
   failOnInsert(table: InsertTable, nth?: number): void;

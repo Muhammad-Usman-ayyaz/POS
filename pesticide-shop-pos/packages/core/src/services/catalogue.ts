@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { todayUtc } from '../clock.js';
-import { buildCatalogueIndex, searchIndex, sizeDisplayName, tidyText, type CatalogueHit, type CatalogueIndex, type CataloguePage, type SearchOptions } from '../domain/catalogue.js';
+import { buildCatalogueIndex, NO_STOCK, nearExpiryLimit, searchIndex, sizeDisplayName, sizeFlagsUpTo, summarizeSizes, tidyText, type CatalogueHit, type CatalogueIndex, type CataloguePage, type GroupSummary, type ListedSize, type SearchOptions } from '../domain/catalogue.js';
 import { DomainError } from '../errors.js';
-import type { NewRow, ProductGroupPatch, ProductPatch, Repositories, SizeWithStock } from '../ports/index.js';
+import type { NewRow, ProductGroupPatch, ProductPatch, Repositories, SizeStatus, SizeWithStock } from '../ports/index.js';
 import { BaseUnit, Flag, Id, NonNegPaisa, TaxRateBp } from '../schemas/common.js';
 import type { Product, ProductGroup } from '../schemas/index.js';
 import { found, ownerUser, parseInput, rowFactory, type ServiceDeps } from './support.js';
@@ -134,6 +134,44 @@ export type SearchInput = z.input<typeof SearchInput>;
 /** The columns of a group that a size copies. */
 type GroupFields = Pick<ProductGroup, 'id' | 'name_en' | 'name_ur' | 'category_id' | 'brand_id' | 'is_active'>;
 
+const ListInput = z.strictObject({
+  query: z.string().default(''),
+  /** Show only products with at least one size that is low on stock, near expiry, or has expired stock. */
+  filter: z.enum(['all', 'low', 'near_expiry', 'expired']).default('all'),
+  include_inactive: z.boolean().optional(),
+  /** Add the cost of each size's next batch. Only the owner may ask: the caller (the shell) decides. */
+  include_cost: z.boolean().default(false),
+  limit: z.number().int().min(1).max(1000).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+export type ListInput = z.input<typeof ListInput>;
+
+export interface ListedGroup {
+  group: ProductGroup;
+  sizes: ListedSize[];
+  /** The sizes that matched the words typed, or, with a filter, the sizes that are low, near expiry or expired. */
+  matched_size_ids: string[];
+  rank: number;
+  summary: GroupSummary;
+}
+
+export interface CatalogueCounts {
+  /** Products with at least one active size. */
+  products: number;
+  /** Active SIZES that are low on stock, near expiry, or hold expired stock. */
+  low: number;
+  near_expiry: number;
+  expired: number;
+}
+
+export interface CatalogueList {
+  hits: ListedGroup[];
+  /** Products that matched the search and the filter, before paging. */
+  total: number;
+  /** Counts over the whole active catalogue (not narrowed by the search), for the filter chips. */
+  counts: CatalogueCounts;
+}
+
 export interface GroupResult {
   group: ProductGroup;
   sizes: Product[];
@@ -161,6 +199,68 @@ export function createCatalogueService(deps: ServiceDeps) {
     ...(input.limit === undefined ? {} : { limit: input.limit }),
     ...(input.offset === undefined ? {} : { offset: input.offset }),
   });
+  // The stock picture of every size (batches, expiry, cost) changes with every sale and receipt, so it is cached only until
+  // the next write of any kind (the repository's change token), and per day (stock expires at midnight).
+  let statusCache: { token: number; today: string; statuses: Map<string, SizeStatus> } | null = null;
+  const sizeStatuses = (tx: Repositories, today: string): Map<string, SizeStatus> => {
+    const token = tx.productGroups.changeToken();
+    if (statusCache && statusCache.token === token && statusCache.today === today) return statusCache.statuses;
+    const statuses = tx.productGroups.sizeStatuses(today);
+    statusCache = { token, today, statuses };
+    return statuses;
+  };
+
+  const list = (rawInput: ListInput = {}): CatalogueList => {
+    const input = parseInput(ListInput, rawInput);
+    return deps.uow.run((tx) => {
+      const today = todayUtc(deps.clock);
+      const index = catalogueIndex(tx);
+      const statuses = sizeStatuses(tx, today);
+      const last = nearExpiryLimit(today, tx.settings.getInt('near_expiry_days', 30)); // worked out once, not per size
+      const flagsOf = (size: Product) => sizeFlagsUpTo(size, statuses.get(size.id) ?? NO_STOCK, last);
+      const listed = (size: Product): ListedSize => {
+        const { next_cost, ...status } = statuses.get(size.id) ?? NO_STOCK;
+        return { ...size, ...status, flags: flagsOf(size), ...(input.include_cost ? { cost_price: next_cost } : {}) };
+      };
+
+      // The chip counts: over the whole active catalogue, whatever was typed.
+      const counts: CatalogueCounts = { products: 0, low: 0, near_expiry: 0, expired: 0 };
+      for (const { group, rows } of index.groups) {
+        if (group.is_active !== 1) continue;
+        let any = false;
+        for (const { size } of rows) {
+          if (size.is_active !== 1) continue;
+          any = true;
+          const flags = flagsOf(size);
+          if (flags.low) counts.low += 1;
+          if (flags.near_expiry) counts.near_expiry += 1;
+          if (flags.expired) counts.expired += 1;
+        }
+        if (any) counts.products += 1;
+      }
+
+      const filter = input.filter;
+      const found = searchIndex(index, input.query, { ...(input.include_inactive === undefined ? {} : { include_inactive: input.include_inactive }) }).hits;
+      // Decide which products are on the list first (cheap), and only then build the full rows for the page that is returned.
+      const selected: { hit: (typeof found)[number]; matched: string[] }[] = [];
+      for (const hit of found) {
+        if (filter === 'all') {
+          selected.push({ hit, matched: hit.matched_size_ids });
+          continue;
+        }
+        const flagged = hit.sizes.filter((size) => flagsOf(size)[filter]).map((size) => size.id);
+        if (flagged.length > 0) selected.push({ hit, matched: flagged }); // else nothing in this product has the problem asked about
+      }
+      const offset = input.offset ?? 0;
+      const page = input.limit === undefined ? selected.slice(offset) : selected.slice(offset, offset + input.limit);
+      const hits = page.map(({ hit, matched }): ListedGroup => {
+        const sizes = hit.sizes.map(listed);
+        return { group: hit.group, sizes, matched_size_ids: matched, rank: hit.rank, summary: summarizeSizes(sizes) };
+      });
+      return { hits, total: selected.length, counts };
+    });
+  };
+
   const searchPage = (rawInput: SearchInput = {}): CataloguePage => {
     const input = parseInput(SearchInput, rawInput);
     return deps.uow.run((tx) => {
@@ -549,6 +649,12 @@ export function createCatalogueService(deps: ServiceDeps) {
 
     /** One page of a search, with the number of products that matched in all. This is what a screen should call. */
     searchPage,
+
+    /**
+     * The Products screen: products with their sizes, each size's stock picture (next expiry, batch count, flags), a summary
+     * per product, and the filter-chip counts. `include_cost` adds each size's next-batch cost; only the owner may be given it.
+     */
+    list,
   };
 }
 export type CatalogueService = ReturnType<typeof createCatalogueService>;

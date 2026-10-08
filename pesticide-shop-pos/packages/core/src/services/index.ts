@@ -6,3 +6,4 @@ export * from './payment.js';
 export * from './khata.js';
 export * from './sales-return.js';
 export * from './catalogue.js';
+export * from './reference.js';

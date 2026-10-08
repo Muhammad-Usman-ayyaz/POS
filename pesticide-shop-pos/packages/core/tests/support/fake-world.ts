@@ -4,7 +4,7 @@
 //  - a repository used outside run() throws
 //  - a row with created_at, updated_at, deleted_at or version is refused: the database owns those
 //  - a few database rules are mirrored (no negative stock, no zero ledger entry)
-import type { Batch, Brand, Category, Customer, Invoice, InvoiceItem, LedgerEntry, Product, ProductGroup, PublicUser, Repositories, Supplier, UnitOfWork } from '../../src/index.js';
+import type { Batch, Brand, Category, Customer, Invoice, InvoiceItem, LedgerEntry, Product, ProductGroup, PublicUser, Repositories, SizeStatus, Supplier, UnitOfWork } from '../../src/index.js';
 import { todayUtc, systemClock, addDays } from '../../src/index.js';
 import { Instrument, instrument } from './instrument.js';
 import { ID, idGenerator, SCOPE, seedData, testClock, type InsertTable, type Row, type ServiceWorld, type TableName, type WorldOptions } from './world.js';
@@ -43,6 +43,10 @@ const emptyData = (): FakeData => ({
 
 class FakeStore {
   data: FakeData = emptyData();
+  /** Settings by key. */
+  settings = new Map<string, string>();
+  /** Counts every write. Never taken back by a rollback (like SQLite's total_changes()). */
+  writes = 0;
   inTx = false;
   readonly prefixes: Record<string, string> = { invoice: 'INV-A-', return: 'RET-A-', purchase: 'PUR-A-' };
 
@@ -58,6 +62,7 @@ class FakeStore {
     }
     if (table === 'ledger_entries' && row.amount_delta === 0) throw new Error('ledger_entries: amount_delta cannot be 0');
     if (table === 'payments' && (row.amount as number) <= 0) throw new Error('payments: amount must be positive');
+    this.writes += 1;
     (this.data[table] as Row[]).push({ ...row, ...meta });
   }
 
@@ -69,6 +74,7 @@ class FakeStore {
     }
     const row = (this.data[table] as Row[]).find((r) => r.id === id);
     if (!row) throw new Error('update: no row ' + id + ' in ' + table);
+    this.writes += 1;
     Object.assign(row, patch, { version: (row.version as number) + 1 });
   }
 
@@ -84,11 +90,32 @@ class FakeStore {
 /** A row as a database hands it back: a fresh copy, so a later UPDATE cannot change what a service already read. */
 const copy = <T extends object>(row: T | undefined): T | undefined => (row === undefined ? undefined : { ...row });
 
+/** In name order (English first, else Urdu), then by id: the order the database lists them in. */
+const byName = <T extends { id: string; name_en: string | null; name_ur: string | null }>(rows: T[]): T[] => {
+  const name = (r: T) => r.name_en ?? r.name_ur ?? '';
+  return [...rows].sort((a, b) => (name(a) < name(b) ? -1 : name(a) > name(b) ? 1 : a.id < b.id ? -1 : 1));
+};
+
 function createRepositories(store: FakeStore): Repositories {
   const byExpiryThenId = (a: Batch, b: Batch) => (a.expiry_date < b.expiry_date ? -1 : a.expiry_date > b.expiry_date ? 1 : a.id < b.id ? -1 : 1);
   return {
-    categories: { getById: (id) => (store.needTx('categories'), store.data.categories.find((c) => c.id === id)) },
-    brands: { getById: (id) => (store.needTx('brands'), store.data.brands.find((b) => b.id === id)) },
+    settings: {
+      getInt: (key, fallback) => {
+        store.needTx('settings');
+        const n = Number.parseInt(store.settings.get(key) ?? '', 10);
+        return Number.isInteger(n) ? n : fallback;
+      },
+    },
+    categories: {
+      getById: (id) => (store.needTx('categories'), store.data.categories.find((c) => c.id === id)),
+      list: () => (store.needTx('categories'), byName(store.data.categories.filter((c) => c.deleted_at === null)).map((c) => ({ ...c }))),
+      insert: (row) => store.insert('categories', row),
+    },
+    brands: {
+      getById: (id) => (store.needTx('brands'), store.data.brands.find((b) => b.id === id)),
+      list: () => (store.needTx('brands'), byName(store.data.brands.filter((b) => b.deleted_at === null)).map((b) => ({ ...b }))),
+      insert: (row) => store.insert('brands', row),
+    },
     productGroups: {
       getById: (id) => (store.needTx('product_groups'), copy(store.data.product_groups.find((g) => g.id === id))),
       insert: (row) => store.insert('product_groups', row),
@@ -111,6 +138,30 @@ function createRepositories(store: FakeStore): Repositories {
         store.needTx('product_groups');
         const sum = (rows: { version: number }[]) => rows.reduce((total, r) => total + r.version, 0);
         return `${store.data.products.length}:${sum(store.data.products)}:${store.data.product_groups.length}:${sum(store.data.product_groups)}`;
+      },
+      changeToken: () => (store.needTx('product_groups'), store.writes),
+      sizeStatuses: (today) => {
+        store.needTx('product_groups');
+        const out = new Map<string, SizeStatus>();
+        const live = store.data.batches.filter((b) => b.deleted_at === null);
+        for (const productId of new Set(live.map((b) => b.product_id))) {
+          const bs = live.filter((b) => b.product_id === productId).map((b) => ({ b, stock: store.stockOf(b.id) }));
+          const sellable = bs.filter((x) => x.b.expiry_date >= today);
+          const sum = (xs: typeof bs) => xs.reduce((total, x) => total + x.stock, 0);
+          const soonest = (xs: typeof bs) => xs.filter((x) => x.stock > 0).map((x) => x.b.expiry_date).sort()[0] ?? null;
+          const first = sellable.filter((x) => x.stock > 0).sort((a, c) => (a.b.expiry_date < c.b.expiry_date ? -1 : a.b.expiry_date > c.b.expiry_date ? 1 : a.b.id < c.b.id ? -1 : 1))[0];
+          out.set(productId, {
+            stock_total: sum(bs),
+            stock_sellable: sum(sellable),
+            expired_stock: sum(bs.filter((x) => x.b.expiry_date < today)),
+            next_expiry: soonest(bs),
+            next_sellable_expiry: soonest(sellable),
+            batch_count: bs.length,
+            stocked_batch_count: bs.filter((x) => x.stock > 0).length,
+            next_cost: first ? first.b.cost_price : null,
+          });
+        }
+        return out;
       },
       stockOfSizes: (productIds, today) => {
         store.needTx('product_groups');
@@ -171,7 +222,11 @@ function createRepositories(store: FakeStore): Repositories {
       insert: (row) => store.insert('stock_movements', row),
     },
     customers: { getById: (id) => (store.needTx('customers'), store.data.customers.find((c) => c.id === id)) },
-    suppliers: { getById: (id) => (store.needTx('suppliers'), store.data.suppliers.find((s) => s.id === id)) },
+    suppliers: {
+      getById: (id) => (store.needTx('suppliers'), store.data.suppliers.find((s) => s.id === id)),
+      list: () => (store.needTx('suppliers'), byName(store.data.suppliers.filter((s) => s.deleted_at === null)).map((s) => ({ ...s }))),
+      insert: (row) => store.insert('suppliers', row),
+    },
     users: { getById: (id) => (store.needTx('users'), store.data.users.find((u) => u.id === id)) },
     invoices: {
       getById: (id) => (store.needTx('invoices'), store.data.invoices.find((i) => i.id === id)),
@@ -252,7 +307,7 @@ export function createFakeWorld(options: WorldOptions = {}): ServiceWorld {
   d.batches.push(...(seed.batches.map((r) => ({ ...r, ...meta })) as unknown as Batch[]));
 
   const addStock = (batch_id: string, qty: number) =>
-    (d.stock_movements.push({ id: `seed-${d.stock_movements.length}`, batch_id, qty_delta: qty, movement_type: 'opening', ref_type: null, ref_id: null, created_by: ID.owner, ...SCOPE, ...meta }));
+    (store.writes += 1, d.stock_movements.push({ id: `seed-${d.stock_movements.length}`, batch_id, qty_delta: qty, movement_type: 'opening', ref_type: null, ref_id: null, created_by: ID.owner, ...SCOPE, ...meta }));
   for (const o of seed.openings) addStock(o.batch_id, o.qty);
 
   const day = (n: number) => addDays(today, n);
@@ -275,10 +330,15 @@ export function createFakeWorld(options: WorldOptions = {}): ServiceWorld {
     update: (table, id, patch) => {
       const row = tableOf(table).find((r) => r.id === id);
       if (!row) throw new Error(`update: no row ${id} in ${table}`);
+      store.writes += 1;
       // like the database trigger, every change moves the row's version
       Object.assign(row, patch, { version: ((row.version as number | undefined) ?? 1) + 1 });
     },
     addStock,
+    setSetting: (key, value) => {
+      store.writes += 1;
+      store.settings.set(key, value);
+    },
     failOnInsert: (table, nth) => probe.failOnInsert(table, nth),
     clearFailure: () => probe.clearFailure(),
     outsideTransaction: () => repos,

@@ -18,7 +18,7 @@ import type {
   StockMovement,
   Supplier,
 } from '../schemas/index.js';
-import type { BatchWithStock, CatalogueGroup, DocumentNumbers, GroupWithSizes, NewRow, ProductGroupPatch, ProductPatch, SizeStock } from './types.js';
+import type { BatchWithStock, CatalogueGroup, DocumentNumbers, GroupWithSizes, NewRow, ProductGroupPatch, ProductPatch, SizeStatus, SizeStock } from './types.js';
 
 // Repository interfaces. They are SYNCHRONOUS on purpose: better-sqlite3 is synchronous, and a SQLite
 // transaction cannot stay open across an `await`. Adapters hide all SQL; services never see it.
@@ -55,14 +55,35 @@ export interface ProductGroupRepository {
   catalogueSignature(): string;
   /** Stock of the given sizes (a size with no batches is 0 and 0). `today` (YYYY-MM-DD) decides which batches are expired. */
   stockOfSizes(productIds: readonly string[], today: string): Map<string, SizeStock>;
+  /**
+   * The stock picture of EVERY live size at once (a size with no batches is simply not in the map): totals, expired
+   * stock, next expiry, batch counts, and the cost of the batch that sells first. One pass over the batches and movements.
+   */
+  sizeStatuses(today: string): Map<string, SizeStatus>;
+  /**
+   * A number that moves whenever ANYTHING is written to the database (any table, any service; writes that are later
+   * rolled back count too) and never goes back. A cache of `sizeStatuses` is out of date exactly when it moves.
+   */
+  changeToken(): number;
 }
 
 export interface CategoryRepository {
   getById(id: string): Category | undefined;
+  /** Live categories in name order. */
+  list(): Category[];
+  insert(row: NewRow<Category>): void;
 }
 
 export interface BrandRepository {
   getById(id: string): Brand | undefined;
+  /** Live brands in name order. */
+  list(): Brand[];
+  insert(row: NewRow<Brand>): void;
+}
+
+export interface SettingsRepository {
+  /** A whole-number setting (for example near_expiry_days), or `fallback` when it is missing or not a number. */
+  getInt(key: string, fallback: number): number;
 }
 
 export interface BatchRepository {
@@ -85,6 +106,9 @@ export interface CustomerRepository {
 
 export interface SupplierRepository {
   getById(id: string): Supplier | undefined;
+  /** Live suppliers in name order. */
+  list(): Supplier[];
+  insert(row: NewRow<Supplier>): void;
 }
 
 export interface UserRepository {
@@ -130,6 +154,7 @@ export interface LedgerRepository {
 
 /** Everything a service can reach inside one transaction. */
 export interface Repositories {
+  settings: SettingsRepository;
   categories: CategoryRepository;
   brands: BrandRepository;
   productGroups: ProductGroupRepository;

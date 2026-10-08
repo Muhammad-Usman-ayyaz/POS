@@ -1,4 +1,5 @@
-import type { SizeWithStock } from '../ports/types.js';
+import { addDays } from '../clock.js';
+import type { SizeStatus, SizeWithStock } from '../ports/types.js';
 import type { Product, ProductGroup } from '../schemas/index.js';
 
 // Pure catalogue rules: how a size is named, and how a typed search is matched. No clock, no database.
@@ -218,4 +219,88 @@ export function searchIndex<S extends Product>(index: CatalogueIndex<S>, text: s
 /** Builds the index and searches it, in one go. Use `buildCatalogueIndex` and `searchIndex` when searching many times. */
 export function searchCatalogue<S extends Product = SizeWithStock>(all: readonly GroupOf<S>[], text: string, options: SearchOptions = {}): CatalogueHit<S>[] {
   return searchIndex(buildCatalogueIndex(all), text, options).hits;
+}
+
+// ---------- the Products screen: what is wrong with a size, and a summary of a product ----------
+
+/** A size with no batches at all. */
+export const NO_STOCK: SizeStatus = {
+  stock_total: 0,
+  stock_sellable: 0,
+  expired_stock: 0,
+  next_expiry: null,
+  next_sellable_expiry: null,
+  batch_count: 0,
+  stocked_batch_count: 0,
+  next_cost: null,
+};
+
+export interface SizeFlags {
+  /** Sellable stock is at or under the minimum (the same rule as the database view v_low_stock). Only for a size that is switched on. */
+  low: boolean;
+  /** Its soonest batch with stock expires within `nearDays` days from today (the same rule as v_near_expiry). */
+  near_expiry: boolean;
+  /** Some stock is still in a batch that has expired (the same rule as v_expired_stock). */
+  expired: boolean;
+}
+
+/** The last day that still counts as "near expiry": `today` plus the warning window (the setting near_expiry_days, 30 by default). */
+export function nearExpiryLimit(today: string, nearDays: number): string {
+  return addDays(today, nearDays);
+}
+
+/** The flags of one size, given the last near-expiry day (from nearExpiryLimit). Use this when flagging many sizes. */
+export function sizeFlagsUpTo(size: { is_active: 0 | 1; min_stock: number }, status: SizeStatus, lastNearDay: string): SizeFlags {
+  return {
+    low: size.is_active === 1 && status.stock_sellable <= size.min_stock,
+    near_expiry: status.next_sellable_expiry !== null && status.next_sellable_expiry <= lastNearDay,
+    expired: status.expired_stock > 0,
+  };
+}
+
+/** `today` is YYYY-MM-DD. `nearDays` is the near-expiry warning window. */
+export function sizeFlags(size: { is_active: 0 | 1; min_stock: number }, status: SizeStatus, today: string, nearDays: number): SizeFlags {
+  return sizeFlagsUpTo(size, status, nearExpiryLimit(today, nearDays));
+}
+
+/** A size as the Products screen lists it. `cost_price` is only present when the caller asked for it (the owner). */
+export type ListedSize = Product &
+  Omit<SizeStatus, 'next_cost'> & {
+    flags: SizeFlags;
+    cost_price?: number | null;
+  };
+
+/** One line about a whole product, for its row when it is folded up. Quantities are in the base unit its sizes share. */
+export interface GroupSummary {
+  size_count: number;
+  /** ml, g or piece (the unit all its sizes share), or null when it has no sizes. */
+  base_unit: Product['base_unit'] | null;
+  stock_total: number;
+  stock_sellable: number;
+  /** The lowest and highest retail price of its sizes, in paisa per pack. Null when it has no sizes. */
+  retail_min: number | null;
+  retail_max: number | null;
+  wholesale_min: number | null;
+  wholesale_max: number | null;
+  low_sizes: number;
+  near_expiry_sizes: number;
+  expired_sizes: number;
+}
+
+export function summarizeSizes(sizes: readonly ListedSize[]): GroupSummary {
+  const retail = sizes.map((s) => s.retail_price);
+  const wholesale = sizes.map((s) => s.wholesale_price);
+  return {
+    size_count: sizes.length,
+    base_unit: sizes[0]?.base_unit ?? null,
+    stock_total: sizes.reduce((sum, s) => sum + s.stock_total, 0),
+    stock_sellable: sizes.reduce((sum, s) => sum + s.stock_sellable, 0),
+    retail_min: retail.length > 0 ? Math.min(...retail) : null,
+    retail_max: retail.length > 0 ? Math.max(...retail) : null,
+    wholesale_min: wholesale.length > 0 ? Math.min(...wholesale) : null,
+    wholesale_max: wholesale.length > 0 ? Math.max(...wholesale) : null,
+    low_sizes: sizes.filter((s) => s.flags.low).length,
+    near_expiry_sizes: sizes.filter((s) => s.flags.near_expiry).length,
+    expired_sizes: sizes.filter((s) => s.flags.expired).length,
+  };
 }
