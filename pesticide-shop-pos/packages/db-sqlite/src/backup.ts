@@ -1,6 +1,5 @@
 import { rmSync, statSync } from 'node:fs';
-import Database from 'better-sqlite3';
-import type { Db } from './connection.js';
+import { nativeBindingOf, openDatabase, type Db } from './connection.js';
 
 export interface IntegrityReport {
   ok: boolean;
@@ -22,12 +21,14 @@ export function checkIntegrity(db: Db): IntegrityReport {
 /**
  * Copies the live database to `destPath` using SQLite's online backup (safe while the app is running),
  * then opens the copy and checks it. A copy that fails the check is deleted and an error is thrown.
+ * The copy is opened with the SAME native SQLite build as `db` (in Electron that is the Electron build, not the default one).
  */
 export async function backupDatabase(db: Db, destPath: string): Promise<{ path: string; bytes: number }> {
   await db.backup(destPath);
   // The copy inherits WAL mode, which would leave -wal and -shm files beside it. Switch it to a plain
   // single file so a backup can be copied to a USB stick as-is.
-  const copy = new Database(destPath);
+  const binding = nativeBindingOf(db);
+  const copy = openDatabase(destPath, binding ? { nativeBinding: binding } : {});
   let report: IntegrityReport;
   try {
     copy.pragma('journal_mode = DELETE');
