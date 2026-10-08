@@ -262,3 +262,21 @@ describe('the Products screen flags agree with the database views (open question
     }
   });
 });
+
+describe('KNOWN DIFFERENCE until migration 005: v_low_stock lists sizes with no minimum, the Products screen does not', () => {
+  it('a size with min_stock 0 and no stock is in v_low_stock but is not flagged low by catalogue.list', async () => {
+    const t = await createSqliteWorld({ stock: false });
+    try {
+      const s = services(t);
+      const x = s.catalogue.createGroup({ actor_id: ID.owner, name_en: 'Unwatched', sizes: [{ pack_label: '', base_unit: 'ml', pack_size: 500, retail_price: 100, wholesale_price: 90, min_stock: 0 }] });
+      const inView = (t.db.prepare('SELECT COUNT(*) AS c FROM v_low_stock WHERE product_id = ?').get(x.sizes[0]!.id) as { c: number }).c;
+      const flagged = s.catalogue.list({ query: 'unwatched' }).hits[0]!.sizes[0]!.flags.low;
+      expect(inView).toBe(1); // the view still says low (min_stock 0: 0 <= 0)
+      expect(flagged).toBe(false); // the Products screen says not low
+      // When migration 005 changes v_low_stock to require min_stock > 0, this test must be changed to expect inView 0:
+      // that is the moment the two agree again (see docs/build-plan.md, "Migration 005").
+    } finally {
+      t.close();
+    }
+  });
+});

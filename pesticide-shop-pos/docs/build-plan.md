@@ -63,6 +63,11 @@ Backup module with destinations, retention, verification and alerts. Restore scr
   - *Archive hash.* `apps/desktop/native-binaries.json` pins the SHA-256 of both the downloaded archive and the `.node` file inside it. Only the file hash is tested (offline); a wrong archive hash would not fail any test. Add a test or a CI step that downloads the archive and checks `tarballSha256`.
   - *Atomic preferences write.* `PrefsStore` writes `preferences.json` to a temporary file and renames it over the old one, so a power cut cannot leave half a file. No test observes this: replacing it with a plain write still passes. Add a test that fails a write half way and checks that the old file is intact.
 
+## Migration 005 (planned, not started: waits for the owner's OK on its plan)
+- **`sales_return_items.tax_refund`** (`NOT NULL DEFAULT 0`, checked `0 <= tax_refund <= refund_amount`), stored by the return service from `planReturn`'s `tax_refund`. Existing rows are backfilled with the running-difference share of their line's tax (integer arithmetic, halves up), which needs a temporary drop and re-creation of `trg_sales_return_items_no_update`; `change_log` rows are written for the backfilled rows. A guard trigger refuses a cumulative `tax_refund` above the line's `tax_amount`.
+- **`v_profit_by_day`** is rebuilt to take a return's revenue as `-(refund_amount - tax_refund)`, so profit matches the refund to the paisa.
+- **`v_low_stock`** is rebuilt to require `min_stock > 0` (`WHERE is_active = 1 AND min_stock > 0 AND stock_sellable <= min_stock`), so the view agrees with the Products screen, where a size with no minimum is never low. Then the test "KNOWN DIFFERENCE until migration 005" in `packages/db-sqlite/tests/e2e-sqlite.test.ts` must be changed to expect the view to NOT list such a size, and `docs/database-rules.md` loses its "does not have the above-0 part yet" note.
+
 ## Phase 10: Real-data trial
 Enter his real products and balances. Run in parallel with his paper register for a week. Fix what he finds.
 

@@ -236,7 +236,11 @@ export const NO_STOCK: SizeStatus = {
 };
 
 export interface SizeFlags {
-  /** Sellable stock is at or under the minimum (the same rule as the database view v_low_stock). Only for a size that is switched on. */
+  /**
+   * The size has a minimum (min_stock above 0) and sellable stock is at or under it. A size with minimum 0 has no alert set, so it is
+   * never low, even with no stock. Only for a size that is switched on. (The database view v_low_stock does not have the "above 0"
+   * part yet and lists such sizes: migration 005 will align it, see docs/build-plan.md.)
+   */
   low: boolean;
   /** Its soonest batch with stock expires within `nearDays` days from today (the same rule as v_near_expiry). */
   near_expiry: boolean;
@@ -252,7 +256,7 @@ export function nearExpiryLimit(today: string, nearDays: number): string {
 /** The flags of one size, given the last near-expiry day (from nearExpiryLimit). Use this when flagging many sizes. */
 export function sizeFlagsUpTo(size: { is_active: 0 | 1; min_stock: number }, status: SizeStatus, lastNearDay: string): SizeFlags {
   return {
-    low: size.is_active === 1 && status.stock_sellable <= size.min_stock,
+    low: size.is_active === 1 && size.min_stock > 0 && status.stock_sellable <= size.min_stock,
     near_expiry: status.next_sellable_expiry !== null && status.next_sellable_expiry <= lastNearDay,
     expired: status.expired_stock > 0,
   };

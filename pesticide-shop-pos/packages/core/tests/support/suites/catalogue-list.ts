@@ -88,6 +88,25 @@ export function defineCatalogueListTests(make: WorldFactory): void {
         expect(sizeOf(listed('insecticide x', { include_inactive: true }), '1 L').flags.low).toBe(false); // switched off: never low
       });
 
+      it('LOW needs a minimum: a size with min_stock 0 is never low, with or without stock; a minimum of 1 is enough to alert', () => {
+        const x = s.catalogue.createGroup({ actor_id: owner, name_en: 'No alert', sizes: [size('250 ml', 250, { min_stock: 0 }), size('500 ml', 500, { min_stock: 0 }), size('1 L', 1000, { min_stock: 1 }), size('2 L', 2000, { min_stock: 1 })] });
+        batch(x.sizes[1]!.id, 5, 100, 'A'); // a little stock, minimum 0
+        batch(x.sizes[2]!.id, 1, 100, 'B'); // exactly the minimum of 1
+        batch(x.sizes[3]!.id, 2, 100, 'C'); // one over the minimum of 1
+        const g = listed('no alert');
+        expect(sizeOf(g, '250 ml').flags.low).toBe(false); // no stock at all, no minimum
+        expect(sizeOf(g, '500 ml').flags.low).toBe(false);
+        expect(sizeOf(g, '1 L').flags.low).toBe(true);
+        expect(sizeOf(g, '2 L').flags.low).toBe(false);
+        expect(g.summary.low_sizes).toBe(1);
+        expect(s.catalogue.list({ query: 'no alert', filter: 'low' }).hits[0]!.matched_size_ids).toEqual([x.sizes[2]!.id]);
+        // setting a minimum on the size with no stock raises the alert
+        const before = s.catalogue.list({ query: 'no alert' }).counts.low;
+        s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[0]!.id, changes: { min_stock: 100 } });
+        expect(s.catalogue.list({ query: 'no alert' }).counts.low).toBe(before + 1);
+        expect(sizeOf(listed('no alert'), '250 ml').flags.low).toBe(true);
+      });
+
       it('LOW counts only sellable stock: a big expired batch does not hide a shortage', () => {
         const x = makeX();
         batch(x.sizes[0]!.id, 50_000, -5, 'OLD');
@@ -183,10 +202,10 @@ export function defineCatalogueListTests(make: WorldFactory): void {
         expect(s.catalogue.list().counts.products).toBe(base);
       });
 
-      it('the seeded shop (products with no stock) counts its sellable products', () => {
+      it('the seeded shop (products with no stock and no minimum) counts its sellable products, and none is low', () => {
         const c = s.catalogue.list().counts;
         expect(c.products).toBe(3); // bottle, fertilizer, taxed (the retired one is off)
-        expect(c.low).toBe(3); // no stock, minimum 0: at or under it
+        expect(c.low).toBe(0); // no minimum set: no alert, even with no stock
       });
     });
 

@@ -353,6 +353,16 @@ describe('sizeFlags', () => {
     expect(sizeFlags({ is_active: 0, min_stock: 1000 }, status({ stock_sellable: 0 }), TODAY, 30).low).toBe(false);
   });
 
+  it('LOW needs a minimum: min_stock 0 is never low (not with no stock either); min_stock 1 with 0 or 1 in stock is', () => {
+    const none = { is_active: 1 as const, min_stock: 0 };
+    expect(sizeFlags(none, status({ stock_sellable: 0 }), TODAY, 30).low).toBe(false);
+    expect(sizeFlags(none, status({ stock_sellable: 5000 }), TODAY, 30).low).toBe(false);
+    const one = { is_active: 1 as const, min_stock: 1 };
+    expect(sizeFlags(one, status({ stock_sellable: 0 }), TODAY, 30).low).toBe(true);
+    expect(sizeFlags(one, status({ stock_sellable: 1 }), TODAY, 30).low).toBe(true);
+    expect(sizeFlags(one, status({ stock_sellable: 2 }), TODAY, 30).low).toBe(false);
+  });
+
   it('LOW uses sellable stock, not the total (expired stock does not help)', () => {
     expect(sizeFlags(on, status({ stock_total: 50_000, stock_sellable: 10, expired_stock: 49_990 }), TODAY, 30).low).toBe(true);
   });
