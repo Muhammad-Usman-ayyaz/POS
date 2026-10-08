@@ -12,3 +12,7 @@ backups/
 
 apps/desktop/native/
 apps/desktop/.screenshots/
+
+# Other AI tools' working copies of this project (a full copy of the repo lives here and would double the tests)
+.kilo/
+.kilocode/
