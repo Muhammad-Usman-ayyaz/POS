@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeSearchText, searchCatalogue, sizeDisplayName, tidyText, type GroupWithSizes, type ProductGroup, type SizeWithStock } from '../src/index.js';
+import { buildCatalogueIndex, normalizeSearchText, searchCatalogue, searchIndex, sizeDisplayName, tidyText, type GroupWithSizes, type ProductGroup, type SizeWithStock } from '../src/index.js';
 
 describe('sizeDisplayName', () => {
   it('joins the group name and the pack label with one space', () => {
@@ -205,3 +205,136 @@ function nameKey(id: string): string {
   const g = catalogue.find((c) => c.group.id === id)!.group;
   return normalizeSearchText(g.name_en ?? g.name_ur ?? '');
 }
+
+// ---------- the optimised search must give exactly the answers of a plain one ----------
+
+describe('buildCatalogueIndex + searchIndex give the same answers as the plain, slow search', () => {
+  // The plain search: normalise everything again for every query, from scratch. It is what the code did before it was optimised.
+  function reference(all: readonly GroupWithSizes[], text: string, includeInactive: boolean) {
+    const query = normalizeSearchText(text);
+    const words = query === '' ? [] : query.split(' ');
+    const hits: { id: string; matched: string[]; rank: number; sizes: string[] }[] = [];
+    for (const { group, sizes: allSizes } of all) {
+      if (!includeInactive && group.is_active !== 1) continue;
+      const sizes = includeInactive ? allSizes : allSizes.filter((s) => s.is_active === 1);
+      if (sizes.length === 0 && (!includeInactive || words.length > 0)) continue;
+      if (words.length === 0) {
+        hits.push({ id: group.id, matched: sizes.map((s) => s.id), rank: 3, sizes: sizes.map((s) => s.id) });
+        continue;
+      }
+      const exact = sizes.filter((s) => [s.barcode, s.sku].some((c) => c !== null && normalizeSearchText(c) === query));
+      if (exact.length > 0) {
+        hits.push({ id: group.id, matched: exact.map((s) => s.id), rank: 0, sizes: sizes.map((s) => s.id) });
+        continue;
+      }
+      const matched = sizes.filter((s) => {
+        const hay = normalizeSearchText([group.name_en, group.name_ur, s.name_en, s.name_ur, s.pack_label].filter((t): t is string => !!t).join(' '));
+        return words.every((w) => hay.includes(w));
+      });
+      if (matched.length === 0) continue;
+      const names = [group.name_en, group.name_ur].filter((t): t is string => !!t).map(normalizeSearchText);
+      const rank = names.some((n) => n.startsWith(query)) ? 1 : names.some((n) => n.split(' ').some((w) => w.startsWith(words[0]!))) ? 2 : 3;
+      hits.push({ id: group.id, matched: matched.map((s) => s.id), rank, sizes: sizes.map((s) => s.id) });
+    }
+    const keys = new Map(all.map(({ group: g }) => [g.id, normalizeSearchText(g.name_en ?? g.name_ur ?? '')]));
+    const key = (id: string) => keys.get(id)!;
+    return hits.sort((a, b) => a.rank - b.rank || (key(a.id) < key(b.id) ? -1 : key(a.id) > key(b.id) ? 1 : a.id < b.id ? -1 : 1));
+  }
+
+  // A fixed seed, printed on failure, with exact 32-bit arithmetic.
+  const SEED = 20_261_008;
+  let state = SEED;
+  const next = (max: number) => {
+    state = (Math.imul(state, 1_103_515_245) + 12_345) >>> 0;
+    return state % max;
+  };
+  const pick = <T,>(xs: readonly T[]): T => xs[next(xs.length)]!;
+
+  const EN = ['Insecticide', 'Fungicide', 'Weedicide', 'Fertilizer', 'Seed', 'Rodenticide', 'Alpha', 'Bayer', 'Zarai', 'Super', 'Neem', 'Urea', 'DAP'];
+  const UR = ['کیڑے مار', 'پھپھوندی کش', 'جڑی بوٹی', 'کھاد', 'بیج', 'چوہے مار', 'دوا', 'سبزی کا بیج', 'ڈی اے پی', 'نیم'];
+  const LABELS = ['', '250 ml', '500 ml', '1 L', '1 kg', '50 kg bag', '100 g', '٢٥٠ ml', '۵۰۰ ml'];
+  const make = (n: number): GroupWithSizes[] =>
+    Array.from({ length: n }, (_, i) => {
+      const styled = (t: string) => (next(4) === 0 ? t.toLowerCase() : next(6) === 0 ? `${t} ${1 + next(90)} ${pick(['kg', 'ml', 'g'])}` : t);
+      const en = next(8) === 0 ? null : styled(`${pick(EN)} ${pick(EN)} ${next(40)}`);
+      const ur = en === null || next(3) !== 0 ? `${pick(UR)} ${pick(UR)} ${next(40)}` : null;
+      const gid = `g${i}`;
+      const labels = next(3) === 0 ? [''] : [...new Set([pick(LABELS.slice(1)), pick(LABELS.slice(1)), pick(LABELS.slice(1))])];
+      const g = group(gid, en, ur, { is_active: next(10) === 0 ? 0 : 1 });
+      return { group: g, sizes: labels.map((l, k) => size(`${gid}s${k}`, gid, l, [en, ur], { is_active: next(8) === 0 ? 0 : 1, barcode: next(2) === 0 ? `89${String(i).padStart(4, '0')}${k}` : null, sku: next(5) === 0 ? `SKU-${i}-${k}` : null })) };
+    });
+  const arabic = (t: string) => t.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
+  const easternDigits = (t: string) => t.replace(/\d/g, (d) => String.fromCharCode(0x0660 + Number(d)));
+
+  it('600 random searches over 250 random products agree on which products, which sizes, the rank and the order', () => {
+    const all = make(250);
+    const index = buildCatalogueIndex(all);
+    const names = all.flatMap((g) => [g.group.name_en, g.group.name_ur]).filter((t): t is string => !!t);
+    const labels = all.flatMap((g) => g.sizes.map((s) => s.pack_label)).filter((l) => l !== '');
+    const codes = all.flatMap((g) => g.sizes.flatMap((s) => [s.barcode, s.sku])).filter((c): c is string => !!c);
+    const queryOf = (): string => {
+      switch (next(10)) {
+        case 0: return pick(names).split(' ')[0]!;
+        case 1: return pick(names).slice(0, 1 + next(5));
+        case 2: return `${pick(names).split(' ')[0]} ${pick(labels)}`;
+        case 3: return arabic(pick(names));
+        case 4: return easternDigits(pick(labels));
+        case 5: return pick(codes);
+        case 6: return pick(names).toUpperCase();
+        case 7: return `${pick(EN)} ${pick(UR)}`;
+        case 8: return pick(['', ' ', 'zzzz', '٠', 'ml', '500', '1 l']);
+        default: return pick(names);
+      }
+    };
+    for (let n = 0; n < 600; n++) {
+      const q = queryOf();
+      const includeInactive = next(4) === 0;
+      const want = reference(all, q, includeInactive);
+      const got = searchIndex(index, q, { include_inactive: includeInactive });
+      const note = `seed ${SEED}, search #${n}, query ${JSON.stringify(q)}, inactive ${includeInactive}`;
+      expect(got.total, note).toBe(want.length);
+      expect(got.hits.map((h) => [h.group.id, h.matched_size_ids, h.rank, h.sizes.map((s) => s.id)]), note).toEqual(want.map((w) => [w.id, w.matched, w.rank, w.sizes]));
+    }
+  }, 60_000);
+
+  it('pages cut out of the full answer: any limit and offset give exactly that slice, with the same total', () => {
+    const all = make(120);
+    const index = buildCatalogueIndex(all);
+    for (let n = 0; n < 300; n++) {
+      const q = pick(['', 'insecticide', 'کھاد', 'alpha', '500', 'zzz', 'bayer 1 l']);
+      const full = searchIndex(index, q);
+      const limit = 1 + next(30);
+      const offset = next(full.total + 5);
+      const page = searchIndex(index, q, { limit, offset });
+      expect(page.total, `seed ${SEED}, #${n}`).toBe(full.total);
+      expect(page.hits.map((h) => h.group.id), `seed ${SEED}, #${n}, ${q}, limit ${limit}, offset ${offset}`).toEqual(full.hits.slice(offset, offset + limit).map((h) => h.group.id));
+    }
+  });
+
+  it('products are sorted by the NORMALISED name: "apple" comes before "Banana" even though "B" sorts before "a" in raw text', () => {
+    const cat: GroupWithSizes[] = [
+      { group: group('b', 'Banana', null), sizes: [size('b1', 'b', '', ['Banana', null])] },
+      { group: group('a', 'apple', null), sizes: [size('a1', 'a', '', ['apple', null])] },
+      { group: group('u', null, 'ٱکھاد'), sizes: [size('u1', 'u', '', [null, 'ٱکھاد'])] },
+    ];
+    expect(searchIndex(buildCatalogueIndex(cat), '').hits.map((h) => h.group.id).slice(0, 2)).toEqual(['a', 'b']);
+  });
+
+  it('ranking sees "50 kg" in a product name as "50kg": typing 50kg ranks that product above one found only by its size label', () => {
+    const cat: GroupWithSizes[] = [
+      { group: group('alpha', 'Alpha', null), sizes: [size('s1', 'alpha', '50 kg', ['Alpha', null])] }, // matches 50kg through its label: rank 3
+      { group: group('zed', 'Zed 50 kg', null), sizes: [size('s2', 'zed', '', ['Zed 50 kg', null])] }, // a word of its NAME starts with 50kg: rank 2
+    ];
+    const hits = searchIndex(buildCatalogueIndex(cat), '50kg').hits;
+    expect(hits.map((h) => [h.group.id, h.rank])).toEqual([['zed', 2], ['alpha', 3]]); // rank beats the alphabet
+  });
+
+  it('the index is built once and not changed by searching it (searching twice gives the same answer)', () => {
+    const all = make(60);
+    const index = buildCatalogueIndex(all);
+    const first = searchIndex(index, 'insecticide', { limit: 10 });
+    searchIndex(index, 'کھاد');
+    searchIndex(index, '', { include_inactive: true });
+    expect(searchIndex(index, 'insecticide', { limit: 10 })).toEqual(first);
+  });
+});

@@ -111,20 +111,69 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
       update: (id, patch) => update('product_groups', id, patch),
       listWithSizes: (today) => {
         const groups = all<ProductGroup>('product groups', 'SELECT * FROM product_groups WHERE deleted_at IS NULL ORDER BY COALESCE(name_en, name_ur), id');
-        // Stock is summed over live batches (expired ones are left out of stock_sellable), like v_product_stock.
-        const sizes = all<GroupWithSizes['sizes'][number]>(
+        const products = all<Product>('product groups', 'SELECT * FROM products WHERE deleted_at IS NULL ORDER BY pack_size, id');
+        // Stock of every size in ONE pass over the batches and movements (not a lookup per size), summed over live batches;
+        // expired ones are left out of stock_sellable. Same numbers as v_product_stock.
+        const stockRows = all<{ product_id: string; total: number; sellable: number }>(
           'product groups',
-          `SELECT p.*,
-                  COALESCE((SELECT SUM(m.qty_delta) FROM stock_movements m JOIN batches b ON b.id = m.batch_id
-                             WHERE b.product_id = p.id AND b.deleted_at IS NULL), 0) AS stock_total,
-                  COALESCE((SELECT SUM(m.qty_delta) FROM stock_movements m JOIN batches b ON b.id = m.batch_id
-                             WHERE b.product_id = p.id AND b.deleted_at IS NULL AND b.expiry_date >= ?), 0) AS stock_sellable
-             FROM products p
-            WHERE p.deleted_at IS NULL
-            ORDER BY p.pack_size, p.id`,
+          `SELECT b.product_id AS product_id,
+                  SUM(m.qty_delta) AS total,
+                  SUM(CASE WHEN b.expiry_date >= ? THEN m.qty_delta ELSE 0 END) AS sellable
+             FROM batches b
+             JOIN stock_movements m ON m.batch_id = b.id
+            WHERE b.deleted_at IS NULL
+            GROUP BY b.product_id`,
           today,
         );
-        return groups.map((group) => ({ group, sizes: sizes.filter((s) => s.group_id === group.id) }));
+        const stock = new Map(stockRows.map((r) => [r.product_id, r]));
+        // Sizes are put under their group in ONE pass, in the order they were read (smallest pack first).
+        const byGroup = new Map<string, GroupWithSizes['sizes']>();
+        for (const p of products) {
+          const row = stock.get(p.id);
+          const size = { ...p, stock_total: row?.total ?? 0, stock_sellable: row?.sellable ?? 0 };
+          const list = byGroup.get(p.group_id);
+          if (list) list.push(size);
+          else byGroup.set(p.group_id, [size]);
+        }
+        return groups.map((group) => ({ group, sizes: byGroup.get(group.id) ?? [] }));
+      },
+      listCatalogue: () => {
+        const groups = all<ProductGroup>('product groups', 'SELECT * FROM product_groups WHERE deleted_at IS NULL ORDER BY COALESCE(name_en, name_ur), id');
+        const products = all<Product>('product groups', 'SELECT * FROM products WHERE deleted_at IS NULL ORDER BY pack_size, id');
+        // Sizes are put under their group in ONE pass, in the order they were read (smallest pack first).
+        const byGroup = new Map<string, Product[]>();
+        for (const p of products) {
+          const list = byGroup.get(p.group_id);
+          if (list) list.push(p);
+          else byGroup.set(p.group_id, [p]);
+        }
+        return groups.map((group) => ({ group, sizes: byGroup.get(group.id) ?? [] }));
+      },
+      // One count and one sum per table (version goes up on every insert, update and soft delete): cheap to read, and it
+      // does not move when stock does, so a sale does not make the catalogue cache rebuild.
+      catalogueSignature: () => {
+        const r = one<{ pc: number; pv: number; gc: number; gv: number }>(
+          'product groups',
+          `SELECT (SELECT COUNT(*) FROM products) AS pc, (SELECT COALESCE(SUM(version), 0) FROM products) AS pv,
+                  (SELECT COUNT(*) FROM product_groups) AS gc, (SELECT COALESCE(SUM(version), 0) FROM product_groups) AS gv`,
+        )!;
+        return `${r.pc}:${r.pv}:${r.gc}:${r.gv}`;
+      },
+      stockOfSizes: (productIds, today) => {
+        needTx('product groups');
+        const result = new Map<string, { stock_total: number; stock_sellable: number }>(productIds.map((id) => [id, { stock_total: 0, stock_sellable: 0 }]));
+        const CHUNK = 500; // SQLite's limit on bound parameters is far higher; this keeps each statement small
+        for (let i = 0; i < productIds.length; i += CHUNK) {
+          const ids = productIds.slice(i, i + CHUNK);
+          const rows = stmt(
+            `SELECT b.product_id AS product_id, SUM(m.qty_delta) AS total, SUM(CASE WHEN b.expiry_date >= ? THEN m.qty_delta ELSE 0 END) AS sellable
+               FROM batches b JOIN stock_movements m ON m.batch_id = b.id
+              WHERE b.deleted_at IS NULL AND b.product_id IN (${ids.map(() => '?').join(', ')})
+              GROUP BY b.product_id`,
+          ).all(today, ...ids) as { product_id: string; total: number; sellable: number }[];
+          for (const r of rows) result.set(r.product_id, { stock_total: r.total, stock_sellable: r.sellable });
+        }
+        return result;
       },
     },
 

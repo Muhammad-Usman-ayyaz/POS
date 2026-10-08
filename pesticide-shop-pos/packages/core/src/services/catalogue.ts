@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { todayUtc } from '../clock.js';
-import { searchCatalogue, sizeDisplayName, tidyText, type CatalogueHit, type SearchOptions } from '../domain/catalogue.js';
+import { buildCatalogueIndex, searchIndex, sizeDisplayName, tidyText, type CatalogueHit, type CatalogueIndex, type CataloguePage, type SearchOptions } from '../domain/catalogue.js';
 import { DomainError } from '../errors.js';
-import type { NewRow, ProductGroupPatch, ProductPatch, Repositories } from '../ports/index.js';
+import type { NewRow, ProductGroupPatch, ProductPatch, Repositories, SizeWithStock } from '../ports/index.js';
 import { BaseUnit, Flag, Id, NonNegPaisa, TaxRateBp } from '../schemas/common.js';
 import type { Product, ProductGroup } from '../schemas/index.js';
 import { found, ownerUser, parseInput, rowFactory, type ServiceDeps } from './support.js';
@@ -121,7 +121,14 @@ const MoveSizeInput = z.strictObject({
 });
 export type MoveSizeInput = z.input<typeof MoveSizeInput>;
 
-const SearchInput = z.strictObject({ query: z.string().default(''), include_inactive: z.boolean().optional() });
+const SearchInput = z.strictObject({
+  query: z.string().default(''),
+  include_inactive: z.boolean().optional(),
+  /** Products per page. Leave out for all of them. */
+  limit: z.number().int().min(1).max(1000).optional(),
+  /** Products to skip (for the next page). */
+  offset: z.number().int().min(0).optional(),
+});
 export type SearchInput = z.input<typeof SearchInput>;
 
 /** The columns of a group that a size copies. */
@@ -136,6 +143,33 @@ const isLive = (row: { deleted_at: string | null }): boolean => row.deleted_at =
 
 export function createCatalogueService(deps: ServiceDeps) {
   const rows = rowFactory(deps);
+
+  // The searchable catalogue (names, labels, structure) is built once and reused until a product or a product group
+  // changes, which the repository's signature tells us (it is read on every search, and is cheap). Stock is NOT in the
+  // cache: a sale or a receipt changes stock all day, so stock is looked up fresh, for just the sizes on the page being
+  // returned. That keeps the first search after a sale as fast as any other.
+  let cached: { signature: string; index: CatalogueIndex<Product> } | null = null;
+  const catalogueIndex = (tx: Repositories): CatalogueIndex<Product> => {
+    const signature = tx.productGroups.catalogueSignature();
+    if (cached && cached.signature === signature) return cached.index;
+    const index = buildCatalogueIndex(tx.productGroups.listCatalogue());
+    cached = { signature, index };
+    return index;
+  };
+  const searchOptions = (input: z.output<typeof SearchInput>): SearchOptions => ({
+    ...(input.include_inactive === undefined ? {} : { include_inactive: input.include_inactive }),
+    ...(input.limit === undefined ? {} : { limit: input.limit }),
+    ...(input.offset === undefined ? {} : { offset: input.offset }),
+  });
+  const searchPage = (rawInput: SearchInput = {}): CataloguePage => {
+    const input = parseInput(SearchInput, rawInput);
+    return deps.uow.run((tx) => {
+      const page = searchIndex(catalogueIndex(tx), input.query, searchOptions(input));
+      const stock = tx.productGroups.stockOfSizes(page.hits.flatMap((h) => h.sizes.map((s) => s.id)), todayUtc(deps.clock));
+      const withStock = (size: Product): SizeWithStock => ({ ...size, ...(stock.get(size.id) ?? { stock_total: 0, stock_sellable: 0 }) });
+      return { total: page.total, hits: page.hits.map((h) => ({ ...h, sizes: h.sizes.map(withStock) })) };
+    });
+  };
 
   // ---------- audit rows for changes ----------
 
@@ -508,12 +542,13 @@ export function createCatalogueService(deps: ServiceDeps) {
       });
     },
 
-    /** Products with their sizes and stock, found by what was typed in English or Urdu (see searchCatalogue). */
+    /** Products with their sizes and stock, found by what was typed in English or Urdu (see searchIndex). */
     search(rawInput: SearchInput = {}): CatalogueHit[] {
-      const input = parseInput(SearchInput, rawInput);
-      const options: SearchOptions = input.include_inactive === undefined ? {} : { include_inactive: input.include_inactive };
-      return deps.uow.run((tx) => searchCatalogue(tx.productGroups.listWithSizes(todayUtc(deps.clock)), input.query, options));
+      return searchPage(rawInput).hits;
     },
+
+    /** One page of a search, with the number of products that matched in all. This is what a screen should call. */
+    searchPage,
   };
 }
 export type CatalogueService = ReturnType<typeof createCatalogueService>;

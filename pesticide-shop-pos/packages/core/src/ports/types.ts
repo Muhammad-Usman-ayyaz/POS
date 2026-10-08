@@ -23,6 +23,19 @@ export type ProductGroupPatch = Partial<Pick<ProductGroup, 'name_en' | 'name_ur'
 /** A size with its stock in base units, summed over its live batches. `stock_sellable` leaves out expired batches. */
 export type SizeWithStock = Product & { stock_total: number; stock_sellable: number };
 
+/** What a size is stocked with: base units, summed over its live batches. `stock_sellable` leaves out expired batches. */
+export interface SizeStock {
+  stock_total: number;
+  stock_sellable: number;
+}
+
+/** A product group with its live sizes and NO stock figures. Changes only when the catalogue is edited, not when stock moves. */
+export interface CatalogueGroup {
+  group: ProductGroup;
+  /** Live sizes only (not soft-deleted), smallest pack first. Inactive sizes are included. */
+  sizes: Product[];
+}
+
 export interface GroupWithSizes {
   group: ProductGroup;
   /** Live sizes only (not soft-deleted), smallest pack first. Inactive sizes are included. */

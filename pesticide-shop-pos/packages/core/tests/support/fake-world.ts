@@ -93,6 +93,37 @@ function createRepositories(store: FakeStore): Repositories {
       getById: (id) => (store.needTx('product_groups'), copy(store.data.product_groups.find((g) => g.id === id))),
       insert: (row) => store.insert('product_groups', row),
       update: (id, patch) => store.update('product_groups', id, patch),
+      listCatalogue: () => {
+        store.needTx('product_groups');
+        const nameOf = (g: ProductGroup) => g.name_en ?? g.name_ur ?? '';
+        return store.data.product_groups
+          .filter((g) => g.deleted_at === null)
+          .sort((a, b) => (nameOf(a) < nameOf(b) ? -1 : nameOf(a) > nameOf(b) ? 1 : a.id < b.id ? -1 : 1))
+          .map((group) => ({
+            group: { ...group },
+            sizes: store.data.products
+              .filter((p) => p.group_id === group.id && p.deleted_at === null)
+              .sort((a, b) => a.pack_size - b.pack_size || (a.id < b.id ? -1 : 1))
+              .map((p) => ({ ...p })),
+          }));
+      },
+      catalogueSignature: () => {
+        store.needTx('product_groups');
+        const sum = (rows: { version: number }[]) => rows.reduce((total, r) => total + r.version, 0);
+        return `${store.data.products.length}:${sum(store.data.products)}:${store.data.product_groups.length}:${sum(store.data.product_groups)}`;
+      },
+      stockOfSizes: (productIds, today) => {
+        store.needTx('product_groups');
+        const out = new Map<string, { stock_total: number; stock_sellable: number }>();
+        for (const id of productIds) {
+          const batches = store.data.batches.filter((b) => b.product_id === id && b.deleted_at === null);
+          out.set(id, {
+            stock_total: batches.reduce((sum, b) => sum + store.stockOf(b.id), 0),
+            stock_sellable: batches.filter((b) => b.expiry_date >= today).reduce((sum, b) => sum + store.stockOf(b.id), 0),
+          });
+        }
+        return out;
+      },
       listWithSizes: (today) => {
         store.needTx('product_groups');
         const stockOf = (productId: string, onlyUnexpired: boolean): number =>
@@ -221,7 +252,7 @@ export function createFakeWorld(options: WorldOptions = {}): ServiceWorld {
   d.batches.push(...(seed.batches.map((r) => ({ ...r, ...meta })) as unknown as Batch[]));
 
   const addStock = (batch_id: string, qty: number) =>
-    d.stock_movements.push({ id: `seed-${d.stock_movements.length}`, batch_id, qty_delta: qty, movement_type: 'opening', ref_type: null, ref_id: null, created_by: ID.owner, ...SCOPE, ...meta });
+    (d.stock_movements.push({ id: `seed-${d.stock_movements.length}`, batch_id, qty_delta: qty, movement_type: 'opening', ref_type: null, ref_id: null, created_by: ID.owner, ...SCOPE, ...meta }));
   for (const o of seed.openings) addStock(o.batch_id, o.qty);
 
   const day = (n: number) => addDays(today, n);
@@ -244,7 +275,8 @@ export function createFakeWorld(options: WorldOptions = {}): ServiceWorld {
     update: (table, id, patch) => {
       const row = tableOf(table).find((r) => r.id === id);
       if (!row) throw new Error(`update: no row ${id} in ${table}`);
-      Object.assign(row, patch);
+      // like the database trigger, every change moves the row's version
+      Object.assign(row, patch, { version: ((row.version as number | undefined) ?? 1) + 1 });
     },
     addStock,
     failOnInsert: (table, nth) => probe.failOnInsert(table, nth),

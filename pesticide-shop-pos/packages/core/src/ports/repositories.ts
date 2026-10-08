@@ -18,7 +18,7 @@ import type {
   StockMovement,
   Supplier,
 } from '../schemas/index.js';
-import type { BatchWithStock, DocumentNumbers, GroupWithSizes, NewRow, ProductGroupPatch, ProductPatch } from './types.js';
+import type { BatchWithStock, CatalogueGroup, DocumentNumbers, GroupWithSizes, NewRow, ProductGroupPatch, ProductPatch, SizeStock } from './types.js';
 
 // Repository interfaces. They are SYNCHRONOUS on purpose: better-sqlite3 is synchronous, and a SQLite
 // transaction cannot stay open across an `await`. Adapters hide all SQL; services never see it.
@@ -45,6 +45,16 @@ export interface ProductGroupRepository {
    * so the clock stays injectable. Groups come back in name order.
    */
   listWithSizes(today: string): GroupWithSizes[];
+  /** Every live group with its live sizes, without stock. Groups come back in name order. */
+  listCatalogue(): CatalogueGroup[];
+  /**
+   * A short text that changes whenever a product or a product group is added, changed or soft-deleted (and only then:
+   * a sale or a receipt does not move it). A cache of `listCatalogue` is out of date exactly when this changes, so no
+   * write path has to remember to say so. It is cheap: it must not read more than a count and a sum per table.
+   */
+  catalogueSignature(): string;
+  /** Stock of the given sizes (a size with no batches is 0 and 0). `today` (YYYY-MM-DD) decides which batches are expired. */
+  stockOfSizes(productIds: readonly string[], today: string): Map<string, SizeStock>;
 }
 
 export interface CategoryRepository {

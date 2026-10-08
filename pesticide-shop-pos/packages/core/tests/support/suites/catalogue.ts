@@ -2,6 +2,7 @@
 // Runs on every backend. The groups here are made THROUGH THE SERVICE with fresh ids, so a mix-up between a group id
 // and a size id cannot hide behind ids that happen to be equal (the seeded world uses different ids on purpose, too).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createCatalogueService, type Repositories } from '../../../src/index.js';
 import { codeOf, errorOf, ID, services, uuid, type Row, type ServiceWorld, type WorldFactory } from '../world.js';
 
 export function defineCatalogueTests(make: WorldFactory): void {
@@ -910,17 +911,275 @@ export function defineCatalogueTests(make: WorldFactory): void {
       });
     });
 
+    describe('the search cache and paging', () => {
+      /** A catalogue service that counts how often the catalogue is read from the database, and which sizes' stock is looked up. */
+      const counting = () => {
+        const log = { catalogueReads: 0, stockLookups: [] as string[][] };
+        const base = w.deps.uow;
+        const uow = {
+          run: <T>(work: (tx: Repositories) => T): T =>
+            base.run((tx) =>
+              work({
+                ...tx,
+                productGroups: {
+                  ...tx.productGroups,
+                  listCatalogue: () => (log.catalogueReads++, tx.productGroups.listCatalogue()),
+                  stockOfSizes: (ids, today) => (log.stockLookups.push([...ids]), tx.productGroups.stockOfSizes(ids, today)),
+                },
+              }),
+            ),
+        };
+        return { cat: createCatalogueService({ ...w.deps, uow }), log };
+      };
+      const stockOfFirst = (cat: ReturnType<typeof createCatalogueService>, query: string) => cat.search({ query })[0]!.sizes.map((p) => [p.pack_label, p.stock_total, p.stock_sellable]);
+
+      it('reads the catalogue once, however many searches are made', () => {
+        makeX();
+        const { cat, log } = counting();
+        for (const query of ['insecticide', 'کیڑے مار', '500 ml', '', 'zzz', 'fertilizer']) cat.searchPage({ query, limit: 10 });
+        expect(log.catalogueReads).toBe(1);
+      });
+
+      it('a sale, a receipt, a return, a stock adjustment and a write-off do NOT make it read the catalogue again, and the stock shown is always current', () => {
+        const x = makeX();
+        const { cat, log } = counting();
+        expect(stockOfFirst(cat, 'insecticide x')).toEqual([['250 ml', 0, 0], ['500 ml', 0, 0], ['1 L', 0, 0]]);
+
+        const batch = stockSize(x.sizes[1]!.id, 10_000);
+        expect(stockOfFirst(cat, 'insecticide x')[1]).toEqual(['500 ml', 10_000, 10_000]);
+
+        const sold = s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: x.sizes[1]!.id, qty: 1500 }] });
+        expect(stockOfFirst(cat, 'insecticide x')[1]).toEqual(['500 ml', 8500, 8500]);
+
+        s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty: 500, condition: 'resellable' }] });
+        expect(stockOfFirst(cat, 'insecticide x')[1]).toEqual(['500 ml', 9000, 9000]);
+
+        s.stock.adjust({ batch_id: batch, qty_delta: -1000, created_by: owner });
+        expect(stockOfFirst(cat, 'insecticide x')[1]).toEqual(['500 ml', 8000, 8000]);
+        s.stock.writeOff({ batch_id: batch, qty: 500, kind: 'damage', created_by: owner });
+        expect(stockOfFirst(cat, 'insecticide x')[1]).toEqual(['500 ml', 7500, 7500]);
+
+        expect(log.catalogueReads).toBe(1); // six kinds of stock change, and the catalogue was never read again
+      });
+
+      it.each([
+        ['renaming a product', (x: ReturnType<typeof makeX>) => s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, name_en: 'Mosquito Guard' }), 'mosquito', 'Mosquito Guard 500 ml'],
+        ['changing a price', (x: ReturnType<typeof makeX>) => s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[1]!.id, changes: { retail_price: 31_000 } }), 'insecticide x', 'Insecticide X 500 ml'],
+        ['switching a size off', (x: ReturnType<typeof makeX>) => s.catalogue.setSizeActive({ actor_id: owner, id: x.sizes[1]!.id, is_active: false }), 'insecticide x', 'Insecticide X 250 ml'],
+        ['adding a size', (x: ReturnType<typeof makeX>) => s.catalogue.addSize({ actor_id: owner, group_id: x.group.id, size: size('2 L', 2000) }), 'insecticide x', 'Insecticide X 2 L'],
+        ['switching the product off', (x: ReturnType<typeof makeX>) => s.catalogue.setGroupActive({ actor_id: owner, id: x.group.id, is_active: false }), 'insecticide x', 'Insecticide X 250 ml'],
+      ])('%s makes the next search read the catalogue again, exactly once, and show the change', (_label, change, query, expectedName) => {
+        const x = makeX();
+        const { cat, log } = counting();
+        cat.searchPage({ query: 'insecticide x' });
+        expect(log.catalogueReads).toBe(1);
+        change(x);
+        const hits = cat.search({ query, include_inactive: true });
+        cat.search({ query });
+        expect(log.catalogueReads).toBe(2);
+        const names = hits.flatMap((h) => h.sizes.map((p) => p.name_en));
+        expect(names).toContain(expectedName);
+        // what the cached search shows is exactly what a fresh service (no cache) shows
+        expect(hits).toEqual(s.catalogue.search({ query, include_inactive: true }));
+      });
+
+      it('a change made BEHIND the services (a direct update of a product row) is noticed too', () => {
+        const x = makeX();
+        const { cat } = counting();
+        expect(cat.search({ query: 'insecticide x' })[0]!.sizes.map((p) => p.retail_price)).toEqual([12_500, 25_000, 50_000]);
+        w.update('products', x.sizes[1]!.id, { retail_price: 27_000 });
+        expect(cat.search({ query: 'insecticide x' })[0]!.sizes.map((p) => p.retail_price)).toEqual([12_500, 27_000, 50_000]);
+        for (const p of x.sizes) w.update('products', p.id, { is_active: 0 });
+        w.update('product_groups', x.group.id, { is_active: 0 }); // the database wants the sizes off first
+        expect(cat.search({ query: 'insecticide x' })).toEqual([]);
+      });
+
+      it('a change to the GROUP alone (its notes, or its name written straight into the row) shows up in the next search', () => {
+        const x = makeX();
+        const { cat } = counting();
+        expect(cat.search({ query: 'insecticide x' })[0]!.group.notes).toBeNull();
+        s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, notes: 'keep dry' }); // no size is touched by this
+        expect(cat.search({ query: 'insecticide x' })[0]!.group.notes).toBe('keep dry');
+        w.update('product_groups', x.group.id, { name_en: 'Raw Renamed' }); // behind the services' back; the sizes still carry the old copy
+        expect(cat.search({ query: 'raw renamed' })[0]!.group.id).toBe(x.group.id);
+        expect(cat.search({ query: 'insecticide x' })).toEqual([]);
+      });
+
+      it('a catalogue change that fails and rolls back leaves the cache valid and the search unchanged', () => {
+        const x = makeX();
+        const { cat, log } = counting();
+        const before = cat.search({ query: 'insecticide x' });
+        w.failOnInsert('audit_log', 1);
+        expect(() => s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[0]!.id, changes: { min_stock: 99 } })).toThrow('injected failure');
+        w.clearFailure();
+        expect(cat.search({ query: 'insecticide x' })).toEqual(before);
+        expect(log.catalogueReads).toBeLessThanOrEqual(2); // at most one rebuild; the answer is the same either way
+      });
+
+      it('stock is looked up only for the sizes on the page that is returned', () => {
+        for (let i = 0; i < 4; i++) s.catalogue.createGroup({ actor_id: owner, name_en: `Widget ${i}`, sizes: [size('1 L', 1000, { barcode: `W${i}` }), size('500 ml', 500, { barcode: `W${i}b` })] });
+        const { cat, log } = counting();
+        const page = cat.searchPage({ query: 'widget', limit: 2 });
+        expect(page.total).toBe(4);
+        expect(page.hits).toHaveLength(2);
+        expect(log.stockLookups).toHaveLength(1);
+        expect(log.stockLookups[0]!.sort()).toEqual(page.hits.flatMap((h) => h.sizes.map((p) => p.id)).sort());
+        expect(log.stockLookups[0]).toHaveLength(4); // 2 products x 2 sizes, not all 8 sizes
+      });
+
+      describe('paging', () => {
+        beforeEach(() => {
+          for (let i = 1; i <= 7; i++) s.catalogue.createGroup({ actor_id: owner, name_en: `Gadget ${String(i).padStart(2, '0')}`, sizes: [size('1 L', 1000)] });
+        });
+        const names = (page: { hits: { group: { name_en: string | null } }[] }) => page.hits.map((h) => h.group.name_en);
+
+        it('total is the number of products that matched, whatever the page', () => {
+          expect(s.catalogue.searchPage({ query: 'gadget', limit: 3 }).total).toBe(7);
+          expect(s.catalogue.searchPage({ query: 'gadget', limit: 3, offset: 6 }).total).toBe(7);
+          expect(s.catalogue.searchPage({ query: 'gadget' }).total).toBe(7);
+          expect(s.catalogue.searchPage({ query: 'nothing like it', limit: 3 })).toEqual({ total: 0, hits: [] });
+        });
+
+        it('pages are in name order, do not overlap, and put together make the whole list', () => {
+          const all = names(s.catalogue.searchPage({ query: 'gadget' }));
+          expect(all).toEqual(['Gadget 01', 'Gadget 02', 'Gadget 03', 'Gadget 04', 'Gadget 05', 'Gadget 06', 'Gadget 07']);
+          const p1 = names(s.catalogue.searchPage({ query: 'gadget', limit: 3, offset: 0 }));
+          const p2 = names(s.catalogue.searchPage({ query: 'gadget', limit: 3, offset: 3 }));
+          const p3 = names(s.catalogue.searchPage({ query: 'gadget', limit: 3, offset: 6 }));
+          expect(p1).toEqual(['Gadget 01', 'Gadget 02', 'Gadget 03']);
+          expect(p2).toEqual(['Gadget 04', 'Gadget 05', 'Gadget 06']);
+          expect(p3).toEqual(['Gadget 07']);
+          expect([...p1, ...p2, ...p3]).toEqual(all);
+        });
+
+        it('the limit is applied AFTER sorting, so page one holds the first products by rank and name, not the first found', () => {
+          s.catalogue.createGroup({ actor_id: owner, name_en: 'Zed Gadget', sizes: [size('1 L', 1000)] }); // a later name, matches "gadget" inside a word list
+          expect(names(s.catalogue.searchPage({ query: 'gadget', limit: 1 }))).toEqual(['Gadget 01']);
+          expect(names(s.catalogue.searchPage({ query: 'gadget', limit: 1, offset: 7 }))).toEqual(['Zed Gadget']);
+        });
+
+        it('an offset past the end is an empty page, not an error', () => {
+          expect(s.catalogue.searchPage({ query: 'gadget', limit: 5, offset: 50 })).toMatchObject({ total: 7, hits: [] });
+        });
+
+        it.each([
+          ['a limit of 0', { limit: 0 }],
+          ['a limit over 1000', { limit: 1001 }],
+          ['a fractional limit', { limit: 1.5 }],
+          ['a negative offset', { offset: -1 }],
+          ['a fractional offset', { offset: 0.5 }],
+          ['a field that does not exist', { page: 2 }],
+        ])('refuses %s', (_label, input) => {
+          expect(codeOf(() => s.catalogue.searchPage({ query: 'gadget', ...input } as never))).toBe('INVALID_INPUT');
+        });
+
+        it('search (the plain call) still returns everything, as a list', () => {
+          expect(s.catalogue.search({ query: 'gadget' })).toHaveLength(7);
+        });
+      });
+    });
+
     describe('repositories', () => {
       it('refuse to work outside a unit of work, and refuse to set columns the database owns', () => {
         const repos = w.outsideTransaction();
         expect(() => repos.productGroups.getById(ID.gBottle)).toThrow(/outside a unit of work/);
         expect(() => repos.productGroups.listWithSizes(w.today)).toThrow(/outside a unit of work/);
         expect(() => repos.products.listByGroup(ID.gBottle)).toThrow(/outside a unit of work/);
+        expect(() => repos.productGroups.listCatalogue()).toThrow(/outside a unit of work/);
+        expect(() => repos.productGroups.catalogueSignature()).toThrow(/outside a unit of work/);
+        expect(() => repos.productGroups.stockOfSizes([ID.bottle], w.today)).toThrow(/outside a unit of work/);
         expect(() => repos.products.update(ID.bottle, { min_stock: 1 })).toThrow(/outside a unit of work/);
         for (const column of ['version', 'updated_at', 'created_at', 'deleted_at', 'id']) {
           expect(() => w.deps.uow.run((tx) => tx.products.update(ID.bottle, { [column]: 'x' } as never)), column).toThrow(`service set ${column}`);
           expect(() => w.deps.uow.run((tx) => tx.productGroups.update(ID.gBottle, { [column]: 'x' } as never)), column).toThrow(`service set ${column}`);
         }
+      });
+
+      it('listCatalogue is the live catalogue without stock; stockOfSizes gives every size its stock; both agree with listWithSizes', () => {
+        const x = makeX();
+        stockSize(x.sizes[0]!.id, 600);
+        stockSize(x.sizes[0]!.id, 300, 'OLD', -10); // expired: in the total, not sellable
+        w.deps.uow.run((tx) => {
+          const full = tx.productGroups.listWithSizes(w.today);
+          const bare = tx.productGroups.listCatalogue();
+          expect(bare.map((g) => g.group.id)).toEqual(full.map((g) => g.group.id)); // same groups, same order
+          for (const [i, g] of bare.entries()) {
+            expect(g.sizes.map((p) => p.id)).toEqual(full[i]!.sizes.map((p) => p.id));
+            for (const p of g.sizes) expect(p).not.toHaveProperty('stock_total'); // no stock in the static catalogue
+          }
+          const ids = full.flatMap((g) => g.sizes.map((p) => p.id));
+          const stock = tx.productGroups.stockOfSizes(ids, w.today);
+          expect(stock.size).toBe(ids.length);
+          for (const g of full) for (const p of g.sizes) expect(stock.get(p.id), p.name_en ?? '').toEqual({ stock_total: p.stock_total, stock_sellable: p.stock_sellable });
+          expect(stock.get(x.sizes[0]!.id)).toEqual({ stock_total: 900, stock_sellable: 600 });
+        });
+      });
+
+      it('stockOfSizes: nothing asked gives nothing, an unknown size is 0 and 0, and a long list (past one statement) is complete', () => {
+        const x = makeX();
+        stockSize(x.sizes[0]!.id, 100);
+        stockSize(x.sizes[1]!.id, 200);
+        stockSize(x.sizes[2]!.id, 4000);
+        w.deps.uow.run((tx) => {
+          expect(tx.productGroups.stockOfSizes([], w.today).size).toBe(0);
+          expect(tx.productGroups.stockOfSizes([uuid(999)], w.today).get(uuid(999))).toEqual({ stock_total: 0, stock_sellable: 0 });
+          // 1,300 ids; the three real sizes sit first, and on both sides of where a batch of 500 would be cut
+          const ids = Array.from({ length: 1300 }, (_, i) => uuid(100_000 + i));
+          ids[0] = x.sizes[0]!.id;
+          ids[499] = x.sizes[1]!.id;
+          ids[500] = x.sizes[2]!.id;
+          ids[1299] = x.sizes[0]!.id; // listed twice: counted once
+          const stock = tx.productGroups.stockOfSizes(ids, w.today);
+          expect(stock.size).toBe(1299);
+          expect(stock.get(x.sizes[0]!.id)).toEqual({ stock_total: 100, stock_sellable: 100 });
+          expect(stock.get(x.sizes[1]!.id)).toEqual({ stock_total: 200, stock_sellable: 200 });
+          expect(stock.get(x.sizes[2]!.id)).toEqual({ stock_total: 4000, stock_sellable: 4000 });
+          expect(stock.get(ids[1298]!)).toEqual({ stock_total: 0, stock_sellable: 0 });
+        });
+      });
+
+      it('a batch that expires TODAY is still sellable today, and is expired tomorrow', () => {
+        const x = makeX();
+        stockSize(x.sizes[0]!.id, 500, 'TODAY', 0);
+        w.deps.uow.run((tx) => {
+          expect(tx.productGroups.stockOfSizes([x.sizes[0]!.id], w.day(0)).get(x.sizes[0]!.id)).toEqual({ stock_total: 500, stock_sellable: 500 });
+          expect(tx.productGroups.stockOfSizes([x.sizes[0]!.id], w.day(1)).get(x.sizes[0]!.id)).toEqual({ stock_total: 500, stock_sellable: 0 });
+        });
+      });
+
+      it('stockOfSizes uses the date it is given to decide what is expired', () => {
+        const x = makeX();
+        stockSize(x.sizes[0]!.id, 500, 'SHORT', 1);
+        w.deps.uow.run((tx) => {
+          expect(tx.productGroups.stockOfSizes([x.sizes[0]!.id], w.day(0)).get(x.sizes[0]!.id)).toEqual({ stock_total: 500, stock_sellable: 500 });
+          expect(tx.productGroups.stockOfSizes([x.sizes[0]!.id], w.day(2)).get(x.sizes[0]!.id)).toEqual({ stock_total: 500, stock_sellable: 0 });
+        });
+      });
+
+      it('catalogueSignature does NOT move when stock or sales move, and DOES move when a product or a group changes', () => {
+        const x = makeX();
+        const signature = () => w.deps.uow.run((tx) => tx.productGroups.catalogueSignature());
+        const start = signature();
+        expect(signature()).toBe(start); // reading it changes nothing
+        const batch = stockSize(x.sizes[1]!.id, 10_000);
+        s.sale.create({ created_by: ID.staff, paid_amount: 25_000, lines: [{ product_id: x.sizes[1]!.id, qty: 500 }] });
+        s.stock.adjust({ batch_id: batch, qty_delta: -100, created_by: owner });
+        s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 100, method: 'cash', created_by: ID.staff });
+        expect(signature()).toBe(start); // a sale, a receipt, an adjustment and a payment: the same
+
+        const seen = new Set([start]);
+        const changeAndCheck = (change: () => void) => {
+          change();
+          const next = signature();
+          expect(seen.has(next)).toBe(false);
+          seen.add(next);
+        };
+        changeAndCheck(() => s.catalogue.updateSize({ actor_id: owner, product_id: x.sizes[0]!.id, changes: { min_stock: 5 } }));
+        changeAndCheck(() => s.catalogue.updateGroup({ actor_id: owner, group_id: x.group.id, name_en: 'Insecticide Y' }));
+        changeAndCheck(() => s.catalogue.addSize({ actor_id: owner, group_id: x.group.id, size: size('2 L', 2000) }));
+        changeAndCheck(() => s.catalogue.setSizeActive({ actor_id: owner, id: x.sizes[0]!.id, is_active: false }));
+        changeAndCheck(() => s.catalogue.createGroup({ actor_id: owner, name_en: 'Another' }));
+        changeAndCheck(() => w.update('products', x.sizes[2]!.id, { deleted_at: '2026-01-01T00:00:00.000Z' })); // a soft delete
       });
 
       it('update changes only the columns given, and an unknown row is an error', () => {

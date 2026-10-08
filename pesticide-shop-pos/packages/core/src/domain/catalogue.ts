@@ -1,4 +1,5 @@
-import type { GroupWithSizes, SizeWithStock } from '../ports/types.js';
+import type { SizeWithStock } from '../ports/types.js';
+import type { Product, ProductGroup } from '../schemas/index.js';
 
 // Pure catalogue rules: how a size is named, and how a typed search is matched. No clock, no database.
 
@@ -41,6 +42,16 @@ const LETTER_VARIANTS: Readonly<Record<string, string>> = {
  *  - a space between a number and a unit is dropped, so "500 ml" and "500ml" are the same
  */
 export function normalizeSearchText(text: string): string {
+  return glueNumberAndUnit(normalizeCore(text));
+}
+
+/** "500 ml" -> "500ml". Applied to a whole text, after the characters have been normalised. */
+function glueNumberAndUnit(text: string): string {
+  return text.replace(/(\d) (?=[a-z\u0600-\u06ff])/g, '$1');
+}
+
+/** Everything in normalizeSearchText except the number-and-unit rule. Joining normalised pieces with one space gives the same text as normalising the joined text. */
+function normalizeCore(text: string): string {
   let out = '';
   for (const ch of text.normalize('NFKC')) {
     const code = ch.codePointAt(0)!;
@@ -55,17 +66,19 @@ export function normalizeSearchText(text: string): string {
     ) continue;
     else out += LETTER_VARIANTS[ch] ?? ch;
   }
-  return out
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/(\d) (?=[a-z؀-ۿ])/g, '$1');
+  return out.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-export interface CatalogueHit {
-  group: GroupWithSizes['group'];
+/** A product group with its sizes, in whatever form the sizes come (with stock, or without). */
+export interface GroupOf<S extends Product> {
+  group: ProductGroup;
+  sizes: readonly S[];
+}
+
+export interface CatalogueHit<S extends Product = SizeWithStock> {
+  group: ProductGroup;
   /** The sizes to show: active ones, unless inactive ones were asked for. */
-  sizes: SizeWithStock[];
+  sizes: S[];
   /** The sizes that matched the words typed. When only the group's own name matched, that is all of them. */
   matched_size_ids: string[];
   /** 0 an exact barcode or SKU, 1 the name starts with what was typed, 2 a word of the name does, 3 anywhere. */
@@ -75,59 +88,134 @@ export interface CatalogueHit {
 export interface SearchOptions {
   /** Also show inactive sizes and inactive groups. Default false. */
   include_inactive?: boolean;
+  /** Only return this many products (after sorting). Leave out for all of them. */
+  limit?: number;
+  /** Skip this many products first (for the next page). Default 0. */
+  offset?: number;
 }
 
-/**
- * Normalised text a size can be found by typing words: both languages of the group and the size, and its label.
- * Barcodes and SKUs are left out on purpose: they only match when typed in full (or scanned), because a number such as
- * "250" would otherwise match every barcode that happens to contain it.
- */
-function haystack(group: GroupWithSizes['group'], size: SizeWithStock): string {
-  return normalizeSearchText([group.name_en, group.name_ur, size.name_en, size.name_ur, size.pack_label].filter((t): t is string => !!t).join(' '));
+/** One page of a search: the products on it, and how many products matched in all. */
+export interface CataloguePage<S extends Product = SizeWithStock> {
+  hits: CatalogueHit<S>[];
+  total: number;
 }
 
-function nameRank(group: GroupWithSizes['group'], query: string, words: readonly string[]): number {
-  const names = [group.name_en, group.name_ur].filter((t): t is string => !!t).map(normalizeSearchText);
-  if (names.some((n) => n.startsWith(query))) return 1;
-  const first = words[0] ?? '';
-  if (names.some((n) => n.split(' ').some((w) => w.startsWith(first)))) return 2;
+// The text work (normalising names, labels, codes) is the expensive part of a search, and it only changes when the
+// catalogue does. So it is done ONCE per catalogue, into an index, and every search after that only compares strings.
+
+interface IndexedSize<S extends Product> {
+  size: S;
+  /**
+   * Normalised text a size can be found by typing words: the group's names in both languages, and the size's label.
+   * (A size's own name is that group name plus the label, so it adds nothing.) Barcodes and SKUs are left out on
+   * purpose: they only match when typed in full (or scanned), because a number such as "250" would otherwise match
+   * every barcode that happens to contain it.
+   */
+  hay: string;
+  /** Normalised barcode and SKU, for an exact match. */
+  codes: string[];
+}
+
+interface IndexedGroup<S extends Product> {
+  group: ProductGroup;
+  rows: readonly IndexedSize<S>[];
+  /** Normalised group names (English, Urdu), for ranking. */
+  names: readonly string[];
+  /** What products are sorted by. */
+  sortKey: string;
+}
+
+/** A catalogue prepared for searching. Immutable: build a new one when the catalogue changes. */
+export interface CatalogueIndex<S extends Product = SizeWithStock> {
+  readonly groups: readonly IndexedGroup<S>[];
+}
+
+export function buildCatalogueIndex<S extends Product>(all: readonly GroupOf<S>[]): CatalogueIndex<S> {
+  const present = (t: string | null): t is string => !!t;
+  // Names and labels repeat a lot (every size of a product shares its names, many products share a label like "1 L").
+  const memo = new Map<string, string>();
+  const core = (text: string): string => {
+    let done = memo.get(text);
+    if (done === undefined) {
+      done = normalizeCore(text);
+      memo.set(text, done);
+    }
+    return done;
+  };
+  return {
+    groups: all.map(({ group, sizes }) => {
+      const names = [group.name_en, group.name_ur].filter(present).map(core);
+      return {
+        group,
+        names,
+        sortKey: glueNumberAndUnit(core(group.name_en ?? group.name_ur ?? '')),
+        rows: sizes.map((size) => ({
+          size,
+          hay: glueNumberAndUnit([...names, core(size.pack_label)].filter((t) => t !== '').join(' ')),
+          codes: [size.barcode, size.sku].filter(present).map(normalizeSearchText),
+        })),
+      };
+    }),
+  };
+}
+
+function nameRank(names: readonly string[], query: string, firstWord: string): number {
+  const glued = names.map(glueNumberAndUnit);
+  if (glued.some((n) => n.startsWith(query))) return 1;
+  if (glued.some((n) => n.split(' ').some((w) => w.startsWith(firstWord)))) return 2;
   return 3;
+}
+
+interface Match<S extends Product> {
+  entry: IndexedGroup<S>;
+  rows: readonly IndexedSize<S>[];
+  matched: readonly IndexedSize<S>[];
+  rank: number;
 }
 
 /**
  * Finds product groups for what the cashier typed, in English or Urdu. Every word typed must appear in a size's
- * names or label (or in its group's names). A barcode or SKU typed in full finds that one size first.
+ * label or in its group's names. A barcode or SKU typed in full finds that one size first.
  * An empty search lists everything in name order. Results are sorted by rank, then by group name, then by id,
- * so the order never depends on the backend.
+ * so the order never depends on the backend. `limit` and `offset` pick one page of the sorted list; `total` is
+ * the number of matching products before paging.
  */
-export function searchCatalogue(all: readonly GroupWithSizes[], text: string, options: SearchOptions = {}): CatalogueHit[] {
+export function searchIndex<S extends Product>(index: CatalogueIndex<S>, text: string, options: SearchOptions = {}): CataloguePage<S> {
   const query = normalizeSearchText(text);
   const words = query === '' ? [] : query.split(' ');
   const includeInactive = options.include_inactive === true;
-  const hits: CatalogueHit[] = [];
+  const matches: Match<S>[] = [];
 
-  for (const { group, sizes: allSizes } of all) {
-    if (!includeInactive && group.is_active !== 1) continue;
-    const sizes = includeInactive ? allSizes : allSizes.filter((s) => s.is_active === 1);
-    if (sizes.length === 0 && (!includeInactive || words.length > 0)) continue;
+  for (const entry of index.groups) {
+    if (!includeInactive && entry.group.is_active !== 1) continue;
+    const rows = includeInactive ? entry.rows : entry.rows.filter((r) => r.size.is_active === 1);
+    if (rows.length === 0 && (!includeInactive || words.length > 0)) continue;
 
     if (words.length === 0) {
-      hits.push({ group, sizes, matched_size_ids: sizes.map((s) => s.id), rank: 3 });
+      matches.push({ entry, rows, matched: rows, rank: 3 });
       continue;
     }
-    const exact = sizes.filter((s) => [s.barcode, s.sku].some((code) => code !== null && normalizeSearchText(code) === query));
+    const exact = rows.filter((r) => r.codes.includes(query));
     if (exact.length > 0) {
-      hits.push({ group, sizes, matched_size_ids: exact.map((s) => s.id), rank: 0 });
+      matches.push({ entry, rows, matched: exact, rank: 0 });
       continue;
     }
-    const matched = sizes.filter((s) => {
-      const text = haystack(group, s);
-      return words.every((w) => text.includes(w));
-    });
+    const matched = rows.filter((r) => words.every((w) => r.hay.includes(w)));
     if (matched.length === 0) continue;
-    hits.push({ group, sizes, matched_size_ids: matched.map((s) => s.id), rank: nameRank(group, query, words) });
+    matches.push({ entry, rows, matched, rank: nameRank(entry.names, query, words[0]!) });
   }
 
-  const sortKey = (h: CatalogueHit) => normalizeSearchText(h.group.name_en ?? h.group.name_ur ?? '');
-  return hits.sort((a, b) => a.rank - b.rank || (sortKey(a) < sortKey(b) ? -1 : sortKey(a) > sortKey(b) ? 1 : a.group.id < b.group.id ? -1 : 1));
+  matches.sort((a, b) => a.rank - b.rank || (a.entry.sortKey < b.entry.sortKey ? -1 : a.entry.sortKey > b.entry.sortKey ? 1 : a.entry.group.id < b.entry.group.id ? -1 : 1));
+
+  const offset = Math.max(0, options.offset ?? 0);
+  const page = options.limit === undefined ? matches.slice(offset) : matches.slice(offset, offset + Math.max(0, options.limit));
+  return {
+    total: matches.length,
+    hits: page.map((m) => ({ group: m.entry.group, sizes: m.rows.map((r) => r.size), matched_size_ids: m.matched.map((r) => r.size.id), rank: m.rank })),
+  };
+}
+
+/** Builds the index and searches it, in one go. Use `buildCatalogueIndex` and `searchIndex` when searching many times. */
+export function searchCatalogue<S extends Product = SizeWithStock>(all: readonly GroupOf<S>[], text: string, options: SearchOptions = {}): CatalogueHit<S>[] {
+  return searchIndex(buildCatalogueIndex(all), text, options).hits;
 }

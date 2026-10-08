@@ -64,6 +64,7 @@ Backup module with destinations, retention, verification and alerts. Restore scr
 Enter his real products and balances. Run in parallel with his paper register for a week. Fix what he finds.
 
 ## Later
+- **When sync is built, re-check the catalogue cache.** `catalogueSignature()` (packages/db-sqlite repositories) is a count plus a sum of `version` for products and product groups, and the search cache relies on both only ever going up. Applying a remote row must never write `version` directly or lower it, and a hard delete must stay impossible; otherwise the signature could stay the same after a change and search would show stale products.
 Cloud backup (Supabase), phone view, second device, barcode scanner, WhatsApp and SMS reminders.
 
 ## Starter prompt for Claude Code
