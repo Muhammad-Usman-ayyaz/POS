@@ -87,7 +87,7 @@ The app must create the `shops`, `branches` and `devices` rows, the owner user, 
 | `group_changed` | a product's English or Urdu name, category, brand or notes changed (`fields`, `before`, `after`; a rename is `name_en` and/or `name_ur`). The sizes' copied names follow and get no rows of their own | the owner |
 | `group_deactivated` / `group_reactivated` | a product was switched off (with the sizes it switched off) or on | the owner |
 | `size_moved` | a size was moved to another product (both groups, both labels, whether the old product was switched off) | the owner |
-| `receipt_backdated` | a purchase was recorded with a receipt date other than today (yesterday's delivery entered today). A date after today is refused with `FUTURE_DATE`. `details`: `purchase_date`, `entered_on`, `supplier_id`, `total`. "Today" is the UTC date, like every other date in core | the user who recorded it |
+| `receipt_backdated` | a purchase was recorded with a receipt date other than today (yesterday's delivery entered today). A date after today is refused with `FUTURE_DATE`. A date more than 30 days ago (`OLD_RECEIPT_DAYS`) is refused with `RECEIPT_DATE_OLD` (with `days`) until the caller sends `confirm_old_date: true`; there is no hard limit. `details`: `purchase_date`, `entered_on`, `supplier_id`, `total`, and for a confirmed old one `days_ago` and `confirmed_by_user`. "Today" is the UTC date, like every other date in core | the user who recorded it |
 | `stock_adjustment` / `stock_write_off` | a stock count correction or a write-off | who did it |
 | `owner_password_reset` / `owner_password_reset_failed` / `recovery_code_regenerated` | owner recovery | the owner, or NULL |
 

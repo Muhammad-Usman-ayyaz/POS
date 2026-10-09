@@ -19,6 +19,7 @@ No screen shows these messages yet: the Products screen is built in Phase 4. The
 | `PACK_LABEL_REQUIRED` | Every size needs a label | Write the size on each one, for example 500 ml or 1 L, so they can be told apart. | ہر سائز کا لیبل ضروری ہے | ہر سائز پر لکھیں، مثلاً 500 ml یا 1 L، تاکہ ان میں فرق کیا جا سکے۔ | Products screen: a product with two or more sizes where one has no label: creating it, adding a second size without giving the first a label, or clearing a label (`createGroup`, `addSize`, `updateSize`, `moveSize`). | |
 | `PACK_SIZE_LOCKED` | This size already has stock records | Its pack size and unit can no longer change. Add a new size instead. | اس سائز کا اسٹاک ریکارڈ موجود ہے | اس کا پیک سائز اور پیمانہ اب تبدیل نہیں ہو سکتا۔ اس کے بجائے نیا سائز شامل کریں۔ | Products screen: changing the pack size or unit of a size that already has batches (`updateSize`). Must be shown with the next step (add a new size instead). | |
 | `FUTURE_DATE` | The date {date} is after today | Pick today or an earlier day. | تاریخ {date} آج کے بعد کی ہے | آج کی یا اس سے پہلے کی تاریخ چنیں۔ | Receive stock: the receipt date is in the future. | |
+| `RECEIPT_DATE_OLD` | This receipt is dated {days} days ago ({date}). Save anyway? | If the date is right, confirm to save it. If not, correct the date. | اس رسید کی تاریخ {days} دن پہلے کی ہے ({date})۔ پھر بھی محفوظ کریں؟ | اگر تاریخ ٹھیک ہے تو تصدیق کر کے محفوظ کریں، ورنہ تاریخ درست کریں۔ | Receive stock: the receipt date is more than 30 days ago. | |
 
 No existing Urdu message was changed in this work.
 

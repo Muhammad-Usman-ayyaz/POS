@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nowIso, todayUtc } from '../clock.js';
+import { daysBetween, nowIso, todayUtc } from '../clock.js';
 import { DomainError } from '../errors.js';
 import { priceForQty } from '../money/index.js';
 import { Id, IsoDate, NonNegPaisa, PaymentMethod, Qty } from '../schemas/common.js';
@@ -7,11 +7,16 @@ import type { Purchase, PurchaseItem } from '../schemas/index.js';
 import type { NewRow } from '../ports/index.js';
 import { activeUser, liveProduct, liveSupplier, parseInput, pickOrCreateBatch, rowFactory, type ServiceDeps } from './support.js';
 
+/** A receipt dated more than this many days ago needs the owner's confirmation (a typo in the date is likelier than a month-old delivery). */
+export const OLD_RECEIPT_DAYS = 30;
+
 export const PurchaseInput = z.object({
   supplier_id: Id,
   supplier_invoice_no: z.string().min(1).optional(),
   /** The day the goods arrived. Defaults to today. A PAST day is allowed (yesterday's delivery, entered today) and is audited; a future day is refused. */
   purchase_date: IsoDate.optional(),
+  /** The owner has seen "this receipt is dated N days ago" and says save anyway. Needed when the date is more than OLD_RECEIPT_DAYS ago. */
+  confirm_old_date: z.boolean().optional(),
   /** Paisa off the whole purchase. */
   discount: NonNegPaisa.default(0),
   /** Paid to the supplier now. */
@@ -61,6 +66,11 @@ export function createPurchaseService(deps: ServiceDeps) {
         // A receipt may be dated in the past (the owner enters yesterday's delivery), never in the future.
         if (input.purchase_date !== undefined && input.purchase_date > today) {
           throw new DomainError('FUTURE_DATE', `a receipt cannot be dated in the future: ${input.purchase_date} is after today (${today})`, { date: input.purchase_date, today });
+        }
+        // A date far in the past is more likely a typo than a late delivery: ask the owner to confirm it.
+        const daysAgo = input.purchase_date === undefined ? 0 : daysBetween(input.purchase_date, today);
+        if (daysAgo > OLD_RECEIPT_DAYS && input.confirm_old_date !== true) {
+          throw new DomainError('RECEIPT_DATE_OLD', `this receipt is dated ${daysAgo} days ago: confirm to save it`, { date: input.purchase_date ?? today, today, days: daysAgo });
         }
         activeUser(tx, input.created_by);
         liveSupplier(tx, input.supplier_id);
@@ -150,7 +160,7 @@ export function createPurchaseService(deps: ServiceDeps) {
               action: 'receipt_backdated',
               table_name: 'purchases',
               row_id: purchase.id,
-              details: { purchase_date: purchase.purchase_date, entered_on: today, supplier_id: input.supplier_id, total },
+              details: { purchase_date: purchase.purchase_date, entered_on: today, supplier_id: input.supplier_id, total, ...(daysAgo > OLD_RECEIPT_DAYS ? { days_ago: daysAgo, confirmed_by_user: true } : {}) },
             }),
           );
         }

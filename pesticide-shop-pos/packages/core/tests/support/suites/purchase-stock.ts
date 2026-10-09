@@ -170,8 +170,8 @@ export function definePurchaseTests(make: WorldFactory): void {
         expect(JSON.parse(audited()[0]!.details as string)).toEqual({ purchase_date: w.day(-1), entered_on: w.today, supplier_id: ID.supplier, total: 210_000 });
       });
 
-      it('a long time ago is accepted too', () => {
-        const r = purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(-400), items: [item()] });
+      it('a long time ago is accepted too, once confirmed (there is no hard limit)', () => {
+        const r = purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(-400), confirm_old_date: true, items: [item()] });
         expect(r.purchase.purchase_date).toBe(w.day(-400));
         expect(audited()).toHaveLength(1);
       });
@@ -192,6 +192,27 @@ export function definePurchaseTests(make: WorldFactory): void {
 
       it('a far-future date is refused too', () => {
         expect(codeOf(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(365), items: [item()] }))).toBe('FUTURE_DATE');
+      });
+
+      it('exactly 30 days ago needs no confirmation; 31 days ago is refused with RECEIPT_DATE_OLD (how many days) and nothing is written', () => {
+        purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(-30), items: [item()] });
+        const before = w.snapshot();
+        const e = errorOf(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(-31), items: [item({ batch_no: 'N2' })] }));
+        expect(e.code).toBe('RECEIPT_DATE_OLD');
+        expect(e.params).toEqual({ date: w.day(-31), today: w.today, days: 31 });
+        expect(w.snapshot()).toEqual(before);
+      });
+
+      it('with confirm_old_date it is saved, and the audit row says how old it was and that it was confirmed', () => {
+        const r = purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(-90), confirm_old_date: true, items: [item()] });
+        expect(r.purchase.purchase_date).toBe(w.day(-90));
+        expect(JSON.parse(audited()[0]!.details as string)).toMatchObject({ purchase_date: w.day(-90), days_ago: 90, confirmed_by_user: true });
+      });
+
+      it('confirm_old_date changes nothing for a recent date (no days_ago in the audit row), and never lets a FUTURE date through', () => {
+        purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(-5), confirm_old_date: true, items: [item()] });
+        expect(JSON.parse(audited()[0]!.details as string)).not.toHaveProperty('days_ago');
+        expect(codeOf(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(1), confirm_old_date: true, items: [item({ batch_no: 'N3' })] }))).toBe('FUTURE_DATE');
       });
 
       it('a failure after the audit row would be written undoes the audit row too', () => {

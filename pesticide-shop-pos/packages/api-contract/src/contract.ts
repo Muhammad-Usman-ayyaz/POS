@@ -110,6 +110,8 @@ export const ReceiveStockInput = z.strictObject({
   supplier_id: Id,
   supplier_invoice_no: z.string().trim().min(1).max(60).optional(),
   purchase_date: IsoDate.optional(),
+  /** True after the owner has confirmed "this receipt is dated N days ago" (needed past 30 days). */
+  confirm_old_date: z.boolean().optional(),
   items: z
     .array(
       z.strictObject({
