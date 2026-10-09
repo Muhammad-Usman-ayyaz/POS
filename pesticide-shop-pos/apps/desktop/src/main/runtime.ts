@@ -1,7 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { AppState, Channel, Output, ParsedInput, SessionUser } from '@pos/api-contract';
 import {
+  createCatalogueService,
   createKhataService,
+  createPurchaseService,
+  createReferenceService,
   createSaleService,
   createSalesReturnService,
   createStockService,
@@ -28,7 +31,7 @@ import {
   type Migration,
 } from '@pos/db-sqlite';
 import { argon2Hasher, type PasswordHasher } from './password.js';
-import { requireCapability } from './permissions.js';
+import { guardHandlers, requireCapability } from './permissions.js';
 import { PrefsStore } from './prefs.js';
 import { generateRecoveryCode, normalizeRecoveryCode } from './recovery.js';
 import { SessionStore } from './session.js';
@@ -45,6 +48,11 @@ export interface RuntimeOptions {
   clock?: Clock;
   ids?: IdGenerator;
   randomBytes?: (count: number) => Uint8Array;
+  /**
+   * Runs a background job after the reply has gone out (default: setImmediate). Tests pass a function that collects the jobs, so they
+   * can see WHICH calls schedule a pre-warm.
+   */
+  schedule?: (job: () => void) => void;
 }
 
 /** One function per channel in the contract. Input is already validated and cleaned by the time it arrives. */
@@ -75,6 +83,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     scope: DeviceScope;
     repos: ReturnType<typeof createSqliteRepositories>;
     stock: ReturnType<typeof createStockService>;
+    purchase: ReturnType<typeof createPurchaseService>;
+    catalogue: ReturnType<typeof createCatalogueService>;
+    reference: ReturnType<typeof createReferenceService>;
     sale: ReturnType<typeof createSaleService>;
     salesReturn: ReturnType<typeof createSalesReturnService>;
     khata: ReturnType<typeof createKhataService>;
@@ -90,6 +101,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       scope: info.scope,
       repos: createSqliteRepositories(db, info.scope),
       stock: createStockService(deps),
+      purchase: createPurchaseService(deps),
+      catalogue: createCatalogueService(deps),
+      reference: createReferenceService(deps),
       sale: createSaleService(deps),
       salesReturn: createSalesReturnService(deps),
       khata: createKhataService(deps),
@@ -140,7 +154,30 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   const startSession = (user: { id: string; name: string; username: string; role: 'owner' | 'staff' }): SessionUser => session.start(user);
 
-  const handlers: Handlers = {
+  // ---- pre-warm: after the owner changes the catalogue (or receives stock), rebuild the search index and the stock picture in the
+  // background, so the next list or search does not wait for it. Not after a sale: that would stall the counter. ----
+  const schedule = options.schedule ?? ((job: () => void) => void setImmediate(job));
+  const prewarm = (): void =>
+    schedule(() => {
+      try {
+        services().catalogue.list({ limit: 1 }); // builds both caches (the text index and the stock picture)
+      } catch {
+        // the app may be closing, or the shop gone: a missed pre-warm only means the next call is a little slower
+      }
+    });
+  /** The signed-in owner, or an error: for catalogue changes. (The guard has checked it already; this keeps each handler honest on its own.) */
+  const catalogueOwner = (): SessionUser => {
+    const user = session.require();
+    requireCapability(user, 'catalogue.edit');
+    return user;
+  };
+  const directoryOwner = (): SessionUser => {
+    const user = session.require();
+    requireCapability(user, 'directory.add');
+    return user;
+  };
+
+  const rawHandlers: Handlers = {
     // ---------- start-up ----------
     'app:getState': async () => getState(),
 
@@ -298,6 +335,78 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return null;
     },
 
+    // ---------- the catalogue: lists for anyone signed in, changes for the owner. Cost only goes to the owner. ----------
+    'catalogue:list': async (input) => {
+      const user = session.require();
+      return services().catalogue.list({ ...input, include_cost: user.role === 'owner' });
+    },
+
+    'catalogue:createGroup': async (input) => {
+      const user = catalogueOwner();
+      const result = services().catalogue.createGroup({ ...input, actor_id: user.id });
+      prewarm();
+      return result;
+    },
+
+    'catalogue:updateGroup': async (input) => {
+      const user = catalogueOwner();
+      const result = services().catalogue.updateGroup({ ...input, actor_id: user.id });
+      prewarm();
+      return result;
+    },
+
+    'catalogue:addSize': async (input) => {
+      const user = catalogueOwner();
+      const result = services().catalogue.addSize({ ...input, actor_id: user.id });
+      prewarm();
+      return result;
+    },
+
+    'catalogue:updateSize': async (input) => {
+      const user = catalogueOwner();
+      const result = services().catalogue.updateSize({ ...input, actor_id: user.id });
+      prewarm();
+      return result;
+    },
+
+    'catalogue:setSizeActive': async (input) => {
+      const user = catalogueOwner();
+      services().catalogue.setSizeActive({ ...input, actor_id: user.id });
+      prewarm();
+      return null;
+    },
+
+    'catalogue:setGroupActive': async (input) => {
+      const user = catalogueOwner();
+      services().catalogue.setGroupActive({ ...input, actor_id: user.id });
+      prewarm();
+      return null;
+    },
+
+    'catalogue:moveSize': async (input) => {
+      const user = catalogueOwner();
+      const result = services().catalogue.moveSize({ ...input, actor_id: user.id });
+      prewarm();
+      return result;
+    },
+
+    // ---------- receiving stock: a purchase from a supplier, paid in full (the payment fields are hidden), owner only ----------
+    'stock:receive': async (input) => {
+      const user = session.require();
+      requireCapability(user, 'stock.receive');
+      const result = services().purchase.record({ ...input, created_by: user.id, pay_in_full: true });
+      prewarm();
+      return { purchase_id: result.purchase.id, total: result.purchase.total, batch_ids: result.items.map((i) => i.batch_id) };
+    },
+
+    // ---------- the short lists a form picks from, and the owner's quick-add ----------
+    'suppliers:list': async () => (session.require(), services().reference.listSuppliers()),
+    'categories:list': async () => (session.require(), services().reference.listCategories()),
+    'brands:list': async () => (session.require(), services().reference.listBrands()),
+    'suppliers:create': async (input) => services().reference.addSupplier({ ...input, actor_id: directoryOwner().id }),
+    'categories:create': async (input) => services().reference.addCategory({ ...input, actor_id: directoryOwner().id }),
+    'brands:create': async (input) => services().reference.addBrand({ ...input, actor_id: directoryOwner().id }),
+
     'khata:setOpeningBalance': async (input) => {
       const user = session.require();
       requireCapability(user, 'khata.openingBalance');
@@ -312,5 +421,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
   };
 
+  // Every call goes through the guard: the channel's permission policy first, and errors made safe for the signed-in user.
+  const handlers = guardHandlers(rawHandlers, () => session.current());
   return { handlers, session, db, close: () => db.close() };
 }

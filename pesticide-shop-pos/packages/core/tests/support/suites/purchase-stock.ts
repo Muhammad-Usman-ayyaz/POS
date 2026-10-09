@@ -98,6 +98,14 @@ export function definePurchaseTests(make: WorldFactory): void {
         expect(e.params).toMatchObject({ kind: 'cost', existingExpiry: w.day(120), newExpiry: w.day(300), existingCost: 40_000, newCost: 99 });
       });
 
+      it('the message holds no amount, only the params do (a cost is for the owner only, and the message travels to the screen)', () => {
+        for (const over of [{ expiry_date: w.day(200) }, { cost_price: 41_234 }, { expiry_date: w.day(300), cost_price: 99_999 }]) {
+          const e = clash(over);
+          expect(e.message).toBe(`batch A already exists with a different ${e.params['kind']}`);
+          expect(e.message).not.toMatch(/\d{4,}/);
+        }
+      });
+
       it('the same batch number on ANOTHER size is not a clash: batch numbers are per size', () => {
         expect(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, items: [item({ product_id: ID.fert, batch_no: 'A', expiry_date: w.day(10), cost_price: 1 })] })).not.toThrow();
       });

@@ -21,6 +21,21 @@ const samples: Record<Channel, () => Record<string, unknown>> = {
   'stock:openingStock': () => ({ product_id: id(), batch_no: 'B-1', expiry_date: '2027-01-31', cost_price: 40_000, qty: 5000 }),
   'stock:adjust': () => ({ batch_id: id(), qty_delta: -100 }),
   'stock:writeOff': () => ({ batch_id: id(), qty: 100, kind: 'damage' }),
+  'catalogue:list': () => ({ query: 'insecticide', filter: 'low', limit: 50, offset: 0 }),
+  'catalogue:createGroup': () => ({ name_en: 'Product A', name_ur: 'پروڈکٹ', category_id: id(), brand_id: null, sizes: [{ pack_label: '500 ml', base_unit: 'ml', pack_size: 500, retail_price: 27_000, wholesale_price: 24_500, tax_rate_bp: 0, min_stock: 2500 }] }),
+  'catalogue:updateGroup': () => ({ group_id: id(), name_en: 'Product B', notes: null }),
+  'catalogue:addSize': () => ({ group_id: id(), size: { pack_label: '1 L', base_unit: 'ml', pack_size: 1000, retail_price: 50_000, wholesale_price: 45_000 }, existing_size_label: '500 ml' }),
+  'catalogue:updateSize': () => ({ product_id: id(), changes: { retail_price: 51_000, min_stock: 3000 } }),
+  'catalogue:setSizeActive': () => ({ id: id(), is_active: false }),
+  'catalogue:setGroupActive': () => ({ id: id(), is_active: true }),
+  'catalogue:moveSize': () => ({ product_id: id(), to_group_id: id(), pack_label: '750 ml' }),
+  'stock:receive': () => ({ supplier_id: id(), supplier_invoice_no: 'GV-20418', purchase_date: '2026-10-08', items: [{ product_id: id(), batch_no: 'B-014', expiry_date: '2027-03-12', qty: 12_000, cost_price: 40_000 }] }),
+  'suppliers:list': () => ({}),
+  'suppliers:create': () => ({ name_en: 'Green Valley Traders', phone: '0300 1234567' }),
+  'categories:list': () => ({}),
+  'categories:create': () => ({ name_ur: 'کھاد' }),
+  'brands:list': () => ({}),
+  'brands:create': () => ({ name_en: 'Sample brand' }),
   'khata:setOpeningBalance': () => ({ customer_id: id(), amount: 100_000 }),
   'reports:profitByDay': () => ({ from: '2026-10-01', to: '2026-10-31' }),
 };
@@ -47,7 +62,7 @@ describe('the contract', () => {
 
   it('never lets the renderer say who is acting: created_by, approved_by and user_id are refused on every channel', () => {
     for (const channel of channels) {
-      for (const key of ['created_by', 'approved_by', 'user_id', 'userId', 'role']) {
+      for (const key of ['created_by', 'approved_by', 'user_id', 'userId', 'role', 'actor_id', 'include_cost']) {
         const result = contract[channel].input.safeParse({ ...samples[channel](), [key]: id() });
         expect(result.success, `${channel} accepted ${key}`).toBe(false);
       }
@@ -60,7 +75,7 @@ describe('the contract', () => {
       const def = (schema as unknown as { def: { type: string; shape?: Record<string, z.ZodType>; element?: z.ZodType; innerType?: z.ZodType } }).def;
       if (def.type === 'object' && def.shape) {
         for (const [key, child] of Object.entries(def.shape)) {
-          if (/^(created_by|approved_by|user_id|userId|role)$/.test(key)) found.push(`${path}.${key}`);
+          if (/^(created_by|approved_by|user_id|userId|role|actor_id|include_cost)$/.test(key)) found.push(`${path}.${key}`);
           walk(child, `${path}.${key}`);
         }
       } else if (def.type === 'array' && def.element) walk(def.element, `${path}[]`);
@@ -125,7 +140,7 @@ describe('field rules', () => {
 describe('buildApi', () => {
   it('turns channels into named functions: app:getState is api.app.getState', () => {
     const api = buildApi(async () => ({ ok: true, data: null }));
-    expect(Object.keys(api).sort()).toEqual(['app', 'auth', 'khata', 'prefs', 'reports', 'sale', 'salesReturn', 'setup', 'stock']);
+    expect(Object.keys(api).sort()).toEqual(['app', 'auth', 'brands', 'catalogue', 'categories', 'khata', 'prefs', 'reports', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
     expect(Object.keys(api.auth).sort()).toEqual(['login', 'logout', 'me', 'regenerateRecoveryCode', 'resetOwnerPassword']);
     // one function per channel, nothing else
     const functions = Object.values(api).flatMap((ns) => Object.values(ns as Record<string, unknown>));

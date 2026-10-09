@@ -32,9 +32,9 @@ export interface Shop {
 }
 
 /** A set-up shop: owner and staff users, demo products and customers. Nobody is signed in. */
-export async function makeShop(options: { hasher?: PasswordHasher; prefsPath?: string | null } = {}): Promise<Shop> {
+export async function makeShop(options: { hasher?: PasswordHasher; prefsPath?: string | null; schedule?: (job: () => void) => void } = {}): Promise<Shop> {
   const hasher = options.hasher ?? fastHasher;
-  const runtime = await createRuntime({ dbPath: ':memory:', prefsPath: options.prefsPath ?? null, hasher });
+  const runtime = await createRuntime({ dbPath: ':memory:', prefsPath: options.prefsPath ?? null, hasher, ...(options.schedule ? { schedule: options.schedule } : {}) });
   const setup = await runtime.handlers['setup:createShop']({ ...OWNER });
 
   const info = loadDeviceInfo(runtime.db);

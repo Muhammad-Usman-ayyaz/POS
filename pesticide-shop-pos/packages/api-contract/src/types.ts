@@ -1,4 +1,4 @@
-import type { BatchStockView, ErrorParams, DomainErrorCode, SaleResult, SalesReturnResult } from '@pos/core';
+import type { BatchStockView, Brand, CatalogueList, Category, ErrorParams, DomainErrorCode, NewRow, Product, ProductGroup, SaleResult, SalesReturnResult, Supplier } from '@pos/core';
 
 // What the shell sends back. Plain data only: it crosses a process boundary (structured clone).
 
@@ -47,13 +47,41 @@ export interface ProfitDay {
   profit: number;
 }
 
-export type { SaleResult, SalesReturnResult };
+export type { CatalogueList, SaleResult, SalesReturnResult };
 
 /**
  * A sale as the screen gets it. Each line carries the cost price of its batch (profit uses it), which only the OWNER may see:
  * for anyone else the shell leaves `cost_price` out of every line.
  */
 export type SaleView = Omit<SaleResult, 'items'> & { items: (Omit<SaleResult['items'][number], 'cost_price'> & { cost_price?: number })[] };
+
+// ---- catalogue answers (plain data; none carries a cost: cost is only in `catalogue:list` rows, for the owner) ----
+export type SizeRow = Product;
+export interface CreateGroupResult {
+  group: NewRow<ProductGroup>;
+  sizes: NewRow<Product>[];
+}
+export interface GroupResult {
+  group: ProductGroup;
+  sizes: Product[];
+}
+export interface AddSizeResult {
+  size: NewRow<Product>;
+  sizes: Product[];
+}
+export type MovedSize = Product;
+export interface ReceiveResult {
+  purchase_id: string;
+  /** Paisa. */
+  total: number;
+  batch_ids: string[];
+}
+export type ListedSupplier = Supplier;
+export type ListedCategory = Category;
+export type ListedBrand = Brand;
+export type CreatedSupplier = NewRow<Supplier>;
+export type CreatedCategory = NewRow<Category>;
+export type CreatedBrand = NewRow<Brand>;
 
 /** An input problem: which field, and what is wrong. For showing next to the field. */
 export interface InputIssue {

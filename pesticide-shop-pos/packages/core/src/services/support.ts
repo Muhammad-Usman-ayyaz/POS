@@ -169,7 +169,7 @@ export function pickOrCreateBatch(
       const kind = existing.cost_price !== want.cost_price ? 'cost' : 'expiry';
       throw new DomainError(
         'BATCH_CONFLICT',
-        `batch ${want.batch_no} already exists with expiry ${existing.expiry_date} and cost ${existing.cost_price}`,
+        `batch ${want.batch_no} already exists with a different ${kind}`, // no amounts here: they are in params, and a cost is the owner's information
         { kind, batchNo: want.batch_no, existingExpiry: existing.expiry_date, newExpiry: want.expiry_date, existingCost: existing.cost_price, newCost: want.cost_price },
       );
     }

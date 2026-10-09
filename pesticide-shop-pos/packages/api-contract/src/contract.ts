@@ -1,8 +1,21 @@
-import { IsoDate, NonNegPaisa, PaymentMethod, PriceType, Qty } from '@pos/core';
+import { BaseUnit, Flag, IsoDate, NonNegPaisa, PaymentMethod, PriceType, Qty, TaxRateBp } from '@pos/core';
 import { z } from 'zod';
 import type {
+  AddSizeResult,
   AppState,
   BatchView,
+  CatalogueList,
+  CreateGroupResult,
+  CreatedBrand,
+  CreatedCategory,
+  CreatedSupplier,
+  GroupResult,
+  ListedBrand,
+  ListedCategory,
+  ListedSupplier,
+  MovedSize,
+  ReceiveResult,
+  SizeRow,
   Language,
   ProfitDay,
   RecoveryCodeResult,
@@ -42,6 +55,75 @@ export const LanguageSchema = z.enum(['en', 'ur']);
 const Name = z.string().trim().min(1, 'required').max(80);
 
 const nothing = z.strictObject({});
+
+// ---------- the product catalogue ----------
+// No actor_id, created_by or approved_by anywhere: the shell takes the user from the session. `include_cost` is not an input either:
+// the shell adds each size's cost to a list only when the signed-in user is the owner.
+
+const Label = z.string().trim().max(40);
+const Code = z.string().trim().max(60).nullish();
+const Notes = z.string().trim().max(500);
+const FreeName = z.string().trim().min(1, 'required').max(80);
+
+export const SizeInputSchema = z.strictObject({
+  pack_label: Label.optional(),
+  sku: Code,
+  barcode: Code,
+  base_unit: BaseUnit,
+  /** Base units per pack (a 1 L bottle is 1000 ml). */
+  pack_size: z.number().int().positive(),
+  allow_loose: Flag.optional(),
+  /** Paisa per pack, tax included. */
+  retail_price: NonNegPaisa,
+  wholesale_price: NonNegPaisa,
+  tax_rate_bp: TaxRateBp.optional(),
+  /** Base units. The screen shows packs and converts. */
+  min_stock: z.number().int().nonnegative().optional(),
+});
+
+export const SizeChangesSchema = z.strictObject({
+  pack_label: Label.optional(),
+  sku: Code,
+  barcode: Code,
+  base_unit: BaseUnit.optional(),
+  pack_size: z.number().int().positive().optional(),
+  allow_loose: Flag.optional(),
+  retail_price: NonNegPaisa.optional(),
+  wholesale_price: NonNegPaisa.optional(),
+  tax_rate_bp: TaxRateBp.optional(),
+  min_stock: z.number().int().nonnegative().optional(),
+});
+
+export const CatalogueListInput = z.strictObject({
+  query: z.string().max(100).optional(),
+  filter: z.enum(['all', 'low', 'near_expiry', 'expired']).optional(),
+  include_inactive: z.boolean().optional(),
+  limit: z.number().int().min(1).max(1000).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+
+/** A new supplier, category or brand typed into a form. At least one name. */
+const QuickName = { name_en: FreeName.optional(), name_ur: FreeName.optional() };
+const hasAName = (i: { name_en?: string | undefined; name_ur?: string | undefined }) => i.name_en !== undefined || i.name_ur !== undefined;
+
+export const ReceiveStockInput = z.strictObject({
+  supplier_id: Id,
+  supplier_invoice_no: z.string().trim().min(1).max(60).optional(),
+  purchase_date: IsoDate.optional(),
+  items: z
+    .array(
+      z.strictObject({
+        product_id: Id,
+        batch_no: z.string().trim().min(1).max(60),
+        expiry_date: IsoDate,
+        /** Base units (the screen turns packs into base units). */
+        qty: Qty,
+        /** Paisa per pack. */
+        cost_price: NonNegPaisa,
+      }),
+    )
+    .min(1),
+});
 
 const SaleLine = z.strictObject({
   product_id: Id,
@@ -112,6 +194,52 @@ export const contract = {
   },
   'stock:writeOff': { input: z.strictObject({ batch_id: Id, qty: Qty, kind: z.enum(['damage', 'expired']) }) },
 
+  'catalogue:list': { input: CatalogueListInput },
+  'catalogue:createGroup': {
+    input: z
+      .strictObject({
+        name_en: FreeName.optional(),
+        name_ur: FreeName.optional(),
+        category_id: Id.nullish(),
+        brand_id: Id.nullish(),
+        notes: Notes.nullish(),
+        sizes: z.array(SizeInputSchema).max(40).optional(),
+      })
+      .refine(hasAName, { message: 'Enter an English or an Urdu name' }),
+  },
+  'catalogue:updateGroup': {
+    input: z.strictObject({
+      group_id: Id,
+      name_en: FreeName.nullable().optional(),
+      name_ur: FreeName.nullable().optional(),
+      category_id: Id.nullable().optional(),
+      brand_id: Id.nullable().optional(),
+      notes: Notes.nullable().optional(),
+    }),
+  },
+  'catalogue:addSize': {
+    input: z.strictObject({ group_id: Id, size: SizeInputSchema, existing_size_label: Label.optional() }),
+  },
+  'catalogue:updateSize': { input: z.strictObject({ product_id: Id, changes: SizeChangesSchema }) },
+  'catalogue:setSizeActive': { input: z.strictObject({ id: Id, is_active: z.boolean() }) },
+  'catalogue:setGroupActive': { input: z.strictObject({ id: Id, is_active: z.boolean() }) },
+  'catalogue:moveSize': {
+    input: z.strictObject({ product_id: Id, to_group_id: Id, pack_label: Label.optional(), existing_size_label: Label.optional() }),
+  },
+
+  'stock:receive': { input: ReceiveStockInput },
+
+  'suppliers:list': { input: nothing },
+  'suppliers:create': {
+    input: z
+      .strictObject({ ...QuickName, phone: z.string().trim().max(40).optional(), address: z.string().trim().max(200).optional() })
+      .refine(hasAName, { message: 'Enter an English or an Urdu name' }),
+  },
+  'categories:list': { input: nothing },
+  'categories:create': { input: z.strictObject(QuickName).refine(hasAName, { message: 'Enter an English or an Urdu name' }) },
+  'brands:list': { input: nothing },
+  'brands:create': { input: z.strictObject(QuickName).refine(hasAName, { message: 'Enter an English or an Urdu name' }) },
+
   'khata:setOpeningBalance': {
     input: z.strictObject({ customer_id: Id, amount: z.number().int().refine((n) => n !== 0, { message: 'cannot be 0' }) }),
   },
@@ -143,6 +271,21 @@ export interface Outputs {
   'stock:openingStock': { batch_id: string };
   'stock:adjust': null;
   'stock:writeOff': null;
+  'catalogue:list': CatalogueList;
+  'catalogue:createGroup': CreateGroupResult;
+  'catalogue:updateGroup': GroupResult;
+  'catalogue:addSize': AddSizeResult;
+  'catalogue:updateSize': SizeRow;
+  'catalogue:setSizeActive': null;
+  'catalogue:setGroupActive': null;
+  'catalogue:moveSize': MovedSize;
+  'stock:receive': ReceiveResult;
+  'suppliers:list': ListedSupplier[];
+  'suppliers:create': CreatedSupplier;
+  'categories:list': ListedCategory[];
+  'categories:create': CreatedCategory;
+  'brands:list': ListedBrand[];
+  'brands:create': CreatedBrand;
   'khata:setOpeningBalance': null;
   'reports:profitByDay': ProfitDay[];
 }

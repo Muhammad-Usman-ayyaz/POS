@@ -591,7 +591,7 @@ export function createCatalogueService(deps: ServiceDeps) {
     },
 
     /**
-     * Moves a size into another product, for example to join "Insecticide 500ml" and "Insecticide 1L" into one
+     * Moves a size into another product, for example to join "Product 500ml" and "Product 1L" into one
      * product. The sizes must share a base unit and labels must stay unique. The size's names are rewritten, and
      * if its old product is left with no sizes that product is switched off. One transaction. Audited: one size_moved row, plus a
      * size_changed row if the size already in the target had to be given a label. Owner only.
