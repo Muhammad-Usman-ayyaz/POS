@@ -6,7 +6,7 @@ import type {
   Language,
   ProfitDay,
   RecoveryCodeResult,
-  SaleResult,
+  SaleView,
   SalesReturnResult,
   SessionUser,
   SetupResult,
@@ -137,7 +137,7 @@ export interface Outputs {
   'auth:regenerateRecoveryCode': RecoveryCodeResult;
   'auth:resetOwnerPassword': RecoveryCodeResult;
   'prefs:setLanguage': Language;
-  'sale:create': SaleResult;
+  'sale:create': SaleView;
   'salesReturn:create': SalesReturnResult;
   'stock:batchesOf': BatchView[];
   'stock:openingStock': { batch_id: string };

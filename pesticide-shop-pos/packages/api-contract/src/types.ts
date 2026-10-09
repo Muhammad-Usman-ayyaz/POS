@@ -49,6 +49,12 @@ export interface ProfitDay {
 
 export type { SaleResult, SalesReturnResult };
 
+/**
+ * A sale as the screen gets it. Each line carries the cost price of its batch (profit uses it), which only the OWNER may see:
+ * for anyone else the shell leaves `cost_price` out of every line.
+ */
+export type SaleView = Omit<SaleResult, 'items'> & { items: (Omit<SaleResult['items'][number], 'cost_price'> & { cost_price?: number })[] };
+
 /** An input problem: which field, and what is wrong. For showing next to the field. */
 export interface InputIssue {
   path: string;

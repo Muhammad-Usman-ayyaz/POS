@@ -117,6 +117,16 @@ describe('enforced in the handlers', () => {
       expect(shop.count('audit_log')).toBe(shop.count('audit_log')); // no override, so no override audit row
     });
 
+    it('the reply to a staff sale carries no cost: no cost_price on any line (it used to), while the owner\'s own sale keeps it for profit', async () => {
+      const sold = await h()['sale:create']({ paid_amount: 50_000, lines: [{ product_id: product, qty: 1000 }] });
+      expect(sold.items[0]).toMatchObject({ product_id: product, qty: 1000, unit_price: 50_000 });
+      expect(JSON.stringify(sold)).not.toMatch(/cost/i);
+      await shop.signOut();
+      await shop.signInAs('owner');
+      const ownersSale = await h()['sale:create']({ paid_amount: 50_000, lines: [{ product_id: product, qty: 1000 }] });
+      expect(ownersSale.items[0]!.cost_price).toBe(40_000); // the demo bottle's batch cost
+    });
+
     it('CAN see stock, but the cost is left out', async () => {
       const batches = await h()['stock:batchesOf']({ productId: product });
       expect(batches.length).toBeGreaterThan(0);

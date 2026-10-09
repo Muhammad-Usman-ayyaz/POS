@@ -250,7 +250,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       if (input.credit_override) requireCapability(user, 'credit.override');
 
       const { credit_override, lines, ...rest } = input;
-      return services().sale.create({
+      const sold = services().sale.create({
         ...rest,
         created_by: user.id,
         // The owner asked for this and is the signed-in user, so they are the approver. A staff session never gets here.
@@ -260,6 +260,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
           ...(price_override ? { price_override: { unit_price: price_override.unit_price, approved_by: user.id } } : {}),
         })),
       });
+      // Each line carries its batch's cost price (for profit). Only the owner may see it.
+      return user.role === 'owner' ? sold : { ...sold, items: sold.items.map(({ cost_price: _cost, ...line }) => line) };
     },
 
     'salesReturn:create': async (input) => {
