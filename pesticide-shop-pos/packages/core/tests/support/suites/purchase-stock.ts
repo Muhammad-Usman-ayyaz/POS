@@ -160,6 +160,49 @@ export function definePurchaseTests(make: WorldFactory): void {
       });
     });
 
+    describe('the receipt date: a past day is allowed and audited, a future day is refused', () => {
+      const audited = () => w.rows('audit_log').filter((a) => a.action === 'receipt_backdated');
+
+      it('yesterday: accepted, stored with that date, and one audit row says who, which day, and the day it was entered', () => {
+        const r = purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(-1), items: [item()] });
+        expect(r.purchase.purchase_date).toBe(w.day(-1));
+        expect(audited()).toEqual([expect.objectContaining({ user_id: ID.owner, table_name: 'purchases', row_id: r.purchase.id })]);
+        expect(JSON.parse(audited()[0]!.details as string)).toEqual({ purchase_date: w.day(-1), entered_on: w.today, supplier_id: ID.supplier, total: 210_000 });
+      });
+
+      it('a long time ago is accepted too', () => {
+        const r = purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(-400), items: [item()] });
+        expect(r.purchase.purchase_date).toBe(w.day(-400));
+        expect(audited()).toHaveLength(1);
+      });
+
+      it('today (given or left out) leaves no audit row', () => {
+        purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.today, items: [item()] });
+        purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, items: [item({ batch_no: 'N2' })] });
+        expect(audited()).toHaveLength(0);
+      });
+
+      it('tomorrow is refused with FUTURE_DATE (saying which dates), and nothing at all is written', () => {
+        const before = w.snapshot();
+        const e = errorOf(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(1), items: [item()] }));
+        expect(e.code).toBe('FUTURE_DATE');
+        expect(e.params).toEqual({ date: w.day(1), today: w.today });
+        expect(w.snapshot()).toEqual(before);
+      });
+
+      it('a far-future date is refused too', () => {
+        expect(codeOf(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(365), items: [item()] }))).toBe('FUTURE_DATE');
+      });
+
+      it('a failure after the audit row would be written undoes the audit row too', () => {
+        const before = w.snapshot();
+        w.failOnInsert('audit_log', 1);
+        expect(() => purchase.record({ supplier_id: ID.supplier, created_by: ID.owner, purchase_date: w.day(-1), items: [item()] })).toThrow('injected failure');
+        w.clearFailure();
+        expect(w.snapshot()).toEqual(before);
+      });
+    });
+
     it('a conflict on the SECOND item undoes the first item too', () => {
       const before = w.snapshot();
       expect(

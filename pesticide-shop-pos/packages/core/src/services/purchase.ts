@@ -10,7 +10,7 @@ import { activeUser, liveProduct, liveSupplier, parseInput, pickOrCreateBatch, r
 export const PurchaseInput = z.object({
   supplier_id: Id,
   supplier_invoice_no: z.string().min(1).optional(),
-  /** Defaults to today. */
+  /** The day the goods arrived. Defaults to today. A PAST day is allowed (yesterday's delivery, entered today) and is audited; a future day is refused. */
   purchase_date: IsoDate.optional(),
   /** Paisa off the whole purchase. */
   discount: NonNegPaisa.default(0),
@@ -57,6 +57,11 @@ export function createPurchaseService(deps: ServiceDeps) {
 
       return deps.uow.run((tx) => {
         const now = nowIso(deps.clock);
+        const today = todayUtc(deps.clock);
+        // A receipt may be dated in the past (the owner enters yesterday's delivery), never in the future.
+        if (input.purchase_date !== undefined && input.purchase_date > today) {
+          throw new DomainError('FUTURE_DATE', `a receipt cannot be dated in the future: ${input.purchase_date} is after today (${today})`, { date: input.purchase_date, today });
+        }
         activeUser(tx, input.created_by);
         liveSupplier(tx, input.supplier_id);
 
@@ -80,7 +85,7 @@ export function createPurchaseService(deps: ServiceDeps) {
           id: deps.ids.newId(),
           supplier_id: input.supplier_id,
           supplier_invoice_no: input.supplier_invoice_no ?? null,
-          purchase_date: input.purchase_date ?? todayUtc(deps.clock),
+          purchase_date: input.purchase_date ?? today,
           discount: input.discount,
           total,
           paid_amount: paid,
@@ -134,6 +139,19 @@ export function createPurchaseService(deps: ServiceDeps) {
           payment_id = payment.id;
           tx.ledger.insert(
             rows.ledger({ party_type: 'supplier', party_id: input.supplier_id, entry_type: 'payment', amount_delta: -paid, ref_type: 'payment', ref_id: payment.id, entry_date: now, created_by: input.created_by }),
+          );
+        }
+
+        // A receipt dated on another day than today is written to the audit log: who, which day it says, and what it was for.
+        if (purchase.purchase_date !== today) {
+          tx.audit.insert(
+            rows.audit({
+              user_id: input.created_by,
+              action: 'receipt_backdated',
+              table_name: 'purchases',
+              row_id: purchase.id,
+              details: { purchase_date: purchase.purchase_date, entered_on: today, supplier_id: input.supplier_id, total },
+            }),
           );
         }
 

@@ -18,6 +18,7 @@ No screen shows these messages yet: the Products screen is built in Phase 4. The
 | `GROUP_INACTIVE` | This product is switched off | Switch the product on first, then its sizes. | یہ پروڈکٹ بند ہے | پہلے پروڈکٹ کو چالو کریں، پھر اس کے سائز۔ | Products screen: adding a size to, moving a size into, or switching on a size of a product that is switched off (`addSize`, `moveSize`, `setSizeActive`). | |
 | `PACK_LABEL_REQUIRED` | Every size needs a label | Write the size on each one, for example 500 ml or 1 L, so they can be told apart. | ہر سائز کا لیبل ضروری ہے | ہر سائز پر لکھیں، مثلاً 500 ml یا 1 L، تاکہ ان میں فرق کیا جا سکے۔ | Products screen: a product with two or more sizes where one has no label: creating it, adding a second size without giving the first a label, or clearing a label (`createGroup`, `addSize`, `updateSize`, `moveSize`). | |
 | `PACK_SIZE_LOCKED` | This size already has stock records | Its pack size and unit can no longer change. Add a new size instead. | اس سائز کا اسٹاک ریکارڈ موجود ہے | اس کا پیک سائز اور پیمانہ اب تبدیل نہیں ہو سکتا۔ اس کے بجائے نیا سائز شامل کریں۔ | Products screen: changing the pack size or unit of a size that already has batches (`updateSize`). Must be shown with the next step (add a new size instead). | |
+| `FUTURE_DATE` | The date {date} is after today | Pick today or an earlier day. | تاریخ {date} آج کے بعد کی ہے | آج کی یا اس سے پہلے کی تاریخ چنیں۔ | Receive stock: the receipt date is in the future. | |
 
 No existing Urdu message was changed in this work.
 
