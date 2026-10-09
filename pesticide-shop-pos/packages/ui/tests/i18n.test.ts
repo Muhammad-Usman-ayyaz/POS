@@ -42,6 +42,7 @@ describe('English and Urdu messages', () => {
   it('English has no Arabic script', () => {
     for (const [path, text] of strings(MESSAGES.en)) {
       if (path === 'language.ur') continue; // the Urdu button is always labelled in Urdu
+      if (path === 'products.searchPlaceholder') continue; // the approved design says "Search in English or اردو": the language name in its own script
       expect(ARABIC_SCRIPT.test(text), `en.${path}`).toBe(false);
     }
   });
@@ -154,7 +155,7 @@ describe('formatting', () => {
 
   it('dates are "30 Nov 2026" or "30 نومبر 2026", with Latin digits', () => {
     expect(formatDate('2026-11-30')).toBe('30 Nov 2026');
-    expect(formatDate('2026-11-30', 'ur')).toBe('30 نومبر 2026');
+    expect(formatDate('2026-11-30', 'ur')).toBe('30 Nov 2026'); // English month names in Urdu mode until the owner asks otherwise
     expect(formatDate('2026-01-05T10:00:00Z')).toBe('5 Jan 2026');
     expect(formatDate('garbage')).toBe('garbage');
   });

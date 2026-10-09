@@ -21,7 +21,13 @@ app.setName('Pesticide Club POS');
 // environment variables that redirect the database and the settings folder, is removed from the bundle.
 if (__POS_DEV_TOOLS__ && !app.isPackaged) {
   // The screenshot tool renders in software so captures are steady and do not depend on the graphics card.
-  if (process.env['POS_SCREENSHOT_DIR']) app.disableHardwareAcceleration();
+  if (process.env['POS_SCREENSHOT_DIR']) {
+    app.disableHardwareAcceleration();
+    // And the window must keep painting when it is covered, minimised or the screen is off, or captures can wait for ever.
+    app.commandLine.appendSwitch('disable-renderer-backgrounding');
+    app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+    app.commandLine.appendSwitch('disable-background-timer-throttling');
+  }
   // A separate data folder, used by the screenshot tool so it never touches your real settings.
   if (process.env['POS_USER_DATA']) app.setPath('userData', resolve(process.env['POS_USER_DATA']));
 }
@@ -106,7 +112,7 @@ async function start(): Promise<void> {
       window.show();
       const { runScreenshots } = await import('./screenshots.js');
       try {
-        await runScreenshots(window, shotDir, `${width}x${height}`);
+        await runScreenshots(window, shotDir, `${width}x${height}`, runtime.db);
       } catch (error) {
         console.error('SCREENSHOTS failed:', error);
         process.exitCode = 1;

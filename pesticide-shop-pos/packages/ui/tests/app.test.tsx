@@ -33,6 +33,8 @@ function fakeShell(initial: Partial<AppState> = {}) {
       state = { ...state, phase: 'ready', user };
       return { ok: true, data: user };
     },
+    'catalogue:list': () => ({ ok: true, data: { hits: [], total: 0, counts: { products: 0, low: 0, near_expiry: 0, expired: 0 } } }),
+    'categories:list': () => ({ ok: true, data: [] }),
     'auth:logout': () => {
       state = { ...state, phase: 'needs-login', user: null };
       return { ok: true, data: null };
@@ -217,7 +219,9 @@ describe('the signed-in layout', () => {
     expect(screen.getByText('This screen is built in Phase 5.')).toBeTruthy();
     await user().click(within(nav).getByRole('link', { name: 'Products' }));
     expect(await screen.findByRole('heading', { name: 'Products and stock' })).toBeTruthy();
-    expect(screen.getByText('This screen is built in Phase 4.')).toBeTruthy();
+    expect(await screen.findByText('No products yet')).toBeTruthy(); // the real Products screen, not a placeholder
+    await user().click(within(nav).getByRole('link', { name: 'Purchases' }));
+    expect(await screen.findByText('This screen is built in Phase 4.')).toBeTruthy();
   });
 
   it('marks the page you are on in the sidebar', async () => {

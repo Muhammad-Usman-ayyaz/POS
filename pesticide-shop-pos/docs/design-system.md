@@ -35,7 +35,7 @@ Tailwind v4 is used: the `@theme` block in that CSS file **is** the Tailwind con
 
 ## Numbers stay left to right
 
-Amounts, quantities, dates and document numbers use the `.num` class (or the `<Num>` component): `direction: ltr; unicode-bidi: isolate`, Plex, tabular digits. In text built as a plain string (an error message, a toast) the helper `ltr()` wraps them in Unicode left-to-right isolate marks instead. Numeric table columns are right-aligned, which means **end**-aligned in right-to-left.
+Amounts, quantities, dates and document numbers use the `.num` class (or the `<Num>` component): `direction: ltr; unicode-bidi: isolate`, Plex, tabular digits. In text built as a plain string (an error message, a toast) the helper `ltr()` wraps them in Unicode left-to-right isolate marks instead. Numeric table columns are right-aligned, which means **end**-aligned in right-to-left. Text that has Urdu *words* in it ("14 پیک", "2 پیک اور 250 کھلا") is NOT forced left to right: the isolate scrambles it (the month ends up after the year). Only pure numbers and amounts are isolated. The Products screen keeps these as plain text in Urdu.
 
 ## Spacing, size and shape
 
@@ -70,6 +70,10 @@ Under `prefers-reduced-motion: reduce` **all** animation and transitions are swi
 - All text comes from `packages/ui/src/i18n` (`messages/en.ts`, `messages/ur.ts`). The two files must have the same shape; the compiler checks it. Have a native Urdu speaker review the wording before go-live.
 - `packages/ui/src/i18n/errors.ts` is the one place that turns an error code into words. It has an entry for every `DomainErrorCode`, in English and Urdu, each with what went wrong and what to do next, built from the error's params ("Only 3 packs left in this batch"). The server never sends text to show.
 - `<ErrorNotice error={e} />` shows an error inline (red box; amber with `tone="warning"`). `useToast().showError(e)` shows the same message as a toast that goes away after six seconds.
+
+## Products and stock screen
+
+`packages/ui/src/pages/products/`. Built from `docs/design/Products with sizes.png` (the PNGs are the only design source; there is no .dc.html). A product row opens into its sizes. The product row says "N sizes", the whole stock in litres or kg, the **Retail range** and a badge for each of low, near expiry and expired sizes. A size row has stock (packs), cost (owner only), retail and wholesale (both "incl. tax"), tax, next expiry and its badge; "Low stock · min 5" is in packs. The chips count sizes. The Edit button is 44 px. Staff get no Cost and Actions columns and no Add product, Receive stock or Edit. Search waits 150 ms after typing stops (`useDebouncedSearch`). It has loading, empty, nothing-found and error states.
 
 ## Checking the look
 

@@ -4,6 +4,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BrowserWindow } from 'electron';
+import type { Db } from '@pos/db-sqlite';
 
 interface PageReport {
   name: string;
@@ -49,16 +50,41 @@ const MEASURE = `(() => {
   };
 })()`;
 
-export async function runScreenshots(window: BrowserWindow, outDir: string, size: string): Promise<void> {
+/** The demo shop (products, batches, customers) and a staff login, written straight into the throw-away database. */
+async function seedForScreens(db: Db): Promise<void> {
+  const [{ hash }, { addDays, systemClock, todayUtc }, { createUser, loadDeviceInfo }, { findOwnerId, seedDemoData }] = await Promise.all([
+    import('@node-rs/argon2'),
+    import('@pos/core'),
+    import('@pos/db-sqlite'),
+    import('@pos/db-sqlite/demo'),
+  ]);
+  const info = loadDeviceInfo(db);
+  const ownerId = findOwnerId(db);
+  if (!info || !ownerId) throw new Error('screenshots: the shop was not set up');
+  createUser(db, info.scope, { name: 'Salesman', username: 'staff', passwordHash: await hash('shots-staff-secret-1'), role: 'staff' });
+  seedDemoData(db, info.scope, ownerId, addDays(todayUtc(systemClock), 0));
+}
+
+export async function runScreenshots(window: BrowserWindow, outDir: string, size: string, db: Db): Promise<void> {
   const dir = join(outDir, size);
   mkdirSync(dir, { recursive: true });
   const js = <T>(code: string): Promise<T> => window.webContents.executeJavaScript(code, true) as Promise<T>;
   // A picture of the page through the DevTools protocol (Electron's own capturePage fails on some graphics set-ups).
   window.webContents.debugger.attach('1.3');
   const capture = async (): Promise<Buffer> => {
-    const result = (await window.webContents.debugger.sendCommand('Page.captureScreenshot', { format: 'png' })) as { data: string };
-    return Buffer.from(result.data, 'base64');
+    // A capture occasionally never answers (the page has no frame to give); ask again rather than wait for ever.
+    for (let attempt = 1; ; attempt++) {
+      const answer = await Promise.race([
+        window.webContents.debugger.sendCommand('Page.captureScreenshot', { format: 'png' }) as Promise<{ data: string }>,
+        sleep(8000).then(() => null),
+      ]);
+      if (answer) return Buffer.from(answer.data, 'base64');
+      console.log(`screenshots ${size}: the capture did not answer (attempt ${attempt})`);
+      if (attempt >= 4) throw new Error('the page never produced a picture');
+      window.webContents.invalidate();
+    }
   };
+  const started = Date.now();
   const problems: string[] = [];
   const reports: PageReport[] = [];
 
@@ -85,6 +111,9 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     js(`(() => { const el = document.querySelector(${JSON.stringify(selector)});
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(value)});
       el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  const clickText = (selector: string, text: string) =>
+    js(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => e.textContent.trim().startsWith(${JSON.stringify(text)}));
+      if (!el) throw new Error('no ' + ${JSON.stringify(selector)} + ' starting with ' + ${JSON.stringify(text)}); el.click(); })()`);
   const setLanguage = async (language: 'en' | 'ur') => {
     await click(`[role=radio][lang=${language}]`);
     await js(`new Promise((r) => setTimeout(r, 300))`);
@@ -95,6 +124,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   };
 
   const shot = async (name: string): Promise<void> => {
+    console.log(`screenshots ${size}: ${name} (+${Math.round((Date.now() - started) / 1000)}s)`);
     await sleep(900); // let the fade-in animations finish
     writeFileSync(join(dir, `${name}.png`), await capture());
     const measured = await js<Omit<PageReport, 'name'>>(MEASURE);
@@ -111,6 +141,20 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     const consoleLines = problems.length ? problems.join('\n') : '(nothing)';
     console.error(`SCREENSHOTS ${size} failed: ${String(error)}\nPage text: ${body}\nPage console:\n${consoleLines}`);
     throw error;
+  }
+
+  /** The Products screen as the signed-in user sees it: folded, every product opened, and the Low stock filter. */
+  async function productsScreens(language: 'en' | 'ur', prefix: string): Promise<void> {
+    await go('/pos'); // leave and come back, so every pass starts folded
+    await go('/products');
+    await waitFor('[data-group]');
+    await shot(`${prefix}-products-${language}`);
+    await clickText('button', language === 'en' ? 'Expand all' : 'سب کھولیں');
+    await waitFor('[data-size]');
+    await shot(`${Number(prefix) + 1}-products-expanded-${language}`);
+    await clickText('button[aria-pressed]', language === 'en' ? 'Low stock' : 'کم اسٹاک');
+    await js(`new Promise((r) => setTimeout(r, 400))`);
+    await shot(`${Number(prefix) + 2}-products-low-${language}`);
   }
 
   async function walk(): Promise<void> {
@@ -134,19 +178,34 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await js(`new Promise((r) => setTimeout(r, 150))`);
   await click('[data-testid=recovery-continue]:not([disabled])');
   await waitFor('nav');
+  await seedForScreens(db);
 
   // ---------- the signed-in app, English ----------
-  for (const [index, page] of ['pos', 'products', 'customers'].entries()) {
+  for (const [index, page] of ['pos', 'customers'].entries()) {
     await go(`/${page}`);
-    await shot(`1${index}-${page}-en`);
+    await shot(`1${index * 2}-${page}-en`);
   }
+  await productsScreens('en', '11');
 
   // ---------- Urdu: right to left ----------
   await setLanguage('ur');
-  for (const [index, page] of ['pos', 'products', 'customers'].entries()) {
+  for (const [index, page] of ['pos', 'customers'].entries()) {
     await go(`/${page}`);
-    await shot(`2${index}-${page}-ur`);
+    await shot(`2${index * 2}-${page}-ur`);
   }
+  await productsScreens('ur', '21');
+  await setLanguage('en');
+
+  // ---------- the same screen for staff: no cost, no Receive stock, no Add, no Edit ----------
+  await click('button[title="Sign out"]');
+  await waitFor('#username');
+  await fill('#username', 'staff');
+  await fill('#password', 'shots-staff-secret-1');
+  await click('button[type=submit]');
+  await waitFor('nav');
+  await productsScreens('en', '40');
+  await setLanguage('ur');
+  await productsScreens('ur', '45');
   await setLanguage('en');
 
   // ---------- sign in ----------

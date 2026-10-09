@@ -31,3 +31,67 @@ No existing Urdu message was changed in this work.
 | Demo product group (Insecticide X in 250 ml, 500 ml, 1 L) | Insecticide X | کیڑے مار دوا ایکس | |
 
 The size labels ("250 ml", "500 ml", "1 L", "1 kg", "50 kg bag") are written in English letters on purpose and are added after the product name in both languages, for example "کیڑے مار دوا ایکس 500 ml". If the shop wants Urdu unit words in labels, say so before the Products screen is built.
+
+## New Urdu text on the Products screen (Phase 4, M4)
+
+The Products and stock screen is the first screen with its own text. Entries that are a function show the template: `${n}`, `${name}` and `${minPacks}` are filled in when the screen is drawn. The words for litres (`لیٹر`), kilograms (`کلو`) and pieces (`عدد`) are used for the total of a whole product. Please check in particular: the filter chip wording ("کم اسٹاک · 3 سائز"), the two badges for a size that is low on stock or near expiry, the heading for the price range, and whether "ٹیکس سمیت" reads naturally under the Retail and Wholesale headings.
+
+| Key | English | Urdu | Reviewer's correction |
+|---|---|---|---|
+| `products.products` | { title: 'Products and stock', subtitle: 'Stock is counted per batch. The Cost column is visible to the owner only.', phase: 4 } | { title: 'مصنوعات اور اسٹاک', subtitle: 'اسٹاک بیچ کے حساب سے گنا جاتا ہے۔ لاگت کا کالم صرف مالک کو نظر آتا ہے۔', phase: 4 } | |
+| `products.purchases` | { title: 'Purchases', subtitle: 'Receive stock from suppliers.', phase: 4 } | { title: 'خریداری', subtitle: 'سپلائرز سے اسٹاک وصول کریں۔', phase: 4 } | |
+| `products.customers` | { title: 'Customers & Khata', subtitle: 'Farmer accounts, payments and balances.', phase: 6 } | { title: 'گاہک اور کھاتہ', subtitle: 'کسانوں کے کھاتے، ادائیگیاں اور بقایا۔', phase: 6 } | |
+| `products.returns` | { title: 'Returns', subtitle: 'Goods brought back against a sale. The owner approves each return.', phase: 7 } | { title: 'واپسی', subtitle: 'فروخت کے مقابلے میں واپس آنے والا مال۔ ہر واپسی کی منظوری مالک دیتا ہے۔', phase: 7 } | |
+| `products.reports` | { title: 'Reports', subtitle: 'Sales, stock, Khata and profit.', phase: 8 } | { title: 'رپورٹس', subtitle: 'فروخت، اسٹاک، کھاتہ اور منافع۔', phase: 8 } | |
+| `products.settings` | { title: 'Settings', subtitle: 'Shop details, users and backups.', phase: 9 } | { title: 'ترتیبات', subtitle: 'دکان کی تفصیل، صارفین اور بیک اپ۔', phase: 9 } | |
+| `products.builtIn` | (phase: number) => `This screen is built in Phase ${phase}.` | (phase: number) => `یہ اسکرین مرحلہ ${phase} میں بنے گی۔` | |
+| `products.note` | 'The layout, sidebar and sign-in are finished. Nothing to show here yet.' | 'لے آؤٹ، سائیڈ بار اور لاگ ان مکمل ہیں۔ یہاں ابھی دکھانے کو کچھ نہیں۔' | |
+| `products.searchLabel` | 'Search products' | 'پروڈکٹ تلاش کریں' | |
+| `products.searchPlaceholder` | 'Search in English or اردو' | 'انگریزی یا اردو میں تلاش کریں' | |
+| `products.addProduct` | 'Add product' | 'نئی پروڈکٹ' | |
+| `products.receiveStock` | 'Receive stock' | 'اسٹاک وصول کریں' | |
+| `products.edit` | 'Edit' | 'ترمیم' | |
+| `products.editLabel` | (name: string) => `Edit ${name}` | (name: string) => `${name} میں ترمیم` | |
+| `products.expandAll` | 'Expand all' | 'سب کھولیں' | |
+| `products.collapseAll` | 'Collapse all' | 'سب بند کریں' | |
+| `products.showSizes` | (name: string) => `Show the sizes of ${name}` | (name: string) => `${name} کے سائز دکھائیں` | |
+| `products.hideSizes` | (name: string) => `Hide the sizes of ${name}` | (name: string) => `${name} کے سائز چھپائیں` | |
+| `products.filterLabel` | 'Filter' | 'فلٹر' | |
+| `products.filterAll` | (n: number) => `All · ${n} ${n === 1 ? 'product' : 'products'}` | (n: number) => `سب · ${n} پروڈکٹ` | |
+| `products.filterLow` | (n: number) => `Low stock · ${n} ${n === 1 ? 'size' : 'sizes'}` | (n: number) => `کم اسٹاک · ${n} سائز` | |
+| `products.filterNear` | (n: number) => `Near expiry · ${n} ${n === 1 ? 'size' : 'sizes'}` | (n: number) => `میعاد قریب · ${n} سائز` | |
+| `products.filterExpired` | (n: number) => `Expired · ${n} ${n === 1 ? 'size' : 'sizes'}` | (n: number) => `میعاد ختم · ${n} سائز` | |
+| `products.inclTax` | 'incl. tax' | 'ٹیکس سمیت' | |
+| `products.sizes` | (n: number) => `${n} ${n === 1 ? 'size' : 'sizes'}` | (n: number) => `${n} سائز` | |
+| `products.retailRange` | 'Retail range' | 'ریٹیل قیمت کی حد' | |
+| `products.singleSize` | 'Single size' | 'ایک سائز' | |
+| `products.unitLitres` | 'L' | 'لیٹر' | |
+| `products.unitKg` | 'kg' | 'کلو' | |
+| `products.unitPieces` | (n: number): string => (n === 1 ? 'piece' : 'pieces') | (_n: number): string => 'عدد' | |
+| `products.badgeLow` | (minPacks: string) => `Low stock · min ${minPacks}` | (minPacks: string) => `کم اسٹاک · کم از کم ${minPacks}` | |
+| `products.badgeNearExpiry` | 'Near expiry' | 'میعاد قریب' | |
+| `products.badgeExpired` | 'Expired' | 'میعاد ختم' | |
+| `products.groupLow` | (n: number) => `${n} ${n === 1 ? 'size' : 'sizes'} low` | (n: number) => `${n} سائز کم` | |
+| `products.groupNear` | (n: number) => `${n} ${n === 1 ? 'size' : 'sizes'} near expiry` | (n: number) => `${n} سائز کی میعاد قریب` | |
+| `products.groupExpired` | (n: number) => `${n} ${n === 1 ? 'size' : 'sizes'} expired` | (n: number) => `${n} سائز کی میعاد ختم` | |
+| `products.loading` | 'Loading products…' | 'پروڈکٹس لوڈ ہو رہی ہیں…' | |
+| `products.retry` | 'Try again' | 'دوبارہ کوشش کریں' | |
+| `products.emptyTitle` | 'No products yet' | 'ابھی کوئی پروڈکٹ نہیں' | |
+| `products.emptyOwner` | 'Add your first product to start counting stock.' | 'اسٹاک گننا شروع کرنے کے لیے پہلی پروڈکٹ شامل کریں۔' | |
+| `products.emptyStaff` | 'The owner has not added any products yet.' | 'مالک نے ابھی کوئی پروڈکٹ شامل نہیں کی۔' | |
+| `products.noMatchTitle` | 'Nothing matches' | 'کچھ نہیں ملا' | |
+| `products.noMatchHint` | 'Check the spelling, or clear the search and the filter.' | 'ہجے دیکھیں، یا تلاش اور فلٹر صاف کریں۔' | |
+| `products.clearFilters` | 'Clear search and filter' | 'تلاش اور فلٹر صاف کریں' | |
+| `products.columns.product` (table heading) | Product / size | پروڈکٹ / سائز | |
+| `products.columns.category` (table heading) | Category | قسم | |
+| `products.columns.stock` (table heading) | Stock | اسٹاک | |
+| `products.columns.cost` (table heading) | Cost | لاگت | |
+| `products.columns.retail` (table heading) | Retail | ریٹیل | |
+| `products.columns.wholesale` (table heading) | Wholesale | تھوک | |
+| `products.columns.tax` (table heading) | Tax | ٹیکس | |
+| `products.columns.nextExpiry` (table heading) | Next expiry | اگلی میعاد | |
+| `products.columns.actions` (table heading) | Actions | عمل | |
+
+## Question for the owner: month names in Urdu
+
+Dates are shown with English month names and Latin digits in Urdu mode too ("15 Aug 2028"), as in the approved design, so that no month name is mistranslated. Does the owner want Urdu month names instead (جنوری, فروری, مارچ, اپریل, مئی, جون, جولائی, اگست, ستمبر, اکتوبر, نومبر, دسمبر)? The Urdu names are already in `packages/ui/src/i18n/format.ts`; switching is one change in `formatDate`.

@@ -131,6 +131,12 @@ export function inspectExistingDatabase(path: string): ExistingDatabase {
 }
 
 /** `today` is `YYYY-MM-DD`. Expiry dates in the mockups that depend on today ("24 days", "17 days ago") are relative to it. */
+/** The id of the first owner, or null when there is none (dev tools: the screenshot tool seeds on top of a freshly set-up shop). */
+export function findOwnerId(db: Db): string | null {
+  const row = db.prepare("SELECT id FROM users WHERE role = 'owner' ORDER BY created_at LIMIT 1").get() as { id: string } | undefined;
+  return row?.id ?? null;
+}
+
 export function seedDemoData(db: Db, scope: DeviceScope, ownerId: string, today: string): DemoIds {
   const s = [scope.shop_id, scope.branch_id, scope.device_id] as const;
   const ids: DemoIds = { supplierId: randomUUID(), groups: {}, products: {}, batches: {}, customers: {} };
