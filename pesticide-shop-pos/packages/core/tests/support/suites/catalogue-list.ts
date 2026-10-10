@@ -25,6 +25,29 @@ export function defineCatalogueListTests(make: WorldFactory): void {
     const listed = (query = 'insecticide x', o: object = {}) => s.catalogue.list({ query, ...o }).hits[0]!;
     const sizeOf = (g: ReturnType<typeof listed>, label: string) => g.sizes.find((x) => x.pack_label === label)!;
 
+    describe('group_id: one product, for the edit screen', () => {
+      it('returns only that product, with all its sizes (switched-off ones too when asked), and nothing for an unknown id', () => {
+        const x = makeX();
+        makeX('Other product');
+        s.catalogue.setSizeActive({ actor_id: owner, id: x.sizes[2]!.id, is_active: false });
+        const one = s.catalogue.list({ group_id: x.group.id, include_inactive: true });
+        expect(one.hits).toHaveLength(1);
+        expect(one.hits[0]!.group.id).toBe(x.group.id);
+        expect(one.hits[0]!.sizes.map((z) => z.pack_label)).toEqual(['250 ml', '500 ml', '1 L']);
+        expect(s.catalogue.list({ group_id: x.group.id }).hits[0]!.sizes).toHaveLength(2); // without include_inactive the off size is left out
+        expect(s.catalogue.list({ group_id: uuid(404), include_inactive: true }).hits).toHaveLength(0);
+      });
+
+      it('each size says whether it has batches (the lock) and how much stock there is', () => {
+        const x = makeX();
+        batch(x.sizes[0]!.id, 750, 100, 'B1');
+        batch(x.sizes[0]!.id, 250, 200, 'B2');
+        const sizes = s.catalogue.list({ group_id: x.group.id, include_inactive: true }).hits[0]!.sizes;
+        expect(sizes[0]).toMatchObject({ batch_count: 2, stock_total: 1000 });
+        expect(sizes[1]).toMatchObject({ batch_count: 0, stock_total: 0 });
+      });
+    });
+
     describe('each size has its stock picture', () => {
       it('totals, expired stock, next expiry, next sellable expiry and batch counts, from its batches', () => {
         const x = makeX();

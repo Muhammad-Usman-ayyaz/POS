@@ -98,6 +98,8 @@ export const CatalogueListInput = z.strictObject({
   query: z.string().max(100).optional(),
   filter: z.enum(['all', 'low', 'near_expiry', 'expired']).optional(),
   include_inactive: z.boolean().optional(),
+  /** Only this product (the edit screen). */
+  group_id: Id.optional(),
   limit: z.number().int().min(1).max(1000).optional(),
   offset: z.number().int().min(0).optional(),
 });

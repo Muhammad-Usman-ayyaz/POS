@@ -76,12 +76,13 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     for (let attempt = 1; ; attempt++) {
       const answer = await Promise.race([
         window.webContents.debugger.sendCommand('Page.captureScreenshot', { format: 'png' }) as Promise<{ data: string }>,
-        sleep(8000).then(() => null),
+        sleep(2500).then(() => null),
       ]);
       if (answer) return Buffer.from(answer.data, 'base64');
       console.log(`screenshots ${size}: the capture did not answer (attempt ${attempt})`);
-      if (attempt >= 4) throw new Error('the page never produced a picture');
+      if (attempt >= 6) throw new Error('the page never produced a picture');
       window.webContents.invalidate();
+      await sleep(200);
     }
   };
   const started = Date.now();
@@ -157,6 +158,37 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await shot(`${Number(prefix) + 2}-products-low-${language}`);
   }
 
+  /** The product form as the owner sees it: a product with locked sizes, the lock message, a new size row, and an empty Add product. */
+  async function formScreens(language: 'en' | 'ur', prefix: number): Promise<void> {
+    await go('/pos');
+    await go('/products');
+    await waitFor('[data-group]');
+    // The first product that has an Edit button for the multi-size product (its name starts with the demo's product)
+    await js(`(() => { const links = [...document.querySelectorAll('a[href*="/edit"]')]; const link = links.find((a) => /Insecticide X|ایکس/.test(a.getAttribute('aria-label') || '')) || links[0]; link.click(); })()`);
+    await waitFor('[data-page=product-form] [data-size-key]');
+    await sleep(300);
+    await shot(`${prefix}-edit-product-${language}`);
+    await js(`document.querySelector('[data-size-key] button[id$="-pack"]').click()`);
+    await waitFor('[role=dialog]');
+    await shot(`${prefix + 1}-lock-message-${language}`);
+    await js(`[...document.querySelectorAll('[role=dialog] button')].at(-1).click()`);
+    await sleep(300);
+    await js(`document.querySelector('[data-page=product-form]').closest('main').scrollTo(0, 1e6)`);
+    await shot(`${prefix + 2}-new-size-${language}`);
+    await go('/products/new');
+    await waitFor('#name-en');
+    await js(`document.querySelector('button[type=submit]').click()`); // empty: every problem is shown next to its field
+    await sleep(300);
+    await shot(`${prefix + 4}-add-product-errors-${language}`);
+    await fill('#name-en', 'Sample sprayer');
+    await fill('[data-size-key] input[name=packSize]', '1000');
+    await fill('[data-size-key] input[name=retail]', '118');
+    await fill('[data-size-key] input[name=wholesale]', '110');
+    await fill('[data-size-key] input[name=tax]', '18');
+    await fill('[data-size-key] input[name=minPacks]', '5');
+    await shot(`${prefix + 3}-add-product-${language}`);
+  }
+
   async function walk(): Promise<void> {
   // ---------- first launch ----------
   await waitFor('#shopName');
@@ -186,6 +218,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await shot(`1${index * 2}-${page}-en`);
   }
   await productsScreens('en', '11');
+  await formScreens('en', 50);
 
   // ---------- Urdu: right to left ----------
   await setLanguage('ur');
@@ -194,6 +227,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await shot(`2${index * 2}-${page}-ur`);
   }
   await productsScreens('ur', '21');
+  await formScreens('ur', 60);
   await setLanguage('en');
 
   // ---------- the same screen for staff: no cost, no Receive stock, no Add, no Edit ----------
@@ -204,6 +238,9 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await click('button[type=submit]');
   await waitFor('nav');
   await productsScreens('en', '40');
+  await go('/products/new'); // staff cannot open it: they are sent back to the list
+  await waitFor('[data-group]');
+  await shot('48-staff-new-product-redirect-en');
   await setLanguage('ur');
   await productsScreens('ur', '45');
   await setLanguage('en');

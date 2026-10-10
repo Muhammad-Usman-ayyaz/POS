@@ -139,6 +139,8 @@ const ListInput = z.strictObject({
   /** Show only products with at least one size that is low on stock, near expiry, or has expired stock. */
   filter: z.enum(['all', 'low', 'near_expiry', 'expired']).default('all'),
   include_inactive: z.boolean().optional(),
+  /** Only this product (with all its sizes, switched-off ones too when include_inactive is set): the edit screen loads one product this way. */
+  group_id: Id.optional(),
   /** Add the cost of each size's next batch. Only the owner may ask: the caller (the shell) decides. */
   include_cost: z.boolean().default(false),
   limit: z.number().int().min(1).max(1000).optional(),
@@ -240,7 +242,7 @@ export function createCatalogueService(deps: ServiceDeps) {
       }
 
       const filter = input.filter;
-      const found = searchIndex(index, input.query, { ...(input.include_inactive === undefined ? {} : { include_inactive: input.include_inactive }) }).hits;
+      const found = searchIndex(index, input.query, { ...(input.include_inactive === undefined ? {} : { include_inactive: input.include_inactive }) }).hits.filter((hit) => input.group_id === undefined || hit.group.id === input.group_id);
       // Decide which products are on the list first (cheap), and only then build the full rows for the page that is returned.
       const selected: { hit: (typeof found)[number]; matched: string[] }[] = [];
       for (const hit of found) {

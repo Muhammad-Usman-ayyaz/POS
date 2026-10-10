@@ -7,6 +7,7 @@ import { NAV_ITEMS } from '../components/sidebar.js';
 import { I18nProvider, useI18n } from '../i18n/index.js';
 import { LoginPage } from '../pages/login-page.js';
 import { PlaceholderPage } from '../pages/placeholder-page.js';
+import { ProductFormPage } from '../pages/products/product-form-page.js';
 import { ProductsPage } from '../pages/products/products-page.js';
 import { ResetPage } from '../pages/reset-page.js';
 import { SetupPage } from '../pages/setup-page.js';
@@ -91,9 +92,9 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut }: { api: Api; 
         <Route element={<AppShell shopName={shopName} deviceText={deviceText} user={user} onSignOut={signOut} />}>
           <Route index element={<Navigate to="/pos" replace />} />
           <Route path="/products" element={<ProductsPage api={api} user={user} />} />
-          {/* The forms the Products screen links to are built next; until then they show the same placeholder. */}
-          <Route path="/products/new" element={<PlaceholderPage page="products" />} />
-          <Route path="/products/:groupId/edit" element={<PlaceholderPage page="products" />} />
+          <Route path="/products/new" element={<ProductFormPage api={api} user={user} />} />
+          <Route path="/products/:groupId/edit" element={<ProductFormPage api={api} user={user} />} />
+          {/* The Receive stock screen is built next; until then it shows the placeholder. */}
           <Route path="/purchases/receive" element={<PlaceholderPage page="purchases" />} />
           {NAV_ITEMS.filter(({ key }) => key !== 'products').map(({ key, path }) => (
             <Route key={key} path={path} element={<PlaceholderPage page={key} />} />

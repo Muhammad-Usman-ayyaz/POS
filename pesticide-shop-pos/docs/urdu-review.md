@@ -96,3 +96,74 @@ The Products and stock screen is the first screen with its own text. Entries tha
 ## Question for the owner: month names in Urdu
 
 Dates are shown with English month names and Latin digits in Urdu mode too ("15 Aug 2028"), as in the approved design, so that no month name is mistranslated. Does the owner want Urdu month names instead (جنوری, فروری, مارچ, اپریل, مئی, جون, جولائی, اگست, ستمبر, اکتوبر, نومبر, دسمبر)? The Urdu names are already in `packages/ui/src/i18n/format.ts`; switching is one change in `formatDate`.
+
+## New Urdu text on the Add / Edit product screen (Phase 4, M5)
+
+`${...}` parts are filled in when the screen is drawn. Please check in particular: the pack-size lock message (`lockTitle`, `lockBody`, `lockNextLead`, `lockNext`, the two buttons), because it explains why something cannot be changed; "کھلی فروخت" for loose sale and its `sellBy` line; the tax line `taxInfo` ("... میں ... ٹیکس شامل ہے", the price already includes the tax); and the word for a batch, "بیچ".
+
+| Key | English | Urdu | Reviewer's correction |
+|---|---|---|---|
+| `productForm.back` | 'Products' | 'پروڈکٹس' | |
+| `productForm.addTitle` | 'Add product' | 'نئی پروڈکٹ' | |
+| `productForm.editTitle` | (name: string) => `Edit product · ${name}` | (name: string) => `پروڈکٹ میں ترمیم · ${name}` | |
+| `productForm.subtitle` | 'The product holds the name and category. Each size has its own pack, barcode and prices.' | 'پروڈکٹ کا نام اور قسم ایک ہوتی ہے۔ ہر سائز کا اپنا پیک، بارکوڈ اور قیمتیں ہیں۔' | |
+| `productForm.cancel` | 'Cancel' | 'منسوخ کریں' | |
+| `productForm.save` | 'Save product' | 'پروڈکٹ محفوظ کریں' | |
+| `productForm.saving` | 'Saving…' | 'محفوظ ہو رہی ہے…' | |
+| `productForm.saved` | 'Product saved' | 'پروڈکٹ محفوظ ہو گئی' | |
+| `productForm.loading` | 'Loading product…' | 'پروڈکٹ لوڈ ہو رہی ہے…' | |
+| `productForm.notFound` | 'This product was not found' | 'یہ پروڈکٹ نہیں ملی' | |
+| `productForm.partial` | 'Some changes were saved before this problem. The form now shows what is saved.' | 'اس مسئلے سے پہلے کچھ تبدیلیاں محفوظ ہو چکی ہیں۔ فارم اب وہی دکھا رہا ہے جو محفوظ ہے۔' | |
+| `productForm.nameEn` | 'Name (English)' | 'نام (English)' | |
+| `productForm.nameUr` | 'Name (اردو)' | 'نام (اردو)' | |
+| `productForm.category` | 'Category' | 'قسم' | |
+| `productForm.brand` | 'Brand' | 'برانڈ' | |
+| `productForm.none` | 'None' | 'کوئی نہیں' | |
+| `productForm.baseUnit` | 'Base unit' | 'بنیادی پیمانہ' | |
+| `productForm.unitOptions` | { ml: 'Millilitre (ml)', g: 'Gram (g)', piece: 'Piece' } | { ml: 'ملی لیٹر (ml)', g: 'گرام (g)', piece: 'عدد' } | |
+| `productForm.unitShort` | { ml: 'ml', g: 'g', piece: 'pcs' } | { ml: 'ml', g: 'g', piece: 'عدد' } | |
+| `productForm.unitHint` | 'Stock is stored in the base unit, so a 1 L pack is 1,000 ml.' | 'اسٹاک بنیادی پیمانے میں رکھا جاتا ہے، اس لیے 1 لیٹر کا پیک 1,000 ملی لیٹر ہے۔' | |
+| `productForm.unitLocked` | 'The unit cannot change once a size has stock records.' | 'جب کسی سائز کا اسٹاک ریکارڈ موجود ہو تو پیمانہ تبدیل نہیں ہو سکتا۔' | |
+| `productForm.newCategory` | '+ New category' | '+ نئی قسم' | |
+| `productForm.newBrand` | '+ New brand' | '+ نیا برانڈ' | |
+| `productForm.quickAdd` | 'Add' | 'شامل کریں' | |
+| `productForm.quickCancel` | 'Cancel' | 'منسوخ کریں' | |
+| `productForm.sizesHeading` | 'Sizes' | 'سائز' | |
+| `productForm.addSize` | '+ Add a size' | '+ سائز شامل کریں' | |
+| `productForm.sizeN` | (n: number) => `Size ${n}` | (n: number) => `سائز ${n}` | |
+| `productForm.chipHasStock` | (batches: number) => `Has stock · ${batches} ${batches === 1 ? 'batch' : 'batches'}` | (batches: number) => `اسٹاک موجود · ${batches} بیچ` | |
+| `productForm.chipNew` | 'New' | 'نیا' | |
+| `productForm.chipOff` | 'Switched off' | 'بند' | |
+| `productForm.remove` | 'Remove' | 'ہٹائیں' | |
+| `productForm.removeLabel` | (n: number) => `Remove size ${n}` | (n: number) => `سائز ${n} ہٹائیں` | |
+| `productForm.switchOff` | 'Switch off' | 'بند کریں' | |
+| `productForm.switchOn` | 'Switch on' | 'چالو کریں' | |
+| `productForm.sizeLabel` | 'Size label' | 'سائز کا لیبل' | |
+| `productForm.packSize` | 'Pack size' | 'پیک سائز' | |
+| `productForm.sku` | 'SKU' | 'SKU' | |
+| `productForm.barcode` | 'Barcode' | 'بارکوڈ' | |
+| `productForm.barcodePlaceholder` | 'Scan or type' | 'اسکین کریں یا لکھیں' | |
+| `productForm.retail` | 'Retail price (incl. tax)' | 'ریٹیل قیمت (ٹیکس سمیت)' | |
+| `productForm.wholesale` | 'Wholesale price (incl. tax)' | 'تھوک قیمت (ٹیکس سمیت)' | |
+| `productForm.taxRate` | 'Tax rate %' | 'ٹیکس کی شرح %' | |
+| `productForm.lowStock` | 'Low-stock alert at' | 'کم اسٹاک کا الرٹ' | |
+| `productForm.packsWord` | 'packs' | 'پیک' | |
+| `productForm.looseSale` | 'Loose sale' | 'کھلی فروخت' | |
+| `productForm.sellBy` | (unit: string) => `Sell by ${unit}` | (unit: string) => `${unit} کے حساب سے بیچیں` | |
+| `productForm.locked` | 'Locked' | 'مقفل' | |
+| `productForm.lockedHint` | 'This pack size is locked. Press to see why.' | 'یہ پیک سائز مقفل ہے۔ وجہ دیکھنے کے لیے دبائیں۔' | |
+| `productForm.taxInfo` | (price: string, tax: string) => `${price} includes ${tax} tax` | (price: string, tax: string) => `${price} میں ${tax} ٹیکس شامل ہے` | |
+| `productForm.noTax` | 'No tax' | 'ٹیکس نہیں' | |
+| `productForm.lockTitle` | 'This pack size can no longer be changed' | 'اس پیک سائز کو اب تبدیل نہیں کیا جا سکتا' | |
+| `productForm.lockBody` | (label: string, stock: string, batches: number) => `The ${label} size already has ${stock} in stock across ${batches} ${batches === 1 ? 'batch' : 'batches'}. Changing the pack size would change what that stock means and make old bills wrong.` | (label: string, stock: string, batches: number) => `${label} سائز کا ${stock} اسٹاک ${batches} بیچ میں موجود ہے۔ پیک سائز بدلنے سے اس اسٹاک کا مطلب بدل جائے گا اور پرانے بل غلط ہو جائیں گے۔` | |
+| `productForm.lockNextLead` | 'What to do instead:' | 'اس کے بجائے:' | |
+| `productForm.lockNext` | 'add a new size with the pack size you want, then switch the old one off when it runs out. You can still change its name, barcode and prices.' | 'مطلوبہ پیک سائز کے ساتھ نیا سائز شامل کریں، پھر پرانا ختم ہونے پر اسے بند کر دیں۔ آپ اس کا نام، بارکوڈ اور قیمتیں اب بھی بدل سکتے ہیں۔' | |
+| `productForm.keepSize` | 'Keep current size' | 'موجودہ سائز رکھیں' | |
+| `productForm.addNewSize` | 'Add a new size' | 'نیا سائز شامل کریں' | |
+| `productForm.problems.name` | 'Enter an English or an Urdu name' | 'انگریزی یا اردو نام لکھیں' | |
+| `productForm.problems.labelRequired` | 'Write the size, for example 500 ml' | 'سائز لکھیں، مثلاً 500 ml' | |
+| `productForm.problems.packInvalid` | 'Enter a whole number above 0' | 'صفر سے زیادہ پورا عدد لکھیں' | |
+| `productForm.problems.retailInvalid` | 'Enter an amount such as 190 or 190.50' | 'رقم لکھیں، مثلاً 190 یا 190.50' | |
+| `productForm.problems.wholesaleInvalid` | 'Enter an amount such as 170 or 170.50' | 'رقم لکھیں، مثلاً 170 یا 170.50' | |
+| `productForm.problems.taxInvalid` | 'Enter a percentage from 0 to 100, for example 18' | '0 سے 100 تک فیصد لکھیں، مثلاً 18' | |
+| `productForm.problems.minInvalid` | 'Enter a number of packs (0 is fine)' | 'پیکس کی تعداد لکھیں (0 بھی ٹھیک ہے)' | |

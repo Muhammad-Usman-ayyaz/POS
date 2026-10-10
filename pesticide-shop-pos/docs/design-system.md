@@ -75,6 +75,14 @@ Under `prefers-reduced-motion: reduce` **all** animation and transitions are swi
 
 `packages/ui/src/pages/products/`. Built from `docs/design/Products with sizes.png` (the PNGs are the only design source; there is no .dc.html). A product row opens into its sizes. The product row says "N sizes", the whole stock in litres or kg, the **Retail range** and a badge for each of low, near expiry and expired sizes. A size row has stock (packs), cost (owner only), retail and wholesale (both "incl. tax"), tax, next expiry and its badge; "Low stock · min 5" is in packs. The chips count sizes. The Edit button is 44 px. Staff get no Cost and Actions columns and no Add product, Receive stock or Edit. Search waits 150 ms after typing stops (`useDebouncedSearch`). It has loading, empty, nothing-found and error states.
 
+## Add / Edit product screen
+
+`packages/ui/src/pages/products/product-form-page.tsx`, built from `docs/design/Edit product, sizes and locked pack size.png` (there is no AddProduct.dc.html). Owner only: staff who open the address are sent back to the list. The product holds the English and Urdu name, category, brand and the **base unit (shown at product level only; a size shows only its pack size number and the unit as text)**. Each size card has label, pack size, SKU, barcode, retail and wholesale price (both "incl. tax"), tax rate in percent (stored as basis points: 18 is 1800), the low-stock alert **in packs** (stored in base units) and a loose-sale checkbox. Under the retail price: "Rs 118 includes Rs 18 tax" (the tax inside the price, never added to it).
+
+A size that has batches shows its pack size as a **locked button**. Pressing it, or a `PACK_SIZE_LOCKED` reply from the shell, opens "This pack size can no longer be changed" with the next step **Add a new size**, which closes the message and adds a new size card with the cursor on its label. **Remove** exists only on a size that is not saved yet; a saved size has **Switch off** (or **Switch on**), saved with the product. Category and brand have a small quick-add form under the drop-down.
+
+A new product is saved in one call. An edit sends only what changed, in this order: the product's own fields, the changed sizes, the new sizes, then switching sizes on or off. These are separate calls, so if one fails the earlier ones stay saved: the form is then reloaded to show what is saved, with a note.
+
 ## Checking the look
 
 `npm run screenshots` builds the app and saves a picture of every screen (English and Urdu) at 1280x720, 1366x768 and 1920x1080 into `apps/desktop/.screenshots/`, with a report of anything that overflows, is clipped, is smaller than 44px, or needs scrolling. It also fails if the page logs a warning, which includes any Content-Security-Policy violation.

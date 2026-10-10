@@ -39,10 +39,13 @@ for (const size of sizes) {
   const env = { ...process.env, POS_SCREENSHOT_DIR: outDir, POS_SCREENSHOT_SIZE: size, POS_DB_PATH: join(work, 'shots.db'), POS_USER_DATA: join(work, 'data') };
   delete env.ELECTRON_RUN_AS_NODE;
   // One retry: the previous Electron process can still be shutting down when the next size starts.
-  let result = spawnSync(electron, [desktop], { env, stdio: 'inherit', timeout: 180000 });
+  let result = spawnSync(electron, [desktop], { env, stdio: 'inherit', timeout: 600000 });
   if (result.status !== 0) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
-    result = spawnSync(electron, [desktop], { env, stdio: 'inherit', timeout: 180000 });
+    // The retry must start from an EMPTY database too, or the app opens on Sign in instead of first-launch setup.
+    rmSync(work, { recursive: true, force: true, maxRetries: 3 });
+    mkdirSync(work, { recursive: true });
+    result = spawnSync(electron, [desktop], { env, stdio: 'inherit', timeout: 600000 });
   }
   if (result.status !== 0) failed = true;
   try {
