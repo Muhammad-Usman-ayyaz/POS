@@ -2,7 +2,7 @@
 // The Add / Edit product screen, driven the way the owner drives it, against a fake API built with the real client code.
 import { buildApi, type Channel, type Language, type SessionUser } from '@pos/api-contract';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { I18nProvider, ToastProvider } from '../src/index.js';
 import { en } from '../src/i18n/messages/en.js';
@@ -57,6 +57,12 @@ const CATEGORIES = [
   { id: 'c2', name_en: 'Fungicide', name_ur: 'پھپھوندی کش' },
 ];
 const BRANDS = [{ id: 'b1', name_en: 'Sample brand', name_ur: null }];
+
+/** A button that goes to Add product, for the test that jumps between forms. */
+function NavigateButton() {
+  const navigate = useNavigate();
+  return <button onClick={() => navigate('/products/new')}>go to new</button>;
+}
 
 // ---- a pretend main process ----
 
@@ -145,6 +151,31 @@ describe('who can open it', () => {
 });
 
 // ---------- adding ----------
+
+describe('switching between products', () => {
+  it('going from an edit form straight to Add product starts empty: nothing typed or loaded carries over', async () => {
+    const shell = fakeShell();
+    const { rerender } = render(
+      <MemoryRouter initialEntries={['/products/g1/edit']}>
+        <I18nProvider language="en" onLanguageChange={() => undefined}>
+          <ToastProvider>
+            <Routes>
+              <Route path="/products/new" element={<ProductFormPage api={shell.api} user={OWNER} />} />
+              <Route path="/products/:groupId/edit" element={<ProductFormPage api={shell.api} user={OWNER} />} />
+            </Routes>
+            <NavigateButton />
+          </ToastProvider>
+        </I18nProvider>
+      </MemoryRouter>,
+    );
+    void rerender;
+    await screen.findByRole('region', { name: en.productForm.sizeN(4) });
+    fireEvent.click(screen.getByRole('button', { name: 'go to new' }));
+    await screen.findByRole('heading', { name: f.addTitle, level: 1 });
+    expect((screen.getByLabelText(f.nameEn) as HTMLInputElement).value).toBe('');
+    expect(screen.getAllByRole('region')).toHaveLength(1);
+  });
+});
 
 describe('Add product', () => {
   const fillFirstSize = () => {
@@ -272,6 +303,20 @@ describe('Add product', () => {
     expect(screen.getByText(f.problems.wholesaleInvalid)).toBeTruthy();
     expect(shell.writes()).toHaveLength(0);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(f.nameEn)));
+  });
+
+  it('a message goes away as soon as its field is put right (the others stay until theirs are)', async () => {
+    show(fakeShell(), '/products/new');
+    await screen.findByLabelText(f.nameEn);
+    fireEvent.click(screen.getByRole('button', { name: f.save }));
+    expect(await screen.findByText(f.problems.name)).toBeTruthy();
+    expect(screen.getByText(f.problems.retailInvalid)).toBeTruthy();
+    set(screen.getByLabelText(f.nameEn), 'Insecticide');
+    expect(screen.queryByText(f.problems.name)).toBeNull();
+    expect(screen.getByText(f.problems.retailInvalid)).toBeTruthy();
+    set(field(1, 'retail'), '190');
+    expect(screen.queryByText(f.problems.retailInvalid)).toBeNull();
+    expect(screen.getByText(f.problems.wholesaleInvalid)).toBeTruthy();
   });
 
   it('two sizes need labels; one size does not', async () => {
@@ -415,7 +460,10 @@ describe('Edit product', () => {
   it('pressing the lock opens "This pack size can no longer be changed", saying how much stock and how many batches', async () => {
     await editReady();
     fireEvent.click(within(card(1)).getByRole('button', { name: new RegExp(f.packSize) }));
-    const dialog = screen.getByRole('dialog', { name: f.lockTitle });
+    // The words are checked literally (not through the message file), because they are the promise made to the owner.
+    const dialog = screen.getByRole('dialog', { name: 'This pack size can no longer be changed' });
+    expect(within(dialog).getByRole('button', { name: 'Add a new size' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Keep current size' })).toBeTruthy();
     expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(within(dialog).getByText(f.lockBody('250 ml', '3 packs', 2))).toBeTruthy();
     expect(within(dialog).getByText(f.lockNextLead)).toBeTruthy();
@@ -590,6 +638,12 @@ describe('Urdu and right to left', () => {
     const dialog = screen.getByRole('dialog', { name: ur.productForm.lockTitle });
     expect(within(dialog).getByRole('button', { name: ur.productForm.addNewSize })).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: ur.productForm.keepSize })).toBeTruthy();
+  });
+
+  it('a Latin size label such as "1 L" is not reversed in right to left (the label field works out its own direction)', async () => {
+    await editReady(fakeShell(), OWNER, 'ur');
+    expect(field(3, 'label').getAttribute('dir')).toBe('auto');
+    expect((screen.getByLabelText(ur.productForm.nameEn) as HTMLInputElement).getAttribute('dir')).toBe('auto');
   });
 
   it('uses only logical (start/end) classes, never left or right', async () => {

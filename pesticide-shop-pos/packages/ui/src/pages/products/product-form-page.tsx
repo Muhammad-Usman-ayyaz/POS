@@ -20,8 +20,10 @@ type Named = { id: string; name_en: string | null; name_ur: string | null };
  * what really is saved.
  */
 export function ProductFormPage({ api, user }: { api: Api; user: SessionUser }) {
+  const { groupId } = useParams<{ groupId: string }>();
   if (user.role !== 'owner') return <Navigate to="/products" replace />;
-  return <OwnerForm api={api} />;
+  // One form per product: going from one product (or from Add) to another must start from that product, never keep what was typed.
+  return <OwnerForm key={groupId ?? 'new'} api={api} />;
 }
 
 function OwnerForm({ api }: { api: Api }) {
@@ -37,6 +39,8 @@ function OwnerForm({ api }: { api: Api }) {
   const [loadError, setLoadError] = useState<unknown>(null);
   const [notFound, setNotFound] = useState(false);
   const [problems, setProblems] = useState<DraftProblems>({ name: false, sizes: {} });
+  // After a failed save the messages follow the form: a field that is put right loses its message at once.
+  const [checked, setChecked] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [partial, setPartial] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -77,6 +81,10 @@ function OwnerForm({ api }: { api: Api }) {
     setFocusKey(null);
   }, [focusKey, draft]);
 
+  useEffect(() => {
+    if (checked && draft) setProblems(checkDraft(draft));
+  }, [checked, draft]);
+
   const update = (patch: Partial<ProductDraft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
   const updateSize = (key: string, patch: Partial<SizeDraft>) => setDraft((d) => (d ? { ...d, sizes: d.sizes.map((s) => (s.key === key ? { ...s, ...patch } : s)) } : d));
   const addSize = () => {
@@ -112,6 +120,7 @@ function OwnerForm({ api }: { api: Api }) {
     if (!draft || saving) return;
     const found = checkDraft(draft);
     setProblems(found);
+    setChecked(hasProblems(found));
     setSaveError(null);
     setPartial(false);
     if (hasProblems(found)) {
@@ -297,7 +306,7 @@ function TextField({ id, label, value, onChange, invalid, error, inputRef, dirUr
       <label htmlFor={id} className="block text-xs font-bold uppercase tracking-wider text-muted">
         {label}
       </label>
-      <Input id={id} ref={inputRef} value={value} invalid={!!invalid} {...(dirUr ? { dir: 'rtl', lang: 'ur' } : {})} aria-describedby={error ? `${id}-error` : undefined} onChange={(e) => onChange(e.target.value)} />
+      <Input id={id} ref={inputRef} value={value} invalid={!!invalid} {...(dirUr ? { dir: 'rtl', lang: 'ur' } : { dir: 'auto' })} aria-describedby={error ? `${id}-error` : undefined} onChange={(e) => onChange(e.target.value)} />
       {error ? (
         <p id={`${id}-error`} role="alert" className="text-sm font-medium text-danger-ink">
           {error}

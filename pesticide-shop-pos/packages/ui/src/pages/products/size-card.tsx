@@ -20,11 +20,13 @@ interface Props {
 }
 
 const labelClass = 'block text-xs font-bold uppercase tracking-wider text-muted';
+/** A label may take two lines in a narrow column; they all reserve two, so the fields underneath line up. */
+const fieldLabelClass = `${labelClass} flex min-h-9 items-end`;
 
 function FieldBox({ id, label, error, children, className }: { id: string; label: string; error?: string | undefined; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
-      <label htmlFor={id} className={labelClass}>
+      <label htmlFor={id} className={fieldLabelClass}>
         {label}
       </label>
       {children}
@@ -90,7 +92,7 @@ export function SizeCard({ size, number, unit, problems, onChange, onRemove, onL
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <FieldBox id={id('label')} label={f.sizeLabel} error={err('label')}>
-          <Input id={id('label')} name="label" value={size.label} invalid={!!problems?.label} aria-describedby={problems?.label ? `${id('label')}-error` : undefined} onChange={(e) => onChange({ label: e.target.value })} />
+          <Input id={id('label')} name="label" dir="auto" value={size.label} invalid={!!problems?.label} aria-describedby={problems?.label ? `${id('label')}-error` : undefined} onChange={(e) => onChange({ label: e.target.value })} />
         </FieldBox>
 
         <FieldBox id={id('pack')} label={f.packSize} error={err('packSize')}>
@@ -145,7 +147,7 @@ export function SizeCard({ size, number, unit, problems, onChange, onRemove, onL
           </div>
         </FieldBox>
         <div className="flex min-w-0 flex-col gap-1.5">
-          <span className={labelClass}>{f.looseSale}</span>
+          <span className={fieldLabelClass}>{f.looseSale}</span>
           <label htmlFor={id('loose')} className={cn('flex min-h-14 items-center gap-3 text-lg', unit === 'piece' && 'opacity-55')}>
             <input id={id('loose')} name="loose" type="checkbox" checked={unit !== 'piece' && size.allowLoose} disabled={unit === 'piece'} onChange={(e) => onChange({ allowLoose: e.target.checked })} className="size-6 shrink-0 accent-accent" />
             <span>{f.sellBy(unitText)}</span>
