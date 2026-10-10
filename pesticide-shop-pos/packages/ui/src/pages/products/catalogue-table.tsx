@@ -153,7 +153,7 @@ function SizeRow({ size, isOwner }: { size: Size; isOwner: boolean }) {
     <tr data-size={size.id} className="bg-page/60">
       <td className={td} />
       <td className={cn(td, 'min-w-0')}>
-        <span className="block break-words border-s-[3px] border-tint ps-3 text-lg font-semibold">{size.pack_label === '' ? m.products.singleSize : size.pack_label}</span>
+        <span dir="auto" className="block break-words border-s-[3px] border-tint ps-3 text-lg font-semibold">{size.pack_label === '' ? m.products.singleSize : size.pack_label}</span>
       </td>
       <td className={td} />
       <td className={cn(td, 'font-semibold')}>

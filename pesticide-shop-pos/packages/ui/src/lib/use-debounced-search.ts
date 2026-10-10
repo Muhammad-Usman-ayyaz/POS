@@ -23,6 +23,8 @@ export interface SearchState<T> {
   error: unknown;
   /** True from the moment a search is sent until its answer arrives. */
   loading: boolean;
+  /** The text `data` is the answer to (what was typed, once it had paused). `data` is for this text only when it equals the text now typed AND `loading` is false. */
+  answeredFor: string | null;
   /** Search again with the same text (after the data changed). */
   refresh: () => void;
 }
@@ -34,7 +36,7 @@ export interface SearchState<T> {
  */
 export function useDebouncedSearch<T>(run: (query: string) => Promise<T>, query: string, delayMs: number = SEARCH_DELAY_MS): SearchState<T> {
   const settled = useDebouncedValue(query, delayMs);
-  const [state, setState] = useState<{ data: T | null; error: unknown; loading: boolean }>({ data: null, error: null, loading: true });
+  const [state, setState] = useState<{ data: T | null; error: unknown; loading: boolean; answeredFor: string | null }>({ data: null, error: null, loading: true, answeredFor: null });
   const [again, setAgain] = useState(0);
   const latest = useRef(0);
 
@@ -43,7 +45,7 @@ export function useDebouncedSearch<T>(run: (query: string) => Promise<T>, query:
     setState((s) => ({ ...s, loading: true }));
     run(settled).then(
       (data) => {
-        if (latest.current === mine) setState({ data, error: null, loading: false });
+        if (latest.current === mine) setState({ data, error: null, loading: false, answeredFor: settled });
       },
       (error: unknown) => {
         if (latest.current === mine) setState((s) => ({ ...s, error, loading: false }));

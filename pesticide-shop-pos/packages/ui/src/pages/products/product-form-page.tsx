@@ -12,7 +12,7 @@ import { buildSaveSteps, blankSize, checkDraft, draftFromSaved, hasProblems, new
 import { SizeCard } from './size-card.js';
 
 const UNITS: Unit[] = ['ml', 'g', 'piece'];
-type Named = { id: string; name_en: string | null; name_ur: string | null };
+export type Named = { id: string; name_en: string | null; name_ur: string | null };
 
 /**
  * Add a product, or edit one and its sizes. Owner only: staff are sent back to the list (and the shell refuses their writes anyway).
@@ -316,8 +316,8 @@ function TextField({ id, label, value, onChange, invalid, error, inputRef, dirUr
   );
 }
 
-/** A drop-down of what exists, with a small form beneath it to add one that does not. */
-function PickWithQuickAdd({ id, label, value, rows, name, noneLabel, onPick, addLabel, onAdd }: { id: string; label: string; value: string; rows: Named[]; name: (row: Named) => string; noneLabel: string; onPick: (id: string) => void; addLabel: string; onAdd: (names: { name_en?: string; name_ur?: string }) => Promise<void> }) {
+/** A drop-down of what exists, with a small form beneath it to add one that does not. (Also used for the supplier on Receive stock.) */
+export function PickWithQuickAdd({ id, label, value, rows, name, noneLabel, onPick, addLabel, onAdd }: { id: string; label: string; value: string; rows: Named[]; name: (row: Named) => string; noneLabel: string; onPick: (id: string) => void; addLabel: string; onAdd: (names: { name_en?: string; name_ur?: string }) => Promise<void> }) {
   const { m } = useI18n();
   const f = m.productForm;
   const [open, setOpen] = useState(false);

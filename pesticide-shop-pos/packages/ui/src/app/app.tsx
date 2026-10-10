@@ -9,6 +9,8 @@ import { LoginPage } from '../pages/login-page.js';
 import { PlaceholderPage } from '../pages/placeholder-page.js';
 import { ProductFormPage } from '../pages/products/product-form-page.js';
 import { ProductsPage } from '../pages/products/products-page.js';
+import { PurchasesPage } from '../pages/purchases/purchases-page.js';
+import { ReceiveStockPage } from '../pages/purchases/receive-stock-page.js';
 import { ResetPage } from '../pages/reset-page.js';
 import { SetupPage } from '../pages/setup-page.js';
 
@@ -94,9 +96,9 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut }: { api: Api; 
           <Route path="/products" element={<ProductsPage api={api} user={user} />} />
           <Route path="/products/new" element={<ProductFormPage api={api} user={user} />} />
           <Route path="/products/:groupId/edit" element={<ProductFormPage api={api} user={user} />} />
-          {/* The Receive stock screen is built next; until then it shows the placeholder. */}
-          <Route path="/purchases/receive" element={<PlaceholderPage page="purchases" />} />
-          {NAV_ITEMS.filter(({ key }) => key !== 'products').map(({ key, path }) => (
+          <Route path="/purchases" element={<PurchasesPage user={user} />} />
+          <Route path="/purchases/receive" element={<ReceiveStockPage api={api} user={user} />} />
+          {NAV_ITEMS.filter(({ key }) => key !== 'products' && key !== 'purchases').map(({ key, path }) => (
             <Route key={key} path={path} element={<PlaceholderPage page={key} />} />
           ))}
           <Route path="*" element={<Navigate to="/pos" replace />} />

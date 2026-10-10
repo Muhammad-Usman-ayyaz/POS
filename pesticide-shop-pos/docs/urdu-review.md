@@ -167,3 +167,58 @@ Dates are shown with English month names and Latin digits in Urdu mode too ("15 
 | `productForm.problems.wholesaleInvalid` | 'Enter an amount such as 170 or 170.50' | 'رقم لکھیں، مثلاً 170 یا 170.50' | |
 | `productForm.problems.taxInvalid` | 'Enter a percentage from 0 to 100, for example 18' | '0 سے 100 تک فیصد لکھیں، مثلاً 18' | |
 | `productForm.problems.minInvalid` | 'Enter a number of packs (0 is fine)' | 'پیکس کی تعداد لکھیں (0 بھی ٹھیک ہے)' | |
+
+## New Urdu text on Receive stock and Purchases (Phase 4, M6)
+
+`${...}` parts are filled in when the screen is drawn. Please check in particular: the batch-clash messages (`receive.clash.*`), because the owner must understand why a batch number cannot be reused ("بیچ" for batch, "میعاد" for expiry, "لاگت" for cost); the button "نئے بیچ نمبر کے طور پر محفوظ کریں" (save as a new batch number); the question about an old receipt date (`receive.oldDate.*`); and the reasons shown beside the disabled Receive button (`receive.why.*`).
+
+| Key | English | Urdu | Reviewer's correction |
+|---|---|---|---|
+| `receive.receive.back` | 'Products' | 'پروڈکٹس' | |
+| `receive.receive.title` | 'Receive stock' | 'اسٹاک وصول کریں' | |
+| `receive.receive.subtitle` | 'Add what arrived from a supplier. Each line becomes a batch with its own expiry.' | 'جو مال سپلائر سے آیا وہ لکھیں۔ ہر لائن اپنی میعاد کے ساتھ ایک بیچ بن جاتی ہے۔' | |
+| `receive.receive.supplier` | 'Supplier' | 'سپلائر' | |
+| `receive.receive.supplierPick` | 'Choose a supplier' | 'سپلائر چنیں' | |
+| `receive.receive.newSupplier` | '+ New supplier' | '+ نیا سپلائر' | |
+| `receive.receive.invoiceNo` | 'Supplier invoice no.' | 'سپلائر کا بل نمبر' | |
+| `receive.receive.dateReceived` | 'Date received' | 'وصولی کی تاریخ' | |
+| `receive.receive.columns` | { product: 'Product and size', batch: 'Batch no.', expiry: 'Expiry', packs: 'Packs', cost: 'Cost / pack', total: 'Line total' } | { product: 'پروڈکٹ اور سائز', batch: 'بیچ نمبر', expiry: 'میعاد', packs: 'پیک', cost: 'لاگت / پیک', total: 'لائن کا کل' } | |
+| `receive.receive.addLine` | '+ Add a line (search product or scan barcode)' | '+ لائن شامل کریں (پروڈکٹ تلاش کریں یا بارکوڈ اسکین کریں)' | |
+| `receive.receive.searchLabel` | 'Search a product or scan a barcode' | 'پروڈکٹ تلاش کریں یا بارکوڈ اسکین کریں' | |
+| `receive.receive.searchPlaceholder` | 'Search in English or اردو' | 'انگریزی یا اردو میں تلاش کریں' | |
+| `receive.receive.noResults` | 'No product matches' | 'کوئی پروڈکٹ نہیں ملی' | |
+| `receive.receive.closeSearch` | 'Close' | 'بند کریں' | |
+| `receive.receive.emptyLines` | 'No lines yet. Add the first product that arrived.' | 'ابھی کوئی لائن نہیں۔ جو پہلی پروڈکٹ آئی وہ شامل کریں۔' | |
+| `receive.receive.removeLine` | (name: string) => `Remove ${name}` | (name: string) => `${name} ہٹائیں` | |
+| `receive.receive.summary` | (lines: number, packs: number) => `${lines} ${lines === 1 ? 'line' : 'lines'} · ${packs} ${packs === 1 ? 'pack' : 'packs'}` | (lines: number, packs: number) => `${lines} لائن · ${packs} پیک` | |
+| `receive.receive.totalCost` | 'Total cost' | 'کل لاگت' | |
+| `receive.receive.paidInFull` | 'Paid in full when received.' | 'وصولی پر پوری ادائیگی ہو جاتی ہے۔' | |
+| `receive.receive.receive` | 'Receive stock' | 'اسٹاک وصول کریں' | |
+| `receive.receive.receiving` | 'Receiving…' | 'وصول ہو رہا ہے…' | |
+| `receive.receive.received` | (total: string) => `Stock received · ${total}` | (total: string) => `اسٹاک وصول ہو گیا · ${total}` | |
+| `receive.receive.why.noLines` | 'Add at least one line.' | 'کم از کم ایک لائن شامل کریں۔' | |
+| `receive.receive.why.header` | 'Check the supplier and the date.' | 'سپلائر اور تاریخ دیکھیں۔' | |
+| `receive.receive.why.fix` | 'Fix the highlighted lines first.' | 'پہلے نشان زد لائنیں درست کریں۔' | |
+| `receive.receive.why.clash` | 'Resolve the batch clashes first.' | 'پہلے بیچ کے ٹکراؤ حل کریں۔' | |
+| `receive.receive.why.loading` | 'Checking the existing batches…' | 'موجودہ بیچ دیکھے جا رہے ہیں…' | |
+| `receive.receive.clash.expiryTitle` | (batch: string) => `Batch ${batch} is already used for this size, with a different expiry` | (batch: string) => `بیچ ${batch} اس سائز کے لیے پہلے سے موجود ہے، مگر میعاد مختلف ہے` | |
+| `receive.receive.clash.expiryBody` | (batch: string, existing: string, typed: string) => `Existing ${batch} expires ${existing}. You typed ${typed}. One batch number can only have one expiry.` | (batch: string, existing: string, typed: string) => `موجودہ ${batch} کی میعاد ${existing} ہے۔ آپ نے ${typed} لکھی۔ ایک بیچ نمبر کی ایک ہی میعاد ہو سکتی ہے۔` | |
+| `receive.receive.clash.costTitle` | (batch: string) => `Batch ${batch} is already used for this size, with a different cost` | (batch: string) => `بیچ ${batch} اس سائز کے لیے پہلے سے موجود ہے، مگر لاگت مختلف ہے` | |
+| `receive.receive.clash.costBody` | (existing: string, typed: string) => `The existing batch cost ${existing} a pack. You typed ${typed}. The cost of a batch is never changed, so this needs a new batch number.` | (existing: string, typed: string) => `موجودہ بیچ کی لاگت ${existing} فی پیک تھی۔ آپ نے ${typed} لکھی۔ بیچ کی لاگت کبھی نہیں بدلی جاتی، اس لیے نیا بیچ نمبر چاہیے۔` | |
+| `receive.receive.clash.useExpiry` | (date: string) => `Use expiry ${date}` | (date: string) => `میعاد ${date} رکھیں` | |
+| `receive.receive.clash.newBatch` | 'Save as new batch number' | 'نئے بیچ نمبر کے طور پر محفوظ کریں' | |
+| `receive.receive.clash.newBatchHint` | 'A new batch number was filled in. You can change it.' | 'نیا بیچ نمبر بھر دیا گیا ہے۔ آپ اسے بدل سکتے ہیں۔' | |
+| `receive.receive.problems.batchRequired` | 'Enter the batch number' | 'بیچ نمبر لکھیں' | |
+| `receive.receive.problems.expiryInvalid` | 'Enter the expiry date' | 'میعاد کی تاریخ لکھیں' | |
+| `receive.receive.problems.packsInvalid` | 'Enter a whole number of packs above 0' | 'صفر سے زیادہ پیک کی پوری تعداد لکھیں' | |
+| `receive.receive.problems.costInvalid` | 'Enter an amount such as 400 or 400.50' | 'رقم لکھیں، مثلاً 400 یا 400.50' | |
+| `receive.receive.problems.supplier` | 'Choose a supplier' | 'سپلائر چنیں' | |
+| `receive.receive.problems.dateInvalid` | 'Enter the date' | 'تاریخ لکھیں' | |
+| `receive.receive.problems.dateFuture` | 'The date cannot be after today' | 'تاریخ آج کے بعد کی نہیں ہو سکتی' | |
+| `receive.receive.oldDate.title` | (days: number) => `This receipt is dated ${days} days ago` | (days: number) => `اس رسید کی تاریخ ${days} دن پہلے کی ہے` | |
+| `receive.receive.oldDate.body` | 'Save anyway?' | 'پھر بھی محفوظ کریں؟' | |
+| `receive.receive.oldDate.saveAnyway` | 'Save anyway' | 'پھر بھی محفوظ کریں' | |
+| `receive.receive.oldDate.changeDate` | 'Change the date' | 'تاریخ بدلیں' | |
+| `receive.receive.loading` | 'Loading…' | 'لوڈ ہو رہا ہے…' | |
+| `purchases.purchases.note` | 'Receive stock from here. The list of past receipts is built later.' | 'یہاں سے اسٹاک وصول کریں۔ پرانی رسیدوں کی فہرست بعد میں بنے گی۔' | |
+| `purchases.purchases.receiveLink` | 'Receive stock' | 'اسٹاک وصول کریں' | |

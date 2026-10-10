@@ -189,6 +189,72 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await shot(`${prefix + 3}-add-product-${language}`);
   }
 
+  /** Type into a field of the n-th receipt line (inputs are found by name, the same in both languages). */
+  function fillLine(n: number, name: string, value: string): Promise<unknown> {
+    return js(`(() => { const el = document.querySelectorAll('[data-line]')[${n - 1}].querySelector('[name=${name}]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(value)});
+      el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('blur', { bubbles: true })); })()`);
+  }
+
+  /** Receive stock: the empty form, the search, two lines, an expiry clash, a cost clash, a new batch number, and the old-date question. */
+  async function receiveScreens(language: 'en' | 'ur', prefix: number): Promise<void> {
+    const t = language === 'en'
+      ? { addLine: '+ Add a line', receive: 'Receive stock', newBatch: 'Save as new', changeDate: 'Change the date' }
+      : { addLine: '+ لائن شامل کریں', receive: 'اسٹاک وصول کریں', newBatch: 'نئے بیچ', changeDate: 'تاریخ بدلیں' };
+    const addSize = async (label: string): Promise<void> => {
+      await clickText('button', t.addLine);
+      await waitFor('input[type=search]');
+      await fill('input[type=search]', 'Insecticide');
+      await js(`new Promise((r) => setTimeout(r, 700))`);
+      await js(`[...document.querySelectorAll('ul button')].find((b) => b.textContent.trim().endsWith(${JSON.stringify(label)})).click()`);
+      await sleep(250);
+    };
+    await go('/pos');
+    await go('/purchases');
+    await waitFor('[data-page=purchases]');
+    await shot(`${prefix}-purchases-${language}`);
+    await go('/purchases/receive');
+    await waitFor('#supplier');
+    await sleep(300);
+    await shot(`${prefix + 1}-receive-empty-${language}`);
+    await js(`(() => { const s = document.querySelector('#supplier'); s.value = [...s.options].find((o) => o.value).value; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await clickText('button', t.addLine);
+    await waitFor('input[type=search]');
+    await fill('input[type=search]', 'Insecticide');
+    await js(`new Promise((r) => setTimeout(r, 700))`);
+    await shot(`${prefix + 2}-receive-search-${language}`);
+    await js(`[...document.querySelectorAll('ul button')].find((b) => b.textContent.trim().endsWith('1 L')).click()`);
+    await sleep(250);
+    await fillLine(1, 'batchNo', 'B-020');
+    await fillLine(1, 'expiry', '2027-05-01');
+    await fillLine(1, 'packs', '12');
+    await fillLine(1, 'cost', '400');
+    await addSize('500 ml');
+    await fillLine(2, 'batchNo', 'B-021');
+    await fillLine(2, 'expiry', '2027-06-30');
+    await fillLine(2, 'packs', '20');
+    await fillLine(2, 'cost', '215');
+    await sleep(300);
+    await shot(`${prefix + 3}-receive-lines-${language}`);
+    // The demo's 500 ml batch (INS-001, Rs 215, expires 18 Jan 2027): a different expiry with the same cost, then a different cost.
+    await fillLine(2, 'batchNo', 'INS-001');
+    await sleep(300);
+    await shot(`${prefix + 4}-receive-clash-expiry-${language}`);
+    await fillLine(2, 'cost', '230');
+    await sleep(300);
+    await shot(`${prefix + 5}-receive-clash-cost-${language}`);
+    await clickText('[role=group] button', t.newBatch);
+    await sleep(300);
+    await shot(`${prefix + 6}-receive-new-batch-${language}`);
+    await js(`(() => { const el = document.querySelector('#date-received'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10)); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(200);
+    await clickText('button[type=submit]', t.receive); // the shell asks: dated 45 days ago, save anyway?
+    await waitFor('[role=dialog]');
+    await shot(`${prefix + 7}-receive-old-date-${language}`);
+    await clickText('[role=dialog] button', t.changeDate);
+    await sleep(200);
+  }
+
   async function walk(): Promise<void> {
   // ---------- first launch ----------
   await waitFor('#shopName');
@@ -219,6 +285,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   }
   await productsScreens('en', '11');
   await formScreens('en', 50);
+  await receiveScreens('en', 70);
 
   // ---------- Urdu: right to left ----------
   await setLanguage('ur');
@@ -228,6 +295,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   }
   await productsScreens('ur', '21');
   await formScreens('ur', 60);
+  await receiveScreens('ur', 80);
   await setLanguage('en');
 
   // ---------- the same screen for staff: no cost, no Receive stock, no Add, no Edit ----------
@@ -241,6 +309,9 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await go('/products/new'); // staff cannot open it: they are sent back to the list
   await waitFor('[data-group]');
   await shot('48-staff-new-product-redirect-en');
+  await go('/purchases/receive'); // nor can they open Receive stock: they land on Purchases, which has no link to it
+  await waitFor('[data-page=purchases]');
+  await shot('49-staff-receive-redirect-en');
   await setLanguage('ur');
   await productsScreens('ur', '45');
   await setLanguage('en');

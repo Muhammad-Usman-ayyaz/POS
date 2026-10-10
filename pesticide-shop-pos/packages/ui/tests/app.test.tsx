@@ -221,7 +221,8 @@ describe('the signed-in layout', () => {
     expect(await screen.findByRole('heading', { name: 'Products and stock' })).toBeTruthy();
     expect(await screen.findByText('No products yet')).toBeTruthy(); // the real Products screen, not a placeholder
     await user().click(within(nav).getByRole('link', { name: 'Purchases' }));
-    expect(await screen.findByText('This screen is built in Phase 4.')).toBeTruthy();
+    expect(await screen.findByText('Receive stock from here. The list of past receipts is built later.')).toBeTruthy(); // Purchases: a page that leads to Receive stock
+    expect(screen.getByRole('link', { name: 'Receive stock' }).getAttribute('href')).toBe('#/purchases/receive'); // HashRouter
   });
 
   it('marks the page you are on in the sidebar', async () => {

@@ -530,6 +530,13 @@ describe('Products: Urdu and right to left', () => {
     expect(row.querySelectorAll('.num').length).toBeGreaterThanOrEqual(5); // prices, tax and the date stay left to right
   });
 
+  it('a Latin size label such as "1 L" or "50 kg bag" works out its own direction, so it is not reversed in Urdu', async () => {
+    show(fakeShell(), OWNER, 'ur');
+    await screen.findByText('کیڑے مار دوا');
+    fireEvent.click(screen.getByRole('button', { name: ur.products.showSizes('کیڑے مار دوا') }));
+    expect(screen.getByText('250 ml').getAttribute('dir')).toBe('auto');
+  });
+
   it('uses only logical (start/end) classes: nothing is pinned to the left or right', async () => {
     for (const language of ['en', 'ur'] as const) {
       show(fakeShell(), OWNER, language);

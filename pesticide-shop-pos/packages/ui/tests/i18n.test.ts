@@ -43,6 +43,7 @@ describe('English and Urdu messages', () => {
   it('English has no Arabic script', () => {
     for (const [path, text] of strings(MESSAGES.en)) {
       if (path === 'language.ur') continue; // the Urdu button is always labelled in Urdu
+      if (path === 'receive.searchPlaceholder') continue; // as in the design: the language name in its own script
       if (path === 'productForm.nameUr') continue; // the field's own language name, in its own script
       if (path === 'products.searchPlaceholder') continue; // the approved design says "Search in English or اردو": the language name in its own script
       expect(ARABIC_SCRIPT.test(text), `en.${path}`).toBe(false);
