@@ -443,6 +443,22 @@ describe('Edit product', () => {
     expect(screen.getByText(f.unitLocked, { exact: false })).toBeTruthy();
   });
 
+  it('a size with exactly one batch is locked too', async () => {
+    await editReady();
+    expect(within(card(2)).getByText(f.chipHasStock(1))).toBeTruthy();
+    expect(field(2, 'packSize')).toBeNull();
+    expect(within(card(2)).getByRole('button', { name: new RegExp(f.packSize) })).toBeTruthy();
+  });
+
+  it('the Urdu boxes of the quick-add forms are right to left and marked as Urdu', async () => {
+    show(fakeShell(), '/products/new');
+    await screen.findByLabelText(f.nameEn);
+    fireEvent.click(screen.getByRole('button', { name: f.newCategory }));
+    const urdu = screen.getByLabelText(`${f.category}: ${f.nameUr}`);
+    expect(urdu.getAttribute('dir')).toBe('rtl');
+    expect(urdu.getAttribute('lang')).toBe('ur');
+  });
+
   it('a size with batches shows "Has stock · 2 batches" and its pack size as a locked button, not a field', async () => {
     await editReady();
     expect(within(card(1)).getByText(f.chipHasStock(2))).toBeTruthy();

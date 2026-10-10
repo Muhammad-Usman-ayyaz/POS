@@ -128,6 +128,11 @@ describe('the lock', () => {
     expect(isLocked(d.sizes[1]!)).toBe(false);
     expect(isLocked(blankSize())).toBe(false);
   });
+  it('a size with exactly ONE batch is locked (the lock is "has batches", not "has several")', () => {
+    const d = draftFromSaved(savedGroup([savedSize({ batch_count: 1 }), savedSize({ id: 's500', pack_label: '500 ml', batch_count: 0 })]));
+    expect(isLocked(d.sizes[0]!)).toBe(true);
+    expect(isLocked(d.sizes[1]!)).toBe(false);
+  });
   it('the unit is editable only for a new product, or one with a single saved size that has no batches', () => {
     expect(unitEditable(newDraft())).toBe(true);
     expect(unitEditable(draftFromSaved(savedGroup()))).toBe(false); // two saved sizes, one locked

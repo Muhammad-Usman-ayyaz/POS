@@ -4,7 +4,15 @@ A native Urdu speaker should check the Urdu below. **The wording in the code has
 
 How to read the tables: `{label}`, `{barcode}`, `{sku}` and `{expected}` are replaced by the real value when the message is shown. In the Urdu text the value is kept left to right inside the right-to-left sentence. Every message has two parts, **what went wrong** and **what to do next**; both are shown.
 
-No screen shows these messages yet: the Products screen is built in Phase 4. The "where it shows" column says what will trigger each one, and which core call raises it.
+**What is in this file (all of Phase 4):**
+1. New Urdu error messages (pack sizes, quick-add, `FUTURE_DATE`, `RECEIPT_DATE_OLD`).
+2. Demo-data names (not shown in the real app).
+3. The Products screen text (M4): `products.*`.
+4. The Add / Edit product screen text (M5): `productForm.*`.
+5. The Receive stock and Purchases text (M6): `receive.*` and `purchases.*`.
+6. A question for the owner: month names in Urdu.
+
+The error messages are shown by the screens that raise them (the product form, Receive stock). The "where it shows" column says what triggers each one. Nothing in the Urdu text has been changed by the developer: this file only lists it.
 
 ## New Urdu error messages (pack sizes, and Phase 4 quick-add)
 

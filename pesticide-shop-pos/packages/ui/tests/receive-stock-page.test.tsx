@@ -614,6 +614,23 @@ describe('Urdu and right to left', () => {
     expect(lineField(1, 'cost').className).toContain('num');
   });
 
+  it('the dates stay left to right in Urdu, the received date cannot be picked after today, and the back arrow points the other way', async () => {
+    await ready(fakeShell(), OWNER, 'ur');
+    const received = screen.getByLabelText(ur.receive.dateReceived) as HTMLInputElement;
+    expect(received.getAttribute('dir')).toBe('ltr');
+    expect(received.max).toBe(today);
+    fireEvent.click(screen.getByRole('button', { name: ur.receive.addLine }));
+    set(screen.getByRole('searchbox', { name: ur.receive.searchLabel }), 'insect');
+    fireEvent.click(await within(await screen.findByRole('list')).findByRole('button', { name: /1 L$/ }));
+    await waitFor(() => expect(document.querySelectorAll('[data-line]')).toHaveLength(1));
+    expect(lineField(1, 'expiry').getAttribute('dir')).toBe('ltr');
+    const back = screen.getByRole('link', { name: ur.receive.back }).querySelector('svg')!;
+    expect(back.getAttribute('class')).toContain('lucide-arrow-right'); // in right to left "back" points to the right
+    cleanup();
+    await ready();
+    expect(screen.getByRole('link', { name: f.back }).querySelector('svg')!.getAttribute('class')).toContain('lucide-arrow-left');
+  });
+
   it('a Latin size label such as "1 L" is not reversed in right to left, on the line and in the search results', async () => {
     await ready(fakeShell(), OWNER, 'ur');
     fireEvent.click(screen.getByRole('button', { name: ur.receive.addLine }));

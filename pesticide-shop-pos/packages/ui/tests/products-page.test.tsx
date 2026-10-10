@@ -400,6 +400,44 @@ describe('Products: search', () => {
     expect(shell.lists().at(-1)!.input).toMatchObject({ query: 'ins' });
   });
 
+  it('a SLOW earlier answer never replaces a newer one on the screen', async () => {
+    vi.useFakeTimers();
+    try {
+      let releaseSlow!: () => void;
+      const slow = new Promise<void>((resolve) => (releaseSlow = resolve));
+      const only = (name: string) => {
+        const data = catalogue();
+        const hit = data.hits.find((h) => h.group.name_en === name)!;
+        return { ...data, hits: [hit], total: 1 };
+      };
+      const api = buildApi(async (channel: Channel, input: any) => {
+        if (channel === 'categories:list') return { ok: true, data: CATEGORIES };
+        if (channel === 'catalogue:list') {
+          if (input.query === 'slow') {
+            await slow;
+            return { ok: true, data: only('Rodenticide') };
+          }
+          return { ok: true, data: input.query === 'fast' ? only('Fungicide') : catalogue() };
+        }
+        return { ok: false, error: { code: 'INTERNAL', message: 'x', params: {} } };
+      });
+      show({ api } as ReturnType<typeof fakeShell>);
+      await act(() => vi.advanceTimersByTimeAsync(10));
+      const box = screen.getByRole('searchbox');
+      fireEvent.change(box, { target: { value: 'slow' } });
+      await act(() => vi.advanceTimersByTimeAsync(200)); // the slow search is on its way
+      fireEvent.change(box, { target: { value: 'fast' } });
+      await act(() => vi.advanceTimersByTimeAsync(200)); // the fast one answers
+      expect(screen.getByRole('button', { name: 'Show the sizes of Fungicide' })).toBeTruthy();
+      releaseSlow();
+      await act(() => vi.advanceTimersByTimeAsync(50)); // the slow, older answer arrives late
+      expect(screen.getByRole('button', { name: 'Show the sizes of Fungicide' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Show the sizes of Rodenticide' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('is typed in English or Urdu and sent as typed', async () => {
     vi.useFakeTimers();
     const shell = fakeShell();
