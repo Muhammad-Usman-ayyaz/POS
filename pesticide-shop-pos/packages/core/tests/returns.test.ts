@@ -148,3 +148,31 @@ describe('planReturn', () => {
     ).toBe('RETURN_EXCEEDS_SOLD');
   });
 });
+
+describe('the tax in a refund is worked out the same running-difference way (migration 005 stores it as tax_refund)', () => {
+  const line: SoldLine = { invoice_item_id: 'ii2', qty: 3, line_total: 2, tax_amount: 1, qty_returned: 0 };
+  const step = (returned: number) => ({ refund: refundFor({ ...line, qty_returned: returned }, 1), tax: taxRefundFor({ ...line, qty_returned: returned }, 1) });
+
+  it('over several returns the refunds add up to the line total and the tax refunds to the tax, exactly', () => {
+    const steps = [step(0), step(1), step(2)];
+    expect(steps.reduce((sum, s) => sum + s.refund, 0)).toBe(2);
+    expect(steps.reduce((sum, s) => sum + s.tax, 0)).toBe(1);
+  });
+
+  it('one step\'s tax CAN be more than that step\'s refund (they round separately), which is why the database caps the tax per LINE and not per return row', () => {
+    expect(step(0)).toEqual({ refund: 1, tax: 0 });
+    expect(step(1)).toEqual({ refund: 0, tax: 1 }); // refund 0, tax 1
+    expect(step(2)).toEqual({ refund: 1, tax: 0 });
+  });
+
+  it('a realistic taxed line: 18 percent inside Rs 4900 after a Rs 100 discount, returned in three parts, gives back all of the tax and no more', () => {
+    const taxed: SoldLine = { invoice_item_id: 'ii3', qty: 10_000, line_total: 490_000, tax_amount: 74_746, qty_returned: 0 };
+    let returned = 0;
+    let tax = 0;
+    for (const qty of [2000, 3000, 5000]) {
+      tax += taxRefundFor({ ...taxed, qty_returned: returned }, qty);
+      returned += qty;
+    }
+    expect(tax).toBe(74_746);
+  });
+});

@@ -29,6 +29,8 @@ afterEach(() => {
 });
 
 const upTo3 = () => loadMigrations().slice(0, 3);
+// 004 is tested at its own version: later migrations are tested in migration-005.test.ts.
+const upTo4 = () => loadMigrations().slice(0, 4);
 const all = (db: Db, sql: string, ...p: unknown[]) => db.prepare(sql).all(...p) as Row[];
 const one = (db: Db, sql: string, ...p: unknown[]) => db.prepare(sql).get(...p) as Row;
 
@@ -66,7 +68,7 @@ async function shopAtVersion3(file: string): Promise<Db> {
 describe('migration 004 on a shop that already has data', () => {
   it('gives every existing product its own group, with its names, category, brand, active flag and deleted_at', async () => {
     const db = await shopAtVersion3(join(dir, 'shop.db'));
-    const result = await migrate(db);
+    const result = await migrate(db, { migrations: upTo4() });
     expect(result.applied).toEqual([4]);
     expect(result.backupPath).not.toBeNull(); // the version-3 file was copied first
     expect(currentSchemaVersion(db)).toBe(4);
@@ -85,7 +87,7 @@ describe('migration 004 on a shop that already has data', () => {
 
   it('uses fresh ids for the groups: no group id equals any product id, all are valid v4 UUIDs, and no two are alike', async () => {
     const db = await shopAtVersion3(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo4() });
     const groupIds = all(db, 'SELECT id FROM product_groups').map((g) => g.id as string);
     const productIds = new Set(all(db, 'SELECT id FROM products').map((p) => p.id as string));
     expect(groupIds.every((id) => UUID_V4.test(id))).toBe(true);
@@ -108,7 +110,7 @@ describe('migration 004 on a shop that already has data', () => {
       stock: all(db, 'SELECT * FROM v_product_stock ORDER BY product_id'),
       low: all(db, 'SELECT product_id FROM v_low_stock ORDER BY product_id'),
     };
-    await migrate(db);
+    await migrate(db, { migrations: upTo4() });
 
     // products: every old column is the same, except version and updated_at, which the backfill update bumps (that is right: the row changed)
     const after = all(db, 'SELECT * FROM products ORDER BY id');
@@ -135,7 +137,7 @@ describe('migration 004 on a shop that already has data', () => {
 
   it('is consistent afterwards: foreign keys, integrity, no drifted copies, no leftover temp table', async () => {
     const db = await shopAtVersion3(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo4() });
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(all(db, 'SELECT * FROM v_product_group_mismatch')).toEqual([]);
@@ -149,7 +151,7 @@ describe('migration 004 on a shop that already has data', () => {
   it('writes the changes to change_log so sync sees them: one insert per group, one update per product', async () => {
     const db = await shopAtVersion3(join(dir, 'shop.db'));
     const logBefore = one(db, "SELECT COUNT(*) c FROM change_log WHERE table_name = 'products' AND operation = 'update'").c as number;
-    await migrate(db);
+    await migrate(db, { migrations: upTo4() });
     expect(one(db, "SELECT COUNT(*) c FROM change_log WHERE table_name = 'product_groups' AND operation = 'insert'").c).toBe(3);
     expect(one(db, "SELECT COUNT(*) c FROM change_log WHERE table_name = 'products' AND operation = 'update'").c).toBe(logBefore + 3);
     db.close();
@@ -157,7 +159,7 @@ describe('migration 004 on a shop that already has data', () => {
 
   it('the old products keep working: an old product still sells, and the new rules apply to it', async () => {
     const db = await shopAtVersion3(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo4() });
     const s = [ID.shop, ID.branch, ID.device];
     // a sale line on an old product, with its old batch
     expect(() =>
@@ -176,7 +178,7 @@ describe('migration 004 on a shop that already has data', () => {
 
   it('on a shop with no products at all, it just creates the empty tables', async () => {
     const db = openDatabase(':memory:');
-    const result = await migrate(db);
+    const result = await migrate(db, { migrations: upTo4() });
     expect(result.applied).toEqual([1, 2, 3, 4]);
     expect(one(db, 'SELECT COUNT(*) c FROM product_groups').c).toBe(0);
     db.close();

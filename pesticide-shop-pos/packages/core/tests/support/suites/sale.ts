@@ -18,6 +18,54 @@ export function defineSaleTests(make: WorldFactory): void {
     const last = (table: Parameters<ServiceWorld['rows']>[0]) => w.rows(table).at(-1);
     const setLimit = (limit: number) => w.update('customers', ID.customer, { credit_limit: limit });
 
+    describe('the name on each invoice line (migration 005): the catalogue name AT SALE TIME', () => {
+      it('is copied from the product, in both languages', () => {
+        w.update('products', ID.bottle, { name_en: 'Insecticide 1L', name_ur: 'کیڑے مار دوا 1 لیٹر' });
+        const result = sale({ paid_amount: 50_000 });
+        expect(result.items[0]).toMatchObject({ name_en: 'Insecticide 1L', name_ur: 'کیڑے مار دوا 1 لیٹر' });
+        expect(last('invoice_items')).toMatchObject({ name_en: 'Insecticide 1L', name_ur: 'کیڑے مار دوا 1 لیٹر' });
+      });
+
+      it('a product with only an Urdu name gives a line with only an Urdu name', () => {
+        w.update('products', ID.fert, { name_en: null, name_ur: 'کھاد' });
+        const result = sale({ paid_amount: 5_000, lines: [{ product_id: ID.fert, qty: 250 }] });
+        expect(result.items[0]).toMatchObject({ name_en: null, name_ur: 'کھاد' });
+      });
+
+      it('a later rename changes the next sale, never the lines already sold (so a reprint shows what the customer was given)', () => {
+        const before = sale({ paid_amount: 50_000 });
+        s.catalogue.updateGroup({ actor_id: ID.owner, group_id: ID.gBottle, name_en: 'Insecticide Plus', name_ur: 'کیڑے مار پلس' });
+        const after = sale({ paid_amount: 50_000 });
+        expect(after.items[0]).toMatchObject({ name_en: 'Insecticide Plus', name_ur: 'کیڑے مار پلس' });
+        const old = w.rows('invoice_items').find((r) => r.id === before.items[0]!.id)!;
+        expect(old).toMatchObject({ name_en: 'Insecticide 1L', name_ur: null });
+      });
+
+      it('cannot be supplied by the caller: a name on a line or on the sale is refused, and nothing is written', () => {
+        const before = w.snapshot();
+        for (const key of ['name_en', 'name_ur']) {
+          expect(codeOf(() => sale({ lines: [{ ...bottles(1), [key]: 'Fake name' }] })), `${key} on a line`).toBe('INVALID_INPUT');
+          expect(codeOf(() => sale({ [key]: 'Fake name' })), `${key} on the sale`).toBe('INVALID_INPUT');
+        }
+        expect(w.snapshot()).toEqual(before);
+      });
+
+      it('a sale of two different products names each line after its OWN product', () => {
+        w.update('products', ID.bottle, { name_en: 'Insecticide 1L', name_ur: 'کیڑے مار دوا' });
+        w.update('products', ID.fert, { name_en: 'Fertilizer 1kg', name_ur: 'کھاد' });
+        const result = sale({ paid_amount: 55_000, lines: [bottles(1), { product_id: ID.fert, qty: 250 }] });
+        const nameOf = (productId: string) => result.items.find((i) => i.product_id === productId);
+        expect(nameOf(ID.bottle)).toMatchObject({ name_en: 'Insecticide 1L', name_ur: 'کیڑے مار دوا' });
+        expect(nameOf(ID.fert)).toMatchObject({ name_en: 'Fertilizer 1kg', name_ur: 'کھاد' });
+      });
+
+      it('every line of a sale split over two batches carries the name', () => {
+        const result = sale({ paid_amount: 450_000, lines: [bottles(9)] }); // more than one batch holds
+        expect(result.items.length).toBeGreaterThan(1);
+        for (const item of result.items) expect(item.name_en).toBe('Insecticide 1L');
+      });
+    });
+
     describe('walk-in sale', () => {
       it('writes the invoice, the line and the stock movement, and nothing else', () => {
         const result = sale({ paid_amount: 100_000, lines: [bottles(2)] });

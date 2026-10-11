@@ -49,6 +49,13 @@ export const InvoiceItem = z.object({
   tax_rate_bp: TaxRateBp,
   tax_amount: NonNegPaisa,
   line_total: NonNegPaisa,
+  /**
+   * What was sold, as the shop's catalogue named it AT SALE TIME (group name + size label, in English and Urdu; at least one is set).
+   * Copied by the sale service from the product, never typed by the screen and never edited, so a receipt or reprint shows the name the
+   * customer was given even if the product is renamed later.
+   */
+  name_en: z.string().nullable(),
+  name_ur: z.string().nullable(),
   ...syncScope,
   ...lineMeta,
 });
@@ -78,6 +85,8 @@ export const SalesReturnItem = z.object({
   invoice_item_id: Id,
   qty: Qty,
   refund_amount: NonNegPaisa,
+  /** The tax inside `refund_amount`, worked out the same running-difference way, so all of a line's tax comes back and never more. */
+  tax_refund: NonNegPaisa,
   condition: ReturnCondition,
   ...syncScope,
   ...lineMeta,

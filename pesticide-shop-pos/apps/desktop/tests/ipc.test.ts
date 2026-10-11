@@ -183,6 +183,31 @@ describe('the whole path: typed client -> IPC -> validation -> real handlers -> 
     expect(shop.count('invoices')).toBe(0);
   });
 
+  it('the screen cannot type what an invoice line is called: name_en and name_ur are refused, and an honest sale gets the catalogue name on every line', async () => {
+    await api.auth.login({ username: 'staff', password: STAFF.password });
+    const product = shop.demo.products['insecticide1l']!;
+    const spoof = (input: unknown) => (api.sale.create as (i: unknown) => Promise<unknown>)(input).catch((e: unknown) => e);
+    for (const key of ['name_en', 'name_ur']) {
+      expect(await spoof({ paid_amount: 1, lines: [{ product_id: product, qty: 1000, [key]: 'Fake name' }] }), `${key} on a line`).toMatchObject({ code: 'INVALID_INPUT' });
+      expect(await spoof({ paid_amount: 1, [key]: 'Fake name', lines: [{ product_id: product, qty: 1000 }] }), `${key} on the sale`).toMatchObject({ code: 'INVALID_INPUT' });
+    }
+    expect(shop.count('invoices')).toBe(0);
+    const sold = await api.sale.create({ paid_amount: 50_000, lines: [{ product_id: product, qty: 1000 }] });
+    const stored = shop.runtime.db.prepare('SELECT name_en, name_ur FROM invoice_items WHERE invoice_id = ?').all(sold.invoice.id) as { name_en: string | null; name_ur: string | null }[];
+    const catalogueName = shop.runtime.db.prepare('SELECT name_en, name_ur FROM products WHERE id = ?').get(product) as { name_en: string | null; name_ur: string | null };
+    expect(stored).toEqual([catalogueName]);
+    expect(sold.items.map((i) => ({ name_en: i.name_en, name_ur: i.name_ur }))).toEqual([catalogueName]); // the reply carries it too, for the receipt
+  });
+
+  it('the owner cannot type the tax of a refund either: tax_refund on a return line is refused, and nothing is written', async () => {
+    await api.auth.login({ username: 'owner', password: OWNER.password });
+    const spoof = (input: unknown) => (api.salesReturn.create as (i: unknown) => Promise<unknown>)(input).catch((e: unknown) => e);
+    const line = { invoice_item_id: '00000000-0000-4000-8000-000000000001', qty: 1000, condition: 'resellable' };
+    const error = await spoof({ invoice_id: '00000000-0000-4000-8000-000000000002', refund_method: 'khata_credit', items: [{ ...line, tax_refund: 1 }] });
+    expect(error).toMatchObject({ code: 'INVALID_INPUT' });
+    expect(shop.count('sales_returns')).toBe(0);
+  });
+
   it('a business rule from the core service keeps its params: out of stock says how much there is', async () => {
     await api.auth.login({ username: 'staff', password: STAFF.password });
     const error = await api.sale.create({ paid_amount: 999_999_999, lines: [{ product_id: shop.demo.products['insecticide1l']!, qty: 50_000 }] }).catch((e: unknown) => e);

@@ -263,18 +263,89 @@ describe('the Products screen flags agree with the database views (open question
   });
 });
 
-describe('KNOWN DIFFERENCE until migration 005: v_low_stock lists sizes with no minimum, the Products screen does not', () => {
-  it('a size with min_stock 0 and no stock is in v_low_stock but is not flagged low by catalogue.list', async () => {
+describe('the low-stock views and the Products screen agree (migration 005: low means a minimum is set AND sellable stock is at or below it)', () => {
+  it('v_low_stock and v_group_stock list exactly the sizes catalogue.list flags low: no minimum, above it, exactly at it, only expired stock, switched off', async () => {
     const t = await createSqliteWorld({ stock: false });
     try {
       const s = services(t);
-      const x = s.catalogue.createGroup({ actor_id: ID.owner, name_en: 'Unwatched', sizes: [{ pack_label: '', base_unit: 'ml', pack_size: 500, retail_price: 100, wholesale_price: 90, min_stock: 0 }] });
-      const inView = (t.db.prepare('SELECT COUNT(*) AS c FROM v_low_stock WHERE product_id = ?').get(x.sizes[0]!.id) as { c: number }).c;
-      const flagged = s.catalogue.list({ query: 'unwatched' }).hits[0]!.sizes[0]!.flags.low;
-      expect(inView).toBe(1); // the view still says low (min_stock 0: 0 <= 0)
-      expect(flagged).toBe(false); // the Products screen says not low
-      // When migration 005 changes v_low_stock to require min_stock > 0, this test must be changed to expect inView 0:
-      // that is the moment the two agree again (see docs/build-plan.md, "Migration 005").
+      const size = (label: string, min_stock: number) => ({ pack_label: label, base_unit: 'ml' as const, pack_size: 500, retail_price: 100, wholesale_price: 90, min_stock });
+      const x = s.catalogue.createGroup({ actor_id: ID.owner, name_en: 'Watched', sizes: [size('no minimum', 0), size('exactly at', 1000), size('above', 1000), size('only expired', 1000), size('switched off', 1000)] });
+      const [noMin, exactly, above, expired, off] = x.sizes as [typeof x.sizes[0], typeof x.sizes[0], typeof x.sizes[0], typeof x.sizes[0], typeof x.sizes[0]];
+      const stock = (productId: string, qty: number, days: number, batchNo: string) =>
+        s.stock.openingStock({ product_id: productId, batch_no: batchNo, expiry_date: t.day(days), cost_price: 1000, qty, created_by: ID.owner });
+      stock(off.id, 700, 100, 'O'); // a size that is switched off still holds this stock; the group's total includes it
+      stock(exactly.id, 1000, 100, 'E'); // 1000 <= 1000: low
+      stock(above.id, 1500, 100, 'A'); // 1500 > 1000: not low
+      stock(expired.id, 5000, -5, 'X'); // plenty of stock, but all of it expired: sellable 0, low
+      s.catalogue.setSizeActive({ actor_id: ID.owner, id: off.id, is_active: false }); // no stock, switched off: never low
+
+      const inView = (t.db.prepare('SELECT product_id FROM v_low_stock WHERE group_id = ? ORDER BY pack_label').all(x.group.id) as { product_id: string }[]).map((r) => r.product_id);
+      const listed = s.catalogue.list({ query: 'watched', include_inactive: true }).hits[0]!;
+      const flagged = listed.sizes.filter((z) => z.flags.low).map((z) => z.id);
+      expect([...inView].sort()).toEqual([expired.id, exactly.id].sort());
+      expect(flagged.sort()).toEqual([...inView].sort()); // the view and the screen say the same
+      expect(inView).not.toContain(noMin.id);
+
+      const group = t.db.prepare('SELECT low_size_count FROM v_group_stock WHERE group_id = ?').get(x.group.id) as { low_size_count: number };
+      expect(group.low_size_count).toBe(2);
+      expect(group.low_size_count).toBe(listed.summary.low_sizes);
+      const stockOfGroup = t.db.prepare('SELECT stock_total, stock_sellable FROM v_group_stock WHERE group_id = ?').get(x.group.id) as { stock_total: number; stock_sellable: number };
+      expect(stockOfGroup).toEqual({ stock_total: listed.summary.stock_total, stock_sellable: listed.summary.stock_sellable });
+      expect(stockOfGroup.stock_total).toBe(1000 + 1500 + 5000 + 700); // every size, the switched-off one too
+    } finally {
+      t.close();
+    }
+  });
+});
+
+describe('v_profit_by_day takes back exactly what was refunded, without the tax inside it (migration 005)', () => {
+  it('a taxed line returned in three parts leaves revenue and profit at exactly zero (no paisa left over from rounding a ratio)', async () => {
+    const t = await createSqliteWorld();
+    try {
+      const s = services(t);
+      t.update('customers', ID.customer, { credit_limit: 0 });
+      const sold = s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: ID.taxed, qty: 7000, line_discount: 3_333 }] });
+      for (const qty of [2000, 2000, 3000]) s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty, condition: 'resellable' }] });
+      expect(t.db.prepare('SELECT revenue, cost, profit FROM v_profit_by_day').all()).toEqual([{ revenue: 0, cost: 0, profit: 0 }]);
+    } finally {
+      t.close();
+    }
+  });
+
+  it('over 60 random taxed sales with random partial returns, the view equals the sum of the rows to the paisa (set POS_SEED to repeat a failure)', async () => {
+    const seed = Number(process.env['POS_SEED'] ?? 20_261_011);
+    const t = await createSqliteWorld();
+    try {
+      const s = services(t);
+      t.update('customers', ID.customer, { credit_limit: 0 }); // no limit: the sales are on credit so they can be credited back
+      t.addStock(ID.bTaxed, 5_000_000);
+      let state = seed;
+      const random = (): number => {
+        state = (state + 0x6d2b79f5) | 0;
+        let x = Math.imul(state ^ (state >>> 15), 1 | state);
+        x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+        return ((x ^ (x >>> 14)) >>> 0) / 4_294_967_296;
+      };
+      const int = (low: number, high: number): number => low + Math.floor(random() * (high - low + 1));
+      for (let i = 0; i < 60; i++) {
+        const packs = int(1, 12);
+        const sold = s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: ID.taxed, qty: packs * 1000, line_discount: random() < 0.5 ? 0 : int(0, 20_000) }] });
+        let left = packs;
+        for (let k = int(0, 3); k > 0 && left > 0; k--) {
+          const back = int(1, left);
+          left -= back;
+          s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty: back * 1000, condition: random() < 0.7 ? 'resellable' : 'damaged' }] });
+        }
+      }
+      const sum = (sql: string): number => (t.db.prepare(sql).get() as { v: number }).v;
+      const expectedRevenue =
+        sum('SELECT COALESCE(SUM(line_total - tax_amount), 0) AS v FROM invoice_items') - sum('SELECT COALESCE(SUM(refund_amount - tax_refund), 0) AS v FROM sales_return_items');
+      const view = t.db.prepare('SELECT SUM(revenue) AS revenue, SUM(cost) AS cost, SUM(profit) AS profit FROM v_profit_by_day').get() as { revenue: number; cost: number; profit: number };
+      expect(view.revenue, `seed ${seed}`).toBe(expectedRevenue);
+      expect(view.profit, `seed ${seed}`).toBe(view.revenue - view.cost);
+      // and each line's tax comes back exactly once everything is returned, never more
+      const over = t.db.prepare('SELECT COUNT(*) AS c FROM invoice_items ii WHERE (SELECT COALESCE(SUM(tax_refund), 0) FROM sales_return_items WHERE invoice_item_id = ii.id) > ii.tax_amount').get() as { c: number };
+      expect(over.c, `seed ${seed}`).toBe(0);
     } finally {
       t.close();
     }

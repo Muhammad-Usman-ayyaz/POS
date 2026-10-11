@@ -136,6 +136,57 @@ export function defineSalesReturnTests(make: WorldFactory): void {
       });
     });
 
+    describe('the tax inside each refund (migration 005: sales_return_items.tax_refund)', () => {
+      const taxedSale = () => s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: ID.taxed, qty: 10_000, line_discount: 10_000 }] });
+
+      it('is stored on each return line, in proportion, and over several returns it adds up to exactly the tax charged, never more', () => {
+        const sold = taxedSale();
+        const line = sold.items[0]!;
+        expect(line.tax_amount).toBe(74_746);
+        const first = ret(sold.invoice.id, line.id, 2000);
+        expect(first.items[0]).toMatchObject({ refund_amount: 98_000, tax_refund: 14_949 }); // 74746 / 5
+        ret(sold.invoice.id, line.id, 3000);
+        ret(sold.invoice.id, line.id, 5000);
+        const taxBack = w.rows('sales_return_items').reduce((sum, r) => sum + (r.tax_refund as number), 0);
+        const refunded = w.rows('sales_return_items').reduce((sum, r) => sum + (r.refund_amount as number), 0);
+        expect(taxBack).toBe(74_746);
+        expect(refunded).toBe(490_000);
+        expect(codeOf(() => ret(sold.invoice.id, line.id, 1000))).toBe('RETURN_EXCEEDS_SOLD'); // nothing left to return, so no tax either
+      });
+
+      it('in ONE return of two lines with different tax, each return line stores the tax of its own line', () => {
+        const sold = s.sale.create({
+          customer_id: ID.customer, created_by: ID.staff, paid_amount: 0,
+          lines: [{ product_id: ID.taxed, qty: 4000 }, { product_id: ID.taxed, qty: 6000 }, { product_id: ID.bottle, qty: 1000 }],
+        });
+        const [a, b, plain] = sold.items;
+        expect(new Set([a!.tax_amount, b!.tax_amount]).size).toBe(2); // two different amounts of tax
+        expect(plain!.tax_amount).toBe(0);
+        const back = s.salesReturn.create({
+          invoice_id: sold.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit',
+          items: [a!, b!, plain!].map((i) => ({ invoice_item_id: i.id, qty: i.qty, condition: 'resellable' as const })),
+        });
+        // everything is returned, so each line gives back exactly ITS OWN tax (and a line with none gives back none)
+        expect(back.items.map((i) => [i.invoice_item_id, i.tax_refund])).toEqual([[a!.id, a!.tax_amount], [b!.id, b!.tax_amount], [plain!.id, 0]]);
+        expect(w.rows('sales_return_items').map((r) => r.tax_refund)).toEqual([a!.tax_amount, b!.tax_amount, 0]);
+      });
+
+      it('is 0 for a line with no tax, and the tax comes back with the refund for damaged goods too', () => {
+        const { invoice, item } = tenSold();
+        expect(ret(invoice.id, item.id, 2000).items[0]!.tax_refund).toBe(0);
+        const sold = taxedSale();
+        const damaged = ret(sold.invoice.id, sold.items[0]!.id, 2000, { items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'damaged' }] });
+        expect(damaged.items[0]!.tax_refund).toBe(14_949);
+      });
+
+      it('a tax_refund typed by the caller changes nothing: the stored value is always the one the service works out (the contract refuses the key outright)', () => {
+        const sold = taxedSale();
+        const result = ret(sold.invoice.id, sold.items[0]!.id, 2000, { items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'resellable', tax_refund: 1 }] });
+        expect(result.items[0]!.tax_refund).toBe(14_949);
+        expect(w.rows('sales_return_items').at(-1)!.tax_refund).toBe(14_949);
+      });
+    });
+
     describe('who may return what', () => {
       it('needs an active owner to approve', () => {
         const { invoice, item } = tenSold();

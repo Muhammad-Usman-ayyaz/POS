@@ -19,6 +19,8 @@ const id: Record<string, string> = {};
 function ins(table: string, vals: Row): string {
   const cols = (db.pragma(`table_info(${table})`) as { name: string }[]).map((c) => c.name);
   const row: Row = { ...vals };
+  // Every invoice line says what was sold, as at sale time (the database refuses a line with no name).
+  if (table === 'invoice_items' && row.name_en === undefined && row.name_ur === undefined) row.name_en = 'Test product';
   if (cols.includes('id') && row.id === undefined) row.id = randomUUID();
   for (const c of ['shop_id', 'branch_id', 'device_id']) {
     if (cols.includes(c) && row[c] === undefined && ctx[c]) row[c] = ctx[c];

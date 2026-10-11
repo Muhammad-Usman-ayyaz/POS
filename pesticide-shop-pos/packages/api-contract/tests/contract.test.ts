@@ -131,6 +131,21 @@ describe('field rules', () => {
     expect(sale.safeParse({ paid_amount: 0, payment_method: 'cheque', lines: [line] }).success).toBe(false);
   });
 
+  it('the screen cannot type what an invoice line is called: name_en / name_ur on a line or on the sale are refused (the sale service copies the catalogue name)', () => {
+    const sale = contract['sale:create'].input;
+    const line = { product_id: id(), qty: 1000 };
+    expect(sale.safeParse({ paid_amount: 0, lines: [line] }).success).toBe(true);
+    for (const key of ['name_en', 'name_ur', 'tax_refund']) {
+      expect(sale.safeParse({ paid_amount: 0, lines: [{ ...line, [key]: 'Fake name' }] }).success, `${key} on a line`).toBe(false);
+      expect(sale.safeParse({ paid_amount: 0, lines: [line], [key]: 'Fake name' }).success, `${key} on the sale`).toBe(false);
+    }
+    // nor can a return line carry a tax_refund (the return service works it out)
+    const back = contract['salesReturn:create'].input;
+    const item = { invoice_item_id: id(), qty: 1000, condition: 'resellable' };
+    expect(back.safeParse({ invoice_id: id(), refund_method: 'khata_credit', items: [item] }).success).toBe(true);
+    expect(back.safeParse({ invoice_id: id(), refund_method: 'khata_credit', items: [{ ...item, tax_refund: 1 }] }).success).toBe(false);
+  });
+
   it('stock and Khata changes cannot be zero', () => {
     expect(contract['stock:adjust'].input.safeParse({ batch_id: id(), qty_delta: 0 }).success).toBe(false);
     expect(contract['khata:setOpeningBalance'].input.safeParse({ customer_id: id(), amount: 0 }).success).toBe(false);

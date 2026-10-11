@@ -101,6 +101,7 @@ export function createSalesReturnService(deps: ServiceDeps) {
             invoice_item_id: line.invoice_item_id,
             qty: line.qty,
             refund_amount: line.refund_amount,
+            tax_refund: line.tax_refund,
             condition: line.condition,
             ...deps.scope,
           };

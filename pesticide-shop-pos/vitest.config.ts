@@ -4,6 +4,8 @@ import { configDefaults, defineConfig } from 'vitest/config';
 // which vitest would otherwise find and run a second time (doubling the file and test counts).
 export default defineConfig({
   test: {
-    exclude: [...configDefaults.exclude, '**/.kilo/**', '**/.kilocode/**', '**/.screenshots/**'],
+    // The big-database tests (`*-large.test.ts`) use a lot of CPU for several seconds and starve the UI tests of time when run alongside them:
+    // they have their own command, `npm run test:large`.
+    exclude: [...configDefaults.exclude, '**/.kilo/**', '**/.kilocode/**', '**/.screenshots/**', '**/*-large.test.ts'],
   },
 });

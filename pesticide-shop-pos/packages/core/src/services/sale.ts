@@ -78,9 +78,12 @@ export function createSaleService(deps: ServiceDeps) {
         // `taken` stops two cart lines for the same product from selling the same stock twice.
         const taken = new Map<string, number>();
         const drafts: InvoiceLineDraft[] = [];
+        // The names as the catalogue has them NOW: copied onto each invoice line, so a later rename cannot change this receipt.
+        const names = new Map<string, { name_en: string | null; name_ur: string | null }>();
         const approvals: { user_id: string; action: string; details: unknown }[] = [];
         for (const line of input.lines) {
           const product = liveProduct(tx, line.product_id);
+          names.set(product.id, { name_en: product.name_en, name_ur: product.name_ur });
           // The price is looked up from the product. Only an active owner can set a different one.
           const listPrice = price_type === 'wholesale' ? product.wholesale_price : product.retail_price;
           let unit_price = listPrice;
@@ -172,7 +175,8 @@ export function createSaleService(deps: ServiceDeps) {
 
         const items: NewRow<InvoiceItem>[] = [];
         for (const d of drafts) {
-          const item: NewRow<InvoiceItem> = { id: deps.ids.newId(), invoice_id: invoice.id, ...d, ...deps.scope };
+          const name = names.get(d.product_id) ?? { name_en: null, name_ur: null };
+          const item: NewRow<InvoiceItem> = { id: deps.ids.newId(), invoice_id: invoice.id, ...d, name_en: name.name_en, name_ur: name.name_ur, ...deps.scope };
           tx.invoices.insertItem(item);
           items.push(item);
           tx.stock.insert(

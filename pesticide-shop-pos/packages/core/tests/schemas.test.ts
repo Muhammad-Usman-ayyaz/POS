@@ -86,8 +86,9 @@ describe('Invoice (same rules as the table CHECKs)', () => {
 
 describe('InvoiceItem', () => {
   it('needs a positive whole quantity', () => {
-    const item = { id: randomUUID(), invoice_id: randomUUID(), product_id: randomUUID(), batch_id: randomUUID(), qty: 10_000, unit_price: 50_000, cost_price: 40_000, line_discount: 0, tax_rate_bp: 0, tax_amount: 0, line_total: 500_000, ...scope(), ...lineMeta() };
+    const item = { id: randomUUID(), invoice_id: randomUUID(), product_id: randomUUID(), batch_id: randomUUID(), qty: 10_000, unit_price: 50_000, cost_price: 40_000, line_discount: 0, tax_rate_bp: 0, tax_amount: 0, line_total: 500_000, name_en: 'Insecticide 1 L', name_ur: null, ...scope(), ...lineMeta() };
     expect(InvoiceItem.safeParse(item).success).toBe(true);
+    expect(InvoiceItem.safeParse({ ...item, name_en: undefined }).success).toBe(false); // the name is part of the line (null for a language it has none in)
     expect(InvoiceItem.safeParse({ ...item, qty: 0 }).success).toBe(false);
     expect(InvoiceItem.safeParse({ ...item, qty: 1.5 }).success).toBe(false);
   });

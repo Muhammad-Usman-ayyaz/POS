@@ -48,6 +48,8 @@ def ins(table, **vals):
     for c in ("shop_id", "branch_id", "device_id"):
         if c in cols and c not in vals and c in ctx:
             vals[c] = ctx[c]
+    if table == "invoice_items" and "name_en" not in vals and "name_ur" not in vals:
+        vals["name_en"] = "Test product"  # every invoice line says what was sold (migration 005)
     names = ", ".join(f'"{k}"' for k in vals)
     marks = ", ".join("?" for _ in vals)
     db.execute(f"INSERT INTO {table} ({names}) VALUES ({marks})", list(vals.values()))
@@ -301,6 +303,38 @@ expect_fail("change_log content cannot be edited",
             lambda: db.execute("UPDATE change_log SET row_id = 'x'"), "append-only")
 expect_fail("unsynced change_log rows cannot be deleted",
             lambda: db.execute("DELETE FROM change_log WHERE synced_at IS NULL"), "not synced")
+
+print("\n--- migration 005: return tax, sale-time names, low-stock views ---")
+cols = {r["name"]: r for r in db.execute("PRAGMA table_info(sales_return_items)")}
+check("sales_return_items.tax_refund is NOT NULL and defaults to 0", cols["tax_refund"]["notnull"] == 1 and cols["tax_refund"]["dflt_value"] == "0")
+check("the return above stored tax_refund 0", one("SELECT tax_refund FROM sales_return_items LIMIT 1")["tax_refund"] == 0)
+ii_cols = [r["name"] for r in db.execute("PRAGMA table_info(invoice_items)")]
+check("invoice_items has name_en and name_ur", "name_en" in ii_cols and "name_ur" in ii_cols)
+expect_fail("a return cannot refund more tax than the line was charged (this line had none)",
+            lambda: ins("sales_return_items", sales_return_id=ret, invoice_item_id=ii, qty=1_000, refund_amount=50_000, tax_refund=1, condition="resellable"), "cannot pass the tax")
+expect_fail("a negative tax_refund is refused",
+            lambda: ins("sales_return_items", sales_return_id=ret, invoice_item_id=ii, qty=1_000, refund_amount=50_000, tax_refund=-1, condition="resellable"), "check")
+expect_fail("an invoice line with no name at all is refused",
+            lambda: db.execute("INSERT INTO invoice_items (id, invoice_id, product_id, batch_id, qty, unit_price, cost_price, line_total, shop_id, branch_id, device_id) "
+                               "VALUES (?, ?, ?, ?, 1000, 50000, 40000, 50000, ?, ?, ?)", (str(uuid.uuid4()), inv, bottle, b1, ctx["shop_id"], ctx["branch_id"], ctx["device_id"])), "name of the product")
+expect_fail("the name on an invoice line cannot be edited afterwards",
+            lambda: db.execute("UPDATE invoice_items SET name_en = 'Renamed'"), "append-only")
+expect_fail("a return line cannot be edited afterwards (tax_refund included)",
+            lambda: db.execute("UPDATE sales_return_items SET tax_refund = 1"), "append-only")
+taxed_line = ins("invoice_items", invoice_id=inv, product_id=bottle, batch_id=b1, qty=10_000, unit_price=50_000, cost_price=40_000,
+                 line_total=490_000, tax_rate_bp=1800, tax_amount=74_746, name_en="Taxed test line")
+tax_ret = ins("sales_returns", return_no="RET-A-000099", invoice_id=inv, approved_by=owner, refund_method="khata_credit", total=1)
+expect_fail("a return cannot refund one paisa more tax than the line was charged",
+            lambda: ins("sales_return_items", sales_return_id=tax_ret, invoice_item_id=taxed_line, qty=2_000, refund_amount=98_000, tax_refund=74_747, condition="resellable"), "cannot pass the tax")
+ins("sales_return_items", sales_return_id=tax_ret, invoice_item_id=taxed_line, qty=2_000, refund_amount=98_000, tax_refund=74_000, condition="resellable")
+expect_fail("the tax of earlier returns of the same line counts toward the cap",
+            lambda: ins("sales_return_items", sales_return_id=tax_ret, invoice_item_id=taxed_line, qty=1_000, refund_amount=49_000, tax_refund=747, condition="resellable"), "cannot pass the tax")
+ins("sales_return_items", sales_return_id=tax_ret, invoice_item_id=taxed_line, qty=1_000, refund_amount=49_000, tax_refund=746, condition="resellable")
+check("up to exactly the tax charged is accepted", one("SELECT SUM(tax_refund) s FROM sales_return_items WHERE invoice_item_id=?", taxed_line)["s"] == 74_746)
+unwatched = ins("products", group_id=ins("product_groups", name_en="Unwatched"), name_en="Unwatched", base_unit="ml", pack_size=500, retail_price=100, wholesale_price=90, min_stock=0)
+check("a size with no minimum is not in v_low_stock", one("SELECT COUNT(*) c FROM v_low_stock WHERE product_id=?", unwatched)["c"] == 0)
+db.execute("UPDATE products SET min_stock = 500 WHERE id=?", (unwatched,))
+check("the same size with a minimum and no stock is", one("SELECT COUNT(*) c FROM v_low_stock WHERE product_id=?", unwatched)["c"] == 1)
 
 print("\n--- integrity ---")
 check("PRAGMA integrity_check is ok", one("PRAGMA integrity_check")[0] == "ok")
