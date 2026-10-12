@@ -116,6 +116,15 @@ Built from `docs/design/80 mm receipts, English and Urdu.png` and `A4 invoice, E
 - **PDF fallback:** when there is no printer, the chosen printer is gone, or printing fails, the same page is saved as a PDF and opened. `print:document` then replies `status: 'pdf_saved'` with `fallback`; the screen must show that as a plain notice ("Saved as PDF: no printer found", with the file's path) and not as an error. Only a failure to make even the PDF is an error.
 - To look at the pages without a printer: the HTML from `renderDocumentHtml` opens in any browser.
 
+## Invoice history
+
+`packages/ui/src/pages/invoices/`, route `/invoices`, the "Invoices" item in the sidebar right after POS (the sidebar now has eight pages; there was no other place in the shell that a cashier would find, and the icon bar has room). No design PNG exists for it: it follows the Products screen (same header, search box, filter chips, table card, loading rows, empty and error states). Staff and owner see the same screen; nothing on it carries cost.
+
+- **List** (`invoices:list`): newest first, 25 a page. Search by invoice number, customer name (English or Urdu) or phone, sent 150 ms after typing stops. From / To dates (the UTC invoice date, as the shell filters) and chips All / Active / Voided. Any change of search or filter goes back to the first page; Previous / Next and "26-50 of 60" below the table. Columns: invoice number (the button that opens it; a Voided badge), date, customer or "Walk-in", total, paid, on Khata, method, sold by, and "Printed N times".
+- **Detail** (`invoices:get`, a dialog): date, customer and village, sold by, method, pay-by date, the lines as they were sold (name at sale time, quantity as "2" packs or "250 g" loose, price per pack or per kg, discount, the tax inside the line, line total) and the totals. Dates use `Asia/Karachi`, like the documents.
+- **Print buttons** (`print-actions.tsx`, shared with the POS sale-saved box): Print receipt, Print A4 invoice, Save receipt as PDF, Save invoice as PDF, each one `print:document` with `{ invoice_id, kind, output }` (no language: the shell uses the print settings). One print at a time. A reply with `status: 'pdf_saved'` (asked for, or `fallback` no_printer / print_failed) is a green notice ("Saved as PDF", the reason, and the file path) and never an error box; `is_copy` adds a COPY badge and a line saying the page says COPY. Only a failure of the call itself (not even a PDF could be made) is an error. After a print the list is asked again so "Printed N times" follows.
+- The POS box shows only Print receipt and Save receipt as PDF.
+
 ## Checking the look
 
 `npm run screenshots` builds the app and saves a picture of every screen (English and Urdu) at 1280x720, 1366x768 and 1920x1080 into `apps/desktop/.screenshots/`, with a report of anything that overflows, is clipped, is smaller than 44px, or needs scrolling. It also fails if the page logs a warning, which includes any Content-Security-Policy violation.

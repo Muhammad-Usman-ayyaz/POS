@@ -1,14 +1,15 @@
 import type { Language, SessionUser } from '@pos/api-contract';
-import { ArrowDownToLine, Box, ChartColumn, LogOut, ShoppingCart, SlidersHorizontal, Undo2, Users, type LucideIcon } from 'lucide-react';
+import { ArrowDownToLine, Box, ChartColumn, LogOut, Receipt, ShoppingCart, SlidersHorizontal, Undo2, Users, type LucideIcon } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { LANGUAGES, useI18n, type Messages } from '../i18n/index.js';
 import { cn } from '../lib/cn.js';
 import { SegmentedToggle } from './ui/segmented.js';
 
-export type PageKey = 'pos' | 'products' | 'purchases' | 'customers' | 'returns' | 'reports' | 'settings';
+export type PageKey = 'pos' | 'invoices' | 'products' | 'purchases' | 'customers' | 'returns' | 'reports' | 'settings';
 
 export const NAV_ITEMS: readonly { key: PageKey; path: string; icon: LucideIcon; mirrorInRtl?: boolean }[] = [
   { key: 'pos', path: '/pos', icon: ShoppingCart },
+  { key: 'invoices', path: '/invoices', icon: Receipt },
   { key: 'products', path: '/products', icon: Box },
   { key: 'purchases', path: '/purchases', icon: ArrowDownToLine },
   { key: 'customers', path: '/customers', icon: Users },
@@ -36,7 +37,7 @@ export function LanguageSwitch({ tone, className }: { tone: 'light' | 'dark'; cl
 }
 
 /**
- * The 232px dark sidebar: shop name, the seven pages, the language switch, and who is signed in.
+ * The 232px dark sidebar: shop name, the eight pages, the language switch, and who is signed in.
  * On a narrow window (under 1366px) it shrinks to a 76px icon-only bar; the names stay available to screen
  * readers and as tooltips.
  */

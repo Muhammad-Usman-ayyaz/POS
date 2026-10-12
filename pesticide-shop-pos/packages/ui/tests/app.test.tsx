@@ -141,14 +141,14 @@ describe('sign in', () => {
     return shell;
   }
 
-  it('signs the owner in and shows the app with its seven pages', async () => {
+  it('signs the owner in and shows the app with its eight pages', async () => {
     await openLogin();
     await user().type(screen.getByLabelText('Username'), 'owner');
     await user().type(screen.getByLabelText('Password'), 'right-password');
     await user().click(screen.getByRole('button', { name: 'Sign in' }));
 
     const nav = await screen.findByRole('navigation', { name: 'Main navigation' });
-    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['POS', 'Products', 'Purchases', 'Customers & Khata', 'Returns', 'Reports', 'Settings']);
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['POS', 'Invoices', 'Products', 'Purchases', 'Customers & Khata', 'Returns', 'Reports', 'Settings']);
     expect(screen.getByText('Signed in as')).toBeTruthy();
     expect(within(root()).getByText('Owner', { selector: 'b' })).toBeTruthy();
   });
@@ -233,10 +233,10 @@ describe('the signed-in layout', () => {
     expect(within(nav).getByRole('link', { name: 'POS' }).getAttribute('aria-current')).toBeNull();
   });
 
-  it('Urdu: right to left, the Urdu page names, and the sidebar still has all seven pages', async () => {
+  it('Urdu: right to left, the Urdu page names, and the sidebar still has all eight pages', async () => {
     const nav = await openApp('ur');
     expect(root().getAttribute('dir')).toBe('rtl');
-    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['بلنگ', 'مصنوعات', 'خریداری', 'گاہک اور کھاتہ', 'واپسی', 'رپورٹس', 'ترتیبات']);
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['بلنگ', 'بل', 'مصنوعات', 'خریداری', 'گاہک اور کھاتہ', 'واپسی', 'رپورٹس', 'ترتیبات']);
     expect(await screen.findByRole('searchbox', { name: 'مصنوعات تلاش کریں' })).toBeTruthy();
   });
 
