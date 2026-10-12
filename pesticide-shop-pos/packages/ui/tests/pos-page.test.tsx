@@ -3,6 +3,8 @@
 import { buildApi, type Channel, type Language, type SessionUser } from '@pos/api-contract';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider, ToastProvider } from '../src/index.js';
 import { en } from '../src/i18n/messages/en.js';
@@ -425,6 +427,7 @@ describe('the owner approves at the counter', () => {
     await userEvent.setup().click(document.querySelector<HTMLButtonElement>('[data-line=p1l] button[title]')!);
     const dialog = await screen.findByRole('dialog');
     const discount = within(dialog).getByLabelText(T.line.discount) as HTMLInputElement;
+    await userEvent.setup().click(within(dialog).getByRole('radio', { name: T.line.rupees }));
     await userEvent.setup().type(discount, '100'); // Rs 100 of Rs 500 is 20%: over the staff limit of 5%
     expect(within(dialog).getByText(T.line.discountOver)).toBeTruthy();
     await userEvent.setup().click(within(dialog).getByRole('button', { name: T.line.done }));
@@ -464,7 +467,7 @@ describe('the credit limit', () => {
     expect(shell.sales()).toHaveLength(0);
     await userEvent.setup().click(within(over).getByRole('button', { name: T.over.askOwner }));
     expect(await screen.findByRole('dialog', { name: T.approval.title })).toBeTruthy();
-    expect(screen.getByText(T.approval.actions.credit_override)).toBeTruthy();
+    expect(screen.getByText(T.approval.overChip('Rs 450', 'Rs 100'))).toBeTruthy(); // "Over credit limit · Rs 450 of Rs 100": what the bill leaves, and the limit
     expect(shell.sales()).toHaveLength(0);
   });
 
@@ -967,13 +970,13 @@ describe('Urdu, right to left', () => {
     }
   });
 
-  it('the F2 badge is wrapped: the placed element is a plain span, the .num badge sits inside it', async () => {
+  it('the F2 badge is a flex item after the search input (as in docs/design/Main.dc.html), not a placed element: in Urdu it sits at the far end, away from the magnifier', async () => {
     show(fakeShell(STAFF), STAFF, 'ur');
     const badge = [...document.querySelectorAll('kbd')].find((k) => k.textContent === 'F2' && k.className.includes('num'))!;
     expect(badge).toBeTruthy();
-    expect(badge.className).not.toContain('absolute');
-    expect(badge.parentElement!.className).toContain('absolute');
-    expect(badge.parentElement!.className).toContain('end-3');
+    expect(badge.className).not.toMatch(/(absolute|fixed)|(start|end)-[\d[]/);
+    expect(badge.previousElementSibling!.tagName).toBe('INPUT'); // icon, input, badge: in a right-to-left row the icon is at the right and the badge at the left
+    expect(badge.parentElement!.firstElementChild!.tagName.toLowerCase()).toBe('svg');
   });
 
   it('the pos screen never uses left or right (only start and end), so it flips by itself', async () => {
@@ -984,6 +987,381 @@ describe('Urdu, right to left', () => {
     for (const file of readdirSync(dir).filter((f) => f.endsWith('.tsx'))) {
       const lines = readFileSync(join(dir, file), 'utf8').split('\n');
       lines.forEach((line, i) => expect(bad.test(line), `${file}:${i + 1}: ${line.trim()}`).toBe(false));
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// The build against docs/design/Main.dc.html, PosUrdu.dc.html and PosDialogs.dc.html
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+describe('design: the Paid now field', () => {
+  const paidBox = () => screen.getByLabelText(T.bill.paidNow) as HTMLInputElement;
+
+  it('shows the amount with thousands separators like the design ("1,000"), not "1000"', async () => {
+    const shell = fakeShell();
+    show(shell);
+    await addSize('insect', 'p1l');
+    await userEvent.setup().click(chip('p1l')); // two packs: Rs 1,000
+    await priced('Rs 1,000');
+    expect(paidBox().value).toBe('1,000');
+  });
+
+  it('puts the separators in as the amount is typed, leaves half-typed paisa alone, and tidies them when the field is left', async () => {
+    const shell = fakeShell();
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    const user = userEvent.setup();
+    await user.clear(paidBox());
+    await user.type(paidBox(), '2500');
+    expect(paidBox().value).toBe('2,500');
+    await user.type(paidBox(), '.5');
+    expect(paidBox().value).toBe('2,500.5'); // not rewritten to .50 under the cursor
+    await user.tab(); // leaving the field
+    expect(paidBox().value).toBe('2,500.50');
+    await user.clear(paidBox());
+    await user.type(paidBox(), '12ab');
+    expect(paidBox().value).toBe('12ab'); // text that is not an amount is left as typed, and says so
+    expect(screen.getByRole('alert').textContent).toBe(T.bill.paidInvalid);
+  });
+
+  it('tidying the text does not ask for a new quote (1000 and 1,000 are the same bill)', async () => {
+    const shell = fakeShell();
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await userEvent.setup().clear(paidBox());
+    await userEvent.setup().type(paidBox(), '800');
+    await waitFor(() => expect(document.querySelector('[data-change]')).toBeTruthy());
+    await priced('Rs 500');
+    const before = shell.of('sale:quote').length;
+    paidBox().focus();
+    paidBox().blur();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(shell.of('sale:quote')).toHaveLength(before);
+  });
+
+  it('in Urdu the field is still left to right: "Rs" first, then the amount, so it is never "1,000Rs"', async () => {
+    const shell = fakeShell();
+    show(shell, STAFF, 'ur');
+    const box = paidBox().parentElement!;
+    expect(box.getAttribute('dir')).toBe('ltr');
+    expect(box.firstElementChild!.textContent).toBe('Rs');
+    expect(box.firstElementChild!.nextElementSibling).toBe(paidBox());
+  });
+
+  it('the shown text of an ordinary bill in Urdu is the same "1,000"', async () => {
+    const shell = fakeShell();
+    show(shell, STAFF, 'ur');
+    await typeIn(searchBox(), 'insect');
+    await waitFor(() => expect(chip('p1l')).toBeTruthy());
+    await userEvent.setup().click(chip('p1l'));
+    await userEvent.setup().click(chip('p1l'));
+    await priced('Rs 1,000');
+    expect(paidBox().value).toBe('1,000');
+  });
+});
+
+describe('design: the pay-by date reads "30 Nov 2026", in both languages, never the browser format', () => {
+  async function khataBill(language: Language) {
+    const shell = fakeShell(STAFF);
+    show(shell, STAFF, language);
+    fireEvent.keyDown(window, { key: 'F4' });
+    const dialog = await screen.findByRole('dialog', { name: T.customer.dialogTitle });
+    await within(dialog).findByRole('option', { name: /Rashid|راشد/ });
+    await userEvent.setup().click(within(dialog).getByRole('option', { name: /Rashid|راشد/ }));
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: new RegExp(language === 'ur' ? 'چنیں' : 'Use') }));
+    await typeIn(searchBox(), 'insect');
+    await waitFor(() => expect(chip('p1l')).toBeTruthy());
+    await userEvent.setup().click(chip('p1l'));
+    await priced('Rs 500');
+    const paid = screen.getByLabelText(T.bill.paidNow);
+    await userEvent.setup().clear(paid);
+    await userEvent.setup().type(paid, '100');
+    await waitFor(() => expect(document.querySelector('[data-khata]')).toBeTruthy());
+    return shell;
+  }
+
+  it.each(['en', 'ur'] as const)('%s: the box shows the date 30 days from today as "11 Nov 2026" and a chosen date as "30 Nov 2026"', async (language) => {
+    const shell = await khataBill(language);
+    const box = document.querySelector('[data-khata] [data-date-field]')!;
+    expect(box.textContent).toBe('11 Nov 2026'); // today (2026-10-12 in the quote) + 30 days
+    expect(box.textContent).not.toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
+    fireEvent.change(document.querySelector('[name=due_date]')!, { target: { value: '2026-11-30' } });
+    await waitFor(() => expect(box.textContent).toBe('30 Nov 2026'));
+    await waitFor(() => expect(shell.of('sale:quote').at(-1)!.input.due_date).toBe('2026-11-30')); // the request still carries YYYY-MM-DD
+  });
+});
+
+describe('design: the counter dialogs (docs/design/PosDialogs.dc.html)', () => {
+  it('the over-the-limit box has the design buttons only (Take Rs X more, Ask owner), the amount in bold, and the owner variant says Allow over the limit', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell, STAFF);
+    fireEvent.keyDown(window, { key: 'F4' });
+    const picker = await screen.findByRole('dialog', { name: T.customer.dialogTitle });
+    await userEvent.setup().type(within(picker).getByLabelText(T.customer.searchLabel), 'bash');
+    await userEvent.setup().click(await within(picker).findByRole('option', { name: /Bashir/ }));
+    await userEvent.setup().click(within(picker).getByRole('button', { name: T.customer.use('Bashir') }));
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    const paid = screen.getByLabelText(T.bill.paidNow);
+    await userEvent.setup().clear(paid);
+    await userEvent.setup().type(paid, '100');
+    await waitFor(() => expect(completeButton().disabled).toBe(false));
+    await userEvent.setup().click(completeButton());
+    const over = await screen.findByRole('dialog', { name: T.over.title });
+    expect(within(over).getAllByRole('button').map((b) => b.textContent)).toEqual(['Take Rs 350 more', T.over.askOwner]);
+    expect(within(over).getByText('Rs 350', { selector: 'b' })).toBeTruthy(); // "Take at least <b>Rs 350</b> more now, or ask the owner to approve."
+    expect(over.textContent).toContain(T.over.eyebrow);
+  });
+
+  it('the dialogs use the counter look: a grey chip, a 20px title, a 14px lead, 16px corners', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    fireEvent.keyDown(window, { key: 'F6' });
+    const held = await screen.findByRole('dialog', { name: T.held.title });
+    expect(held.hasAttribute('data-counter-dialog')).toBe(true);
+    expect(held.className).toContain('rounded-2xl');
+    expect(held.querySelector('h2')!.className).toContain('text-xl');
+    expect(held.textContent).toContain('F6');
+    expect(held.textContent).toContain(T.held.lead);
+  });
+
+  it('a held bill with one item says "1 item", not "1 items"', () => {
+    expect(en.pos.held.items(1)).toBe('1 item');
+    expect(en.pos.held.items(3)).toBe('3 items');
+    expect(en.pos.bill.invoice(1)).toBe('New bill · 1 line');
+    expect(en.pos.bill.invoice(3)).toBe('New bill · 3 lines');
+  });
+
+  it('the line editor: Auto is a chip on the batch that expires first, stock reads "9,000 g", a new discount is a percent, and the cursor is in the quantity', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await addSize('fert', 'f1');
+    await priced('Rs 200');
+    await userEvent.setup().click(document.querySelector<HTMLButtonElement>('[data-line=f1] button[title]')!);
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByRole('radio', { name: /B-002/ });
+    const first = within(dialog).getAllByRole('radio').find((r) => r.textContent!.includes('B-001'))!;
+    expect(first.getAttribute('aria-checked')).toBe('true');
+    expect(first.textContent).toContain(T.line.auto);
+    expect(first.textContent).toContain('Exp 12 Mar 2027 · 9,000 g');
+    expect(within(dialog).getAllByRole('radio').find((r) => r.textContent!.includes('B-002'))!.textContent).not.toContain(T.line.auto);
+    expect(within(dialog).getByRole('radio', { name: T.line.percent }).getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(within(dialog).getByLabelText(T.line.quantityUnit('g')));
+    expect(dialog.textContent).toContain('Per kg Rs 200'); // a 1 kg loose pack is priced per kg, not "Per g pack"
+    expect(dialog.textContent).toContain('Fertilizer · 1 kg');
+  });
+
+  it('picking the batch that expires first is "Auto" (no batch is sent), picking the other one sends it', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await userEvent.setup().click(document.querySelector<HTMLButtonElement>('[data-line=p1l] button[title]')!);
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByRole('radio', { name: /B-002/ });
+    await userEvent.setup().click(within(dialog).getByRole('radio', { name: /B-002/ }));
+    await userEvent.setup().click(within(dialog).getByRole('radio', { name: /B-001/ })); // back to the first: Auto again
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: T.line.done }));
+    await priced('Rs 500');
+    expect(shell.of('sale:quote').at(-1)!.input.lines[0].batches).toBeUndefined();
+  });
+
+  it('the approval box names the limit with numbers ("Over credit limit · Rs 450 of Rs 100") and its fields use the 48px dialog input', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    fireEvent.keyDown(window, { key: 'F4' });
+    const picker = await screen.findByRole('dialog', { name: T.customer.dialogTitle });
+    await userEvent.setup().type(within(picker).getByLabelText(T.customer.searchLabel), 'bash');
+    await userEvent.setup().click(await within(picker).findByRole('option', { name: /Bashir/ }));
+    await userEvent.setup().click(within(picker).getByRole('button', { name: T.customer.use('Bashir') }));
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    const paid = screen.getByLabelText(T.bill.paidNow);
+    await userEvent.setup().clear(paid);
+    await userEvent.setup().type(paid, '100');
+    await waitFor(() => expect(completeButton().disabled).toBe(false));
+    await userEvent.setup().click(completeButton());
+    await userEvent.setup().click(within(await screen.findByRole('dialog', { name: T.over.title })).getByRole('button', { name: T.over.askOwner }));
+    const approval = await screen.findByRole('dialog', { name: T.approval.title });
+    expect(approval.textContent).toContain(T.approval.overChip('Rs 450', 'Rs 100'));
+    expect(within(approval).getByLabelText(T.approval.username).className).toContain('h-12');
+    expect(within(approval).getByLabelText(T.approval.password).getAttribute('aria-describedby')).toBe('approval-password-hint');
+  });
+});
+
+describe('design: a held bill resumed says when the batch changed ("FG-014 expired, now FG-020")', () => {
+  async function holdThenResume(first: { no: string; expiry: string }, later: { no: string; expiry: string }) {
+    let now = first;
+    const shell = fakeShell(STAFF, {
+      'sale:quote': (input) => {
+        const q = quoteOf(input, 'staff');
+        q.lines.forEach((l) => {
+          l.batches[0].batch_no = now.no;
+          l.batches[0].expiry_date = now.expiry;
+        });
+        return ok(q);
+      },
+    });
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await userEvent.setup().click(screen.getByRole('button', { name: T.bill.hold }));
+    await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
+    expect(JSON.parse(localStorage.getItem('pos.heldBills.v1')!)[0].lines[0].seenBatch).toEqual({ no: first.no, expiry: first.expiry });
+    now = later;
+    fireEvent.keyDown(window, { key: 'F6' });
+    const dialog = await screen.findByRole('dialog', { name: T.held.title });
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: T.held.resume }));
+    return screen.findByRole('dialog', { name: T.resumed.title });
+  }
+
+  it('the old batch is past its date: "expired, now ..."', async () => {
+    const note = await holdThenResume({ no: 'FG-014', expiry: '2026-10-01' }, { no: 'FG-020', expiry: '2027-08-01' });
+    expect(within(note).getByText(T.resumed.batchLine('Insecticide 1 L', 'FG-014', 'FG-020', true))).toBeTruthy();
+    expect(note.querySelector('[data-note=batch]')!.textContent).toContain(T.resumed.batchChanged);
+    expect(note.textContent).toContain('FG-014 expired, now FG-020');
+  });
+
+  it('the old batch is simply used up: "is used up, now ..."', async () => {
+    const note = await holdThenResume({ no: 'B-001', expiry: '2027-03-12' }, { no: 'B-002', expiry: '2028-02-14' });
+    expect(note.textContent).toContain('B-001 is used up, now B-002');
+  });
+
+  it('the same batch says nothing', async () => {
+    let now = 'B-001';
+    const shell = fakeShell(STAFF, {
+      'sale:quote': (input) => {
+        const q = quoteOf(input, 'staff');
+        q.lines.forEach((l) => (l.batches[0].batch_no = now));
+        return ok(q);
+      },
+    });
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await userEvent.setup().click(screen.getByRole('button', { name: T.bill.hold }));
+    await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
+    now = 'B-001';
+    fireEvent.keyDown(window, { key: 'F6' });
+    await userEvent.setup().click(within(await screen.findByRole('dialog', { name: T.held.title })).getByRole('button', { name: T.held.resume }));
+    await priced('Rs 500');
+    expect(screen.queryByRole('dialog', { name: T.resumed.title })).toBeNull();
+  });
+});
+
+describe('design: the exact wording of docs/design/Main.dc.html and PosUrdu.dc.html', () => {
+  const read = (name: string) => readFileSync(join(__dirname, '..', '..', '..', 'docs', 'design', name), 'utf8');
+  const MAIN = read('Main.dc.html');
+  const URDU = read('PosUrdu.dc.html');
+
+  const english: [string, string][] = [
+    ['search placeholder', en.pos.searchPlaceholder],
+    ['Retail', en.pos.retail],
+    ['Wholesale', en.pos.wholesale],
+    ['Product', en.pos.cols.product],
+    ['Qty', en.pos.cols.qty],
+    ['Price', en.pos.cols.price],
+    ['Total', en.pos.cols.total],
+    ['Search', en.pos.shortcuts.search],
+    ['Customer', en.pos.shortcuts.customer],
+    ['Discount', en.pos.shortcuts.discount],
+    ['Complete sale', en.pos.shortcuts.complete],
+    ['Change', en.pos.customer.change],
+    ['Owes now', en.pos.customer.owesNow],
+    ['After this sale', en.pos.customer.afterSale],
+    ['Includes tax', en.pos.bill.includesTax],
+    ['Paid now', en.pos.bill.paidNow],
+    ['Cash', en.pos.bill.methods.cash],
+    ['Bank', en.pos.bill.methods.bank],
+    ['Easypaisa', en.pos.bill.methods.easypaisa],
+    ['JazzCash', en.pos.bill.methods.jazzcash],
+    ['Goes on Khata', en.pos.bill.goesOnKhata],
+    ['Pay by', en.pos.bill.payBy],
+    ['Hold bill', en.pos.bill.hold],
+    ['Clear', en.pos.bill.clear],
+    ['Out', en.pos.out],
+    ['packs', en.pos.packs],
+    ['Loose · per kg', en.pos.looseBadge('g')],
+    ['Disc. Rs 50', en.pos.discBadge('Rs 50')],
+    ['Near expiry · 24 days', en.pos.nearExpiry(24)],
+    ['Chak 12 · Retail price', `Chak 12 · ${en.pos.customer.retailPrice}`],
+    ['3 left', en.pos.left(3)],
+  ];
+  const urdu: [string, string][] = [
+    ['search placeholder', ur.pos.searchPlaceholder],
+    ['پرچون', ur.pos.retail],
+    ['تھوک', ur.pos.wholesale],
+    ['پراڈکٹ', ur.pos.cols.product],
+    ['مقدار', ur.pos.cols.qty],
+    ['قیمت', ur.pos.cols.price],
+    ['کل', ur.pos.cols.total],
+    ['تلاش', ur.pos.shortcuts.search],
+    ['گاہک', ur.pos.shortcuts.customer],
+    ['رعایت', ur.pos.shortcuts.discount],
+    ['مکمل', ur.pos.shortcuts.complete],
+    ['تبدیل کریں', ur.pos.customer.change],
+    ['ابھی بقایا', ur.pos.customer.owesNow],
+    ['اس بل کے بعد', ur.pos.customer.afterSale],
+    ['ٹیکس سمیت', ur.pos.bill.includesTax],
+    ['کل رقم', ur.pos.bill.total],
+    ['ابھی ادا', ur.pos.bill.paidNow],
+    ['نقد', ur.pos.bill.methods.cash],
+    ['بینک', ur.pos.bill.methods.bank],
+    ['ایزی پیسہ', ur.pos.bill.methods.easypaisa],
+    ['جاز کیش', ur.pos.bill.methods.jazzcash],
+    ['کھاتے میں جائے گا', ur.pos.bill.goesOnKhata],
+    ['ادائیگی کی تاریخ', ur.pos.bill.payBy],
+    ['بل مکمل کریں', ur.pos.bill.complete],
+    ['بل روکیں', ur.pos.bill.hold],
+    ['صاف کریں', ur.pos.bill.clear],
+    ['ختم', ur.pos.out],
+    ['پیک', ur.pos.packs],
+    ['کھلی · فی کلو', ur.pos.looseBadge('g')],
+    ['رعایت Rs 50', ur.pos.discBadge('Rs 50')],
+    ['ایکسپائری قریب · 24 دن', ur.pos.nearExpiry(24)],
+    ['چک 12 · پرچون قیمت', `چک 12 · ${ur.pos.customer.retailPrice}`],
+    ['3 باقی', ur.pos.left(3)],
+  ];
+
+  it.each(english)('English: "%s" is written in Main.dc.html exactly as the build says it', (_label, text) => {
+    expect(MAIN, text).toContain(text);
+  });
+  it.each(urdu)('Urdu: "%s" is written in PosUrdu.dc.html exactly as the build says it', (_label, text) => {
+    expect(URDU, text).toContain(text);
+  });
+});
+
+describe('design: the sizes and spacing of Main.dc.html that a test can read', () => {
+  it('the cart columns are 132 / 92 / 104 px, the aside is 340px, the page has the design padding, the Complete sale button is 58px', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    const header = document.querySelector('[role=columnheader]')!.parentElement!;
+    expect(header.className).toContain('grid-cols-[minmax(0,1fr)_132px_92px_104px_44px]');
+    expect(document.querySelector('aside')!.className).toContain('w-[340px]');
+    expect(completeButton().className).toContain('h-[58px]');
+    expect(completeButton().className).toContain('text-[19px]');
+    expect(document.querySelector('[data-total]')!.className).toContain('text-[34px]');
+    const search = searchBox().parentElement!;
+    expect(search.className).toContain('h-[52px]');
+    expect(search.className).toContain('border-2');
+    expect(searchBox().className).toContain('text-[17px]');
+  });
+
+  it('every button and field on the screen is at least 44px tall (the design file itself says "Targets are 44 px or larger")', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    for (const el of document.querySelectorAll<HTMLElement>('button, input')) {
+      const cls = el.className;
+      // jsdom has no layout: read the size classes. A button with no height class falls back to the button's min-h-11.
+      const small = /\b(?:h|min-h|size)-(?:[1-9]|10)\b/.test(cls) && !/\bmin-h-11\b|\bh-1[1-9]\b|\bsize-11\b/.test(cls);
+      expect(small, `${el.tagName} "${el.textContent?.trim().slice(0, 30)}" has class ${cls}`).toBe(false);
     }
   });
 });

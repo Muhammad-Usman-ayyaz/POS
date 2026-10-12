@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { ApiError } from '@pos/api-contract';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Badge, Button, ErrorNotice, I18nProvider, Input, Notice, Num, SegmentedToggle, ToastProvider, useToast } from '../src/index.js';
+import { Badge, Button, DateField, Dialog, ErrorNotice, I18nProvider, Input, Notice, Num, SegmentedToggle, ToastProvider, useToast } from '../src/index.js';
 
 afterEach(() => {
   cleanup();
@@ -214,5 +214,100 @@ describe('toast', () => {
     open();
     const region = document.querySelector('[aria-live="polite"]')!;
     expect(region.className).toContain('end-6');
+  });
+});
+
+describe('DateField', () => {
+  const field = () => document.querySelector<HTMLElement>('[data-date-field]')!;
+  const input = () => field().querySelector('input')!;
+
+  it.each(['en', 'ur'] as const)('%s: shows the date as "30 Nov 2026" (Latin digits, English month, like the receipts), not the browser mm/dd/yyyy', (language) => {
+    inEnglish(<DateField name="d" value="2026-11-30" onChange={() => undefined} />, language);
+    expect(field().textContent).toBe('30 Nov 2026');
+    expect(input().value).toBe('2026-11-30'); // the real value is still YYYY-MM-DD
+    expect(input().type).toBe('date');
+  });
+
+  it('with no date it shows the placeholder instead, never "mm/dd/yyyy"', () => {
+    inEnglish(<DateField name="d" value="" placeholder="Any date" onChange={() => undefined} />);
+    expect(field().textContent).toBe('Any date');
+  });
+
+  it('a change from the calendar or the keyboard arrives as YYYY-MM-DD, and min and max are passed on', () => {
+    const seen: string[] = [];
+    inEnglish(<DateField name="d" value="2026-11-30" min="2026-10-12" max="2027-01-01" onChange={(v) => seen.push(v)} />);
+    fireEvent.change(input(), { target: { value: '2026-12-05' } });
+    expect(seen).toEqual(['2026-12-05']);
+    expect(input().min).toBe('2026-10-12');
+    expect(input().max).toBe('2027-01-01');
+  });
+
+  it('pressing it (or Enter / Space) opens the calendar', () => {
+    inEnglish(<DateField name="d" value="2026-11-30" onChange={() => undefined} />);
+    const showPicker = vi.fn();
+    input().showPicker = showPicker;
+    fireEvent.click(input());
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    fireEvent.keyDown(input(), { key: ' ' });
+    fireEvent.keyDown(input(), { key: 'a' });
+    expect(showPicker).toHaveBeenCalledTimes(3);
+  });
+
+  it('a calendar that cannot be opened (no showPicker, or it throws) never breaks the field', () => {
+    inEnglish(<DateField name="d" value="" onChange={() => undefined} />);
+    input().showPicker = () => {
+      throw new Error('needs a press');
+    };
+    expect(() => fireEvent.click(input())).not.toThrow();
+  });
+});
+
+describe('the counter dialog (docs/design/PosDialogs.dc.html)', () => {
+  it('has the grey chip, the 20px title, the 14px lead and the 16px corners; the ordinary dialog is unchanged', () => {
+    inEnglish(
+      <>
+        <Dialog counter open title="Held bills" eyebrow="F6" lead="Bills set aside." onClose={() => undefined}>
+          <p>body</p>
+        </Dialog>
+      </>,
+    );
+    const box = screen.getByRole('dialog', { name: 'Held bills' });
+    expect(box.className).toContain('rounded-2xl');
+    expect(box.className).toContain('p-6');
+    expect(box.className).toContain('gap-3.5');
+    expect(box.querySelector('h2')!.className).toContain('text-xl');
+    expect(screen.getByText('F6').className).toContain('bg-thead');
+    expect(screen.getByText('Bills set aside.').className).toContain('text-sm');
+    cleanup();
+    inEnglish(
+      <Dialog open title="Old look" onClose={() => undefined}>
+        <p>body</p>
+      </Dialog>,
+    );
+    expect(screen.getByRole('dialog').className).toContain('rounded-xl');
+    expect(screen.getByRole('dialog').hasAttribute('data-counter-dialog')).toBe(false);
+  });
+});
+
+describe('SegmentedToggle in a track (Retail / Wholesale, % / Rs)', () => {
+  it('the chosen one is a white tile, the other is plain text on the grey track', () => {
+    inEnglish(
+      <SegmentedToggle<'a' | 'b'>
+        tone="track"
+        label="Price type"
+        value="a"
+        onChange={() => undefined}
+        options={[
+          { value: 'a', label: 'Retail' },
+          { value: 'b', label: 'Wholesale' },
+        ]}
+      />,
+    );
+    const [on, off] = screen.getAllByRole('radio');
+    expect(on!.className).toContain('bg-card');
+    expect(on!.className).toContain('rounded-[9px]');
+    expect(off!.className).not.toContain('bg-card ');
+    expect(off!.className).toContain('font-normal');
+    expect(on!.className).toContain('min-h-11');
   });
 });

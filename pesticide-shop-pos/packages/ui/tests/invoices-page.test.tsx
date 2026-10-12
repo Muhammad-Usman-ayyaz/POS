@@ -395,7 +395,11 @@ describe('Printing from the sale-saved box at the counter', () => {
   function showDone(shell: Shell, language: Language = 'en') {
     return render(
       <I18nProvider language={language} onLanguageChange={() => undefined}>
-        <SaleDoneDialog sale={sale} tendered={null} isCash onNewSale={() => undefined} receiptActions={(s) => <PrintActions api={shell.api} invoiceId={s.invoice.id} kinds={['receipt']} />} />
+        <SaleDoneDialog sale={sale} tendered={null} isCash onNewSale={() => undefined} receiptActions={(s, newSale) => (
+          <PrintActions counter api={shell.api} invoiceId={s.invoice.id} kinds={['receipt']}>
+            {newSale}
+          </PrintActions>
+        )} />
       </I18nProvider>,
     );
   }
@@ -407,7 +411,7 @@ describe('Printing from the sale-saved box at the counter', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: en.invoices.print.receipt }));
     await waitFor(() => expect(shell.prints()[0]!.input).toEqual({ invoice_id: 'inv-9', kind: 'receipt', output: 'printer' }));
     await waitFor(() => expect((screen.getByRole('button', { name: en.invoices.print.receipt }) as HTMLButtonElement).disabled).toBe(false));
-    await userEvent.setup().click(screen.getByRole('button', { name: en.invoices.print.receiptPdf }));
+    await userEvent.setup().click(screen.getByRole('button', { name: en.invoices.print.savePdf }));
     await waitFor(() => expect(shell.prints()[1]!.input).toEqual({ invoice_id: 'inv-9', kind: 'receipt', output: 'pdf' }));
   });
 
@@ -478,5 +482,73 @@ describe('Invoices: no cost, and right to left by logical classes only', () => {
       const source = readFileSync(join(dir, file), 'utf8');
       expect(source, file).not.toMatch(/\b(?:ml|mr|pl|pr)-\d|text-left|text-right|\bleft-\d|\bright-\d/);
     }
+  });
+});
+
+describe('Invoices: dates that read the same in English and Urdu (docs/design: "30 Nov 2026")', () => {
+  it('the From and To boxes say "Any date" until a date is chosen, then "5 Dec 2026", never the browser mm/dd/yyyy, and still send YYYY-MM-DD', async () => {
+    for (const language of ['en', 'ur'] as const) {
+      const T2 = language === 'ur' ? ur.invoices : en.invoices;
+      const shell = fakeShell();
+      show(shell, STAFF, language);
+      await loaded();
+      const from = screen.getByLabelText(T2.from) as HTMLInputElement;
+      const box = from.closest('[data-date-field]')!;
+      expect(box.textContent).toBe(T2.anyDate);
+      fireEvent.change(from, { target: { value: '2026-12-05' } });
+      await waitFor(() => expect(box.textContent).toBe('5 Dec 2026'));
+      expect(box.textContent).not.toMatch(/\d{1,2}\/\d{1,2}\/\d{4}|mm|yyyy/i);
+      await waitFor(() => expect(shell.lists().at(-1)!.input).toMatchObject({ from: expect.stringContaining('2026-12-05') }));
+      cleanup();
+    }
+  });
+});
+
+describe('Printing from the sale-saved box: the "Could not print" box (docs/design/PosDialogs.dc.html)', () => {
+  const sale = { invoice: { id: 'inv-9', invoice_no: 'INV-A-000009', total: 50_000, paid_amount: 50_000, payment_method: 'cash' }, items: [], payment_id: 'p' } as unknown as SaleView;
+  const showDone = (shell: Shell) =>
+    render(
+      <I18nProvider language="en" onLanguageChange={() => undefined}>
+        <SaleDoneDialog
+          sale={sale}
+          tendered={null}
+          isCash
+          onNewSale={() => undefined}
+          receiptActions={(s, newSale) => (
+            <PrintActions counter api={shell.api} invoiceId={s.invoice.id} kinds={['receipt']}>
+              {newSale}
+            </PrintActions>
+          )}
+        />
+      </I18nProvider>,
+    );
+
+  it('the sale-saved box has Save PDF, New sale and Print receipt in that order, Print receipt being the main (green) one', () => {
+    showDone(fakeShell());
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual([en.invoices.print.savePdf, en.pos.done.newSale, en.invoices.print.receipt]);
+    expect(within(dialog).getByRole('button', { name: en.invoices.print.receipt }).className).toContain('bg-accent');
+    expect(within(dialog).getByRole('button', { name: en.pos.done.newSale }).className).not.toContain('bg-accent');
+  });
+
+  it('when not even a PDF could be made, a box says so with Skip, Save PDF and Try again; Try again asks for the same thing, Skip closes it, the sale stays saved', async () => {
+    const shell = fakeShell({ 'print:document': () => fail('INTERNAL') });
+    showDone(shell);
+    await userEvent.setup().click(screen.getByRole('button', { name: en.invoices.print.receipt }));
+    const failed = await screen.findByRole('dialog', { name: en.invoices.print.failedTitle });
+    expect(failed.textContent).toContain(en.invoices.print.failedLead);
+    expect(failed.querySelector('[data-print-failed]')).toBeTruthy();
+    expect(within(failed).getAllByRole('button').map((b) => b.textContent)).toEqual([en.invoices.print.skip, en.invoices.print.savePdf, en.invoices.print.tryAgain]);
+    await userEvent.setup().click(within(failed).getByRole('button', { name: en.invoices.print.tryAgain }));
+    await waitFor(() => expect(shell.prints()).toHaveLength(2));
+    expect(shell.prints()[1]!.input).toEqual(shell.prints()[0]!.input); // the same request again
+    const again = await screen.findByRole('dialog', { name: en.invoices.print.failedTitle });
+    await userEvent.setup().click(within(again).getByRole('button', { name: en.invoices.print.savePdf }));
+    await waitFor(() => expect(shell.prints()).toHaveLength(3));
+    expect(shell.prints()[2]!.input).toEqual({ invoice_id: 'inv-9', kind: 'receipt', output: 'pdf' });
+    const third = await screen.findByRole('dialog', { name: en.invoices.print.failedTitle });
+    await userEvent.setup().click(within(third).getByRole('button', { name: en.invoices.print.skip }));
+    expect(screen.queryByRole('dialog', { name: en.invoices.print.failedTitle })).toBeNull();
+    expect(screen.getByRole('dialog', { name: en.pos.done.title })).toBeTruthy(); // the saved sale is still there
   });
 });

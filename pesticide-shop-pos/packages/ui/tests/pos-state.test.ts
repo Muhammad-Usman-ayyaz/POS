@@ -6,6 +6,9 @@ import {
   addDays,
   addSize,
   approvalSubject,
+  groupDigits,
+  groupTyped,
+  groupedRupeesText,
   newRequestId,
   paidFromText,
   quoteKey,
@@ -16,6 +19,7 @@ import {
   setDiscount,
   stepOf,
   stepQty,
+  tidyPaidText,
   type BillDraft,
   type SizePick,
 } from '../src/pages/pos/pos-state.js';
@@ -113,5 +117,46 @@ describe('small helpers', () => {
     expect(actionsFromParams('credit_override,discount_override')).toEqual(['credit_override', 'discount_override']);
     expect(actionsFromParams('nonsense')).toEqual([]);
     expect(actionsFromParams(undefined)).toEqual([]);
+  });
+});
+
+describe('the Paid now text: thousands separators, as in the design ("1,000")', () => {
+  it('groupedRupeesText: whole rupees get separators, paisa show only when there are some', () => {
+    expect(groupedRupeesText(0)).toBe('0');
+    expect(groupedRupeesText(99_900)).toBe('999');
+    expect(groupedRupeesText(100_000)).toBe('1,000');
+    expect(groupedRupeesText(105_050)).toBe('1,050.50');
+    expect(groupedRupeesText(123_456_700)).toBe('1,234,567');
+    expect(groupDigits(9750)).toBe('9,750');
+  });
+
+  it('groupTyped puts the separators in as the amount is typed and leaves the paisa and anything else as typed', () => {
+    expect(groupTyped('1000')).toBe('1,000');
+    expect(groupTyped('1,000')).toBe('1,000');
+    expect(groupTyped('10000')).toBe('10,000');
+    expect(groupTyped('1,0000')).toBe('10,000'); // a comma in the wrong place is mended
+    expect(groupTyped('1000.')).toBe('1,000.');
+    expect(groupTyped('1000.5')).toBe('1,000.5'); // not rewritten to .50 while typing
+    expect(groupTyped('1000.50')).toBe('1,000.50');
+    expect(groupTyped('')).toBe('');
+    expect(groupTyped('12ab')).toBe('12ab');
+    expect(groupTyped('1.234')).toBe('1.234');
+    expect(groupTyped('Rs 1000')).toBe('Rs 1000');
+  });
+
+  it('tidyPaidText completes the paisa when the field is left, and leaves non-amounts and empty text alone', () => {
+    expect(tidyPaidText('1000.5')).toBe('1,000.50');
+    expect(tidyPaidText('1,000')).toBe('1,000');
+    expect(tidyPaidText('abc')).toBe('abc');
+    expect(tidyPaidText('')).toBe('');
+    expect(tidyPaidText('  ')).toBe('  ');
+  });
+
+  it('1000 and 1,000 are the same bill: the quote key does not change when the text is tidied', () => {
+    const cart = addSize([], litre);
+    const draft: BillDraft = { customerId: null, priceType: 'retail', method: 'cash', reference: '', dueDate: '' };
+    expect(quoteKey(cart, draft, '1000')).toBe(quoteKey(cart, draft, '1,000'));
+    expect(quoteKey(cart, draft, '1000')).not.toBe(quoteKey(cart, draft, '1001'));
+    expect(quoteKey(cart, draft, null)).not.toBe(quoteKey(cart, draft, '0'));
   });
 });
