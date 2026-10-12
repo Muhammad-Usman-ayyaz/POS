@@ -248,6 +248,19 @@ describe('the owner\'s approval at the counter', () => {
     expect(audits('approval_used')).toHaveLength(1);
   });
 
+  it('the approval_used record and the sale are one transaction: if the record cannot be written, there is no invoice, no stock movement and no ledger row', async () => {
+    const sale = overLimit({ request_id: newId() });
+    const grant = await requestApproval(sale);
+    shop.runtime.db.exec("CREATE TEMP TRIGGER fail_approval_used BEFORE INSERT ON audit_log WHEN NEW.action = 'approval_used' BEGIN SELECT RAISE(ABORT, 'audit write failed'); END");
+    const before = footprint();
+    await expect(h['sale:create']!({ ...sale, approval_token: grant.token })).rejects.toThrow(/audit write failed/);
+    expect(footprint()).toEqual(before); // no invoice, no lines, no stock movement, no ledger row, no payment, no other audit row
+    expect(shop.count('invoices')).toBe(0);
+    shop.runtime.db.exec('DROP TRIGGER fail_approval_used');
+    // and the other way round: a sale that fails leaves no approval_used row behind
+    expect(audits('approval_used')).toEqual([]);
+  });
+
   it('wrong passwords: the owner\'s name with the wrong password, a staff password, and an unknown name all get the same refusal, and each is written down', async () => {
     const sale = overLimit();
     for (const [username, password] of [['owner', 'wrong-password'], ['staff', STAFF.password], ['nobody', 'x']] as const) {

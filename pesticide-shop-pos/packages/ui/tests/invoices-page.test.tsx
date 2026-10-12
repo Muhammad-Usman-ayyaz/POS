@@ -5,13 +5,21 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { userEvent } from '@testing-library/user-event';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../src/index.js';
 import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
 import { InvoicesPage, PAGE_SIZE } from '../src/pages/invoices/invoices-page.js';
 import { PrintActions } from '../src/pages/invoices/print-actions.js';
 import { SaleDoneDialog } from '../src/pages/pos/bill-dialogs.js';
+
+// The zone the invoice screens use comes from ONE constant (pages/invoices/time-zone.ts). Tests may move it to prove every date follows it.
+const zone = vi.hoisted(() => ({ value: 'Asia/Karachi' }));
+vi.mock('../src/pages/invoices/time-zone.js', () => ({
+  get SHOP_TIME_ZONE() {
+    return zone.value;
+  },
+}));
 
 const OWNER: SessionUser = { id: 'u1', name: 'Owner', username: 'owner', role: 'owner' };
 const STAFF: SessionUser = { id: 'u2', name: 'Salesman', username: 'staff', role: 'staff' };
@@ -94,7 +102,10 @@ const openSecond = async () => {
 };
 const printButton = (kind: string, output: string) => document.querySelector<HTMLButtonElement>(`[data-print="${kind}:${output}"]`)!;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  zone.value = 'Asia/Karachi';
+});
 
 describe('Invoices: the list', () => {
   it('shows a loading state, then the rows: number, date, customer or walk-in, total, paid, on Khata, method, sold by and the printed hint', async () => {
@@ -192,6 +203,40 @@ describe('Invoices: the list', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: T.retry }));
     await loaded();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('Invoices: the time zone of every date', () => {
+  // 2026-10-12 05:42 UTC is 10:42 in Karachi (UTC+5) and 18:42 in Auckland (UTC+13 in October).
+  it('the list and the detail both show invoice dates in the one shop zone', async () => {
+    const shell = fakeShell();
+    show(shell);
+    await loaded();
+    const rowText = () => document.querySelector('[data-invoice-row="INV-A-000002"]')!.textContent!;
+    expect(rowText()).toContain('12 Oct 2026, 10:42');
+    await openSecond();
+    const detail = screen.getByRole('dialog');
+    expect(detail.textContent).toContain('12 Oct 2026, 10:42');
+    cleanup();
+
+    zone.value = 'Pacific/Auckland'; // change the ONE constant: nothing else is touched
+    show(fakeShell());
+    await loaded();
+    expect(rowText()).toContain('12 Oct 2026, 18:42');
+    expect(rowText()).not.toContain('10:42');
+    await openSecond();
+    expect(screen.getByRole('dialog').textContent).toContain('12 Oct 2026, 18:42');
+    expect(screen.getByRole('dialog').textContent).not.toContain('10:42');
+  });
+
+  it('no file in pages/invoices names a time zone except time-zone.ts', () => {
+    const dir = join(__dirname, '..', 'src', 'pages', 'invoices');
+    for (const file of readdirSync(dir).filter((f) => /\.tsx?$/.test(f) && f !== 'time-zone.ts')) {
+      const text = readFileSync(join(dir, file), 'utf8');
+      expect(/['"`][A-Z][A-Za-z_]+\/[A-Z][A-Za-z_]+['"`]/.test(text), `${file} names an IANA zone`).toBe(false);
+      expect(text, file).not.toContain('Karachi');
+    }
+    expect(readFileSync(join(dir, 'time-zone.ts'), 'utf8')).toContain("export const SHOP_TIME_ZONE = 'Asia/Karachi'");
   });
 });
 

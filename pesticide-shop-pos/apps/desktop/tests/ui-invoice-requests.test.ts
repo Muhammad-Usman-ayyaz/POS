@@ -59,6 +59,14 @@ describe('the invoice history against the real shell', () => {
   });
 });
 
+describe('the list request the screen builds', () => {
+  it('trims the search text, and sends nothing for blank text or unset filters', () => {
+    expect(I.buildListRequest(filters({ query: '  rashid ' }))).toEqual({ query: 'rashid', limit: I.PAGE_SIZE, offset: 0 });
+    expect(I.buildListRequest(filters({ query: '   ' }))).toEqual({ limit: I.PAGE_SIZE, offset: 0 });
+    expect(I.buildListRequest(filters({ status: 'voided', from: '2026-10-01', to: '2026-10-31', offset: 25 }))).toEqual({ status: 'voided', from: '2026-10-01', to: '2026-10-31', limit: I.PAGE_SIZE, offset: 25 });
+  });
+});
+
 describe('the print buttons against the real shell', () => {
   it('each button\'s request is accepted and prints the right document; the list counts the prints', async () => {
     const printing = fakePrinting();

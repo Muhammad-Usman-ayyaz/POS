@@ -70,10 +70,32 @@ describe('the production build', () => {
     expect(Object.keys(pkg.dependencies)).toContain('better-sqlite3'); // see the "//" note in package.json before removing it
   });
 
-  it('carries the print fonts INSIDE the main process bundle (woff2 data, no font file to ship or lose) and can render a document there', () => {
+  it('carries the print fonts INSIDE the main process bundle: the right font file under each name, byte for byte, and each name on the right @font-face', () => {
     const main = readFileSync(join(out, 'main', 'index.js'), 'utf8');
-    expect(main.match(/data:font\/woff2;base64,d09GMg/g)?.length).toBeGreaterThanOrEqual(4); // Plex 400, 600, 700 and Naskh
-    expect(main).toContain("font-family:'Naskh'"); // the document stylesheet is in the bundle too
+    const modules = join(desktop, '..', '..', 'node_modules');
+    // name in the bundle -> the font file it must hold (Plex 400, 600, 700 for English and numbers; Naskh for Urdu)
+    const expected: Record<string, string> = {
+      plex400: join(modules, '@fontsource', 'ibm-plex-sans', 'files', 'ibm-plex-sans-latin-400-normal.woff2'),
+      plex600: join(modules, '@fontsource', 'ibm-plex-sans', 'files', 'ibm-plex-sans-latin-600-normal.woff2'),
+      plex700: join(modules, '@fontsource', 'ibm-plex-sans', 'files', 'ibm-plex-sans-latin-700-normal.woff2'),
+      naskh: join(modules, '@fontsource-variable', 'noto-naskh-arabic', 'files', 'noto-naskh-arabic-arabic-wght-normal.woff2'),
+    };
+    const sizes: Record<string, number> = {};
+    for (const [name, file] of Object.entries(expected)) {
+      const bytes = readFileSync(file);
+      sizes[name] = bytes.length;
+      const held = new RegExp(`const ${name} = "data:font/woff2;base64,([A-Za-z0-9+/=]+)"`).exec(main);
+      expect(held, `${name} is a woff2 data address in the bundle`).not.toBeNull();
+      expect(Buffer.from(held![1]!, 'base64').equals(bytes), `${name} holds exactly ${file.slice(modules.length + 1)}`).toBe(true);
+    }
+    expect(sizes['naskh']).toBeGreaterThan(50_000); // the Urdu face is the big one: a Latin-only font here would print Urdu as empty boxes
+    expect(sizes['naskh']).toBeGreaterThan(sizes['plex400']! * 2);
+    expect(main).toMatch(/documentFonts = \{ plex400, plex600, plex700, naskh \}/); // each name goes to the same-named slot
+    // the stylesheet puts each of them on the right face
+    expect(main).toContain("font-family:'Plex';font-weight:400;font-style:normal;src:url(${fonts.plex400})");
+    expect(main).toContain("font-family:'Plex';font-weight:600;font-style:normal;src:url(${fonts.plex600})");
+    expect(main).toContain("font-family:'Plex';font-weight:700;font-style:normal;src:url(${fonts.plex700})");
+    expect(main).toContain("font-family:'Naskh';font-weight:400 700;font-style:normal;src:url(${fonts.naskh})");
     expect(main).toContain('renderToStaticMarkup');
   });
 

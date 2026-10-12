@@ -3,7 +3,7 @@
 import { buildApi, type Channel, type Language, type SessionUser } from '@pos/api-contract';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider, ToastProvider } from '../src/index.js';
 import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
@@ -305,6 +305,7 @@ describe('completing the sale', () => {
     expect(typeof sale.request_id).toBe('string');
     expect(sale.request_id.length).toBeGreaterThanOrEqual(8);
     expect(document.querySelector('[data-done-total]')!.textContent).toBe('Rs 500');
+    expect(screen.queryByText(T.done.onKhata)).toBeNull(); // paid in full: nothing on Khata
     // New sale clears the bill.
     await userEvent.setup().click(screen.getByRole('button', { name: T.done.newSale }));
     expect(document.querySelector('[data-line]')).toBeNull();
@@ -529,6 +530,7 @@ describe('customers', () => {
     await userEvent.setup().type(paid, '100');
     await waitFor(() => expect(completeButton().disabled).toBe(true));
     await waitFor(() => expect(screen.getByText(T.bill.walkInFull)).toBeTruthy());
+    expect(document.querySelector('[data-khata]')).toBeNull(); // nothing can go on Khata without a customer, however much is unpaid
     expect(shell.sales()).toHaveLength(0);
   });
 
@@ -660,6 +662,244 @@ describe('held bills', () => {
     show(shell);
     await userEvent.setup().click(screen.getByRole('button', { name: T.bill.hold }));
     expect(localStorage.getItem('pos.heldBills.v1')).toBeNull();
+  });
+});
+
+describe('the amount paid and the money after the sale', () => {
+  const typePaid = async (text: string) => {
+    const paid = screen.getByLabelText(T.bill.paidNow);
+    await userEvent.setup().clear(paid);
+    await userEvent.setup().type(paid, text);
+  };
+  const pickRashid = async () => {
+    fireEvent.keyDown(window, { key: 'F4' });
+    const dialog = await screen.findByRole('dialog', { name: T.customer.dialogTitle });
+    await within(dialog).findByRole('option', { name: /Rashid/ });
+    await userEvent.setup().click(within(dialog).getByRole('option', { name: /Rashid/ }));
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: T.customer.use('Rashid') }));
+  };
+
+  it('paying MORE than the bill by bank is an overpayment, not change: it blocks the sale, shows no change and never asks for the bill as paid in full', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await userEvent.setup().click(screen.getByRole('radio', { name: T.bill.methods.bank }));
+    await typePaid('800');
+    await waitFor(() => expect(shell.of('sale:quote').at(-1)!.input.paid_amount).toBe(80_000));
+    await new Promise((r) => setTimeout(r, 400)); // a follow-up "paid in full" quote, if the screen wrongly sent one, would be here by now
+    expect(shell.of('sale:quote').filter((c) => c.input.payment_method === 'bank').every((c) => c.input.paid_amount === 80_000)).toBe(true);
+    expect(document.querySelector('[data-change]')).toBeNull();
+    expect(completeButton().disabled).toBe(true);
+    fireEvent.keyDown(window, { key: 'F12' });
+    expect(shell.sales()).toHaveLength(0);
+  });
+
+  it('cash handed over beyond the bill IS change: the bill is priced as paid in full and the sale is allowed', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await typePaid('800');
+    await waitFor(() => expect(document.querySelector('[data-change]')).toBeTruthy());
+    await waitFor(() => expect(completeButton().disabled).toBe(false));
+    expect(shell.of('sale:quote').some((c) => c.input.paid_amount === undefined)).toBe(true);
+  });
+
+  it('the change hint goes the moment the method is no longer cash, without waiting for a new quote', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await typePaid('800');
+    await waitFor(() => expect(document.querySelector('[data-change]')).toBeTruthy());
+    fireEvent.click(screen.getByRole('radio', { name: T.bill.methods.bank }));
+    expect(document.querySelector('[data-change]')).toBeNull(); // checked straight away: the quote of the cash bill is still on screen
+  });
+
+  it('a sale partly on Khata says how much went on Khata, in the saved-sale window, from the total less what was paid', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await pickRashid();
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await typePaid('100');
+    await waitFor(() => expect(document.querySelector('[data-khata]')!.textContent).toContain('Rs 400'));
+    await waitFor(() => expect(completeButton().disabled).toBe(false));
+    await userEvent.setup().click(completeButton());
+    const done = await screen.findByRole('dialog', { name: T.done.title });
+    expect(document.querySelector('[data-done-total]')!.textContent).toBe('Rs 500');
+    const label = within(done).getByText(T.done.onKhata);
+    expect(label.nextElementSibling!.textContent!.replace(/[⁦⁩]/g, '')).toBe('Rs 400'); // 500 less the 100 paid, not the total
+    expect(within(done).queryByText(T.done.changeDue)).toBeNull(); // no cash handed over beyond the bill
+  });
+});
+
+describe('held bills in detail', () => {
+  const stored = () => JSON.parse(localStorage.getItem('pos.heldBills.v1') ?? '[]') as { customer: { id: string } | null; priceType: string; lines: { seenPrice: number | null }[] }[];
+  const hold = async () => userEvent.setup().click(screen.getByRole('button', { name: T.bill.hold }));
+  const pick = async (name: RegExp, label: string) => {
+    fireEvent.keyDown(window, { key: 'F4' });
+    const dialog = await screen.findByRole('dialog', { name: T.customer.dialogTitle });
+    await within(dialog).findByRole('option', { name });
+    await userEvent.setup().click(within(dialog).getByRole('option', { name }));
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: label }));
+  };
+  const customerName = () => document.querySelector('[data-customer-name]')!.textContent;
+  const resumeFirst = async () => {
+    fireEvent.keyDown(window, { key: 'F6' });
+    const dialog = await screen.findByRole('dialog', { name: T.held.title });
+    await userEvent.setup().click(within(dialog).getAllByRole('button', { name: T.held.resume })[0]!);
+  };
+
+  it('holds the customer and the price type with the bill, and resume brings both back, priced for that customer and that price type', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await pick(/Rashid/, T.customer.use('Rashid')); // Rashid's usual price type is retail ...
+    await userEvent.setup().click(screen.getByRole('radio', { name: T.wholesale })); // ... but this bill is wholesale
+    await addSize('insect', 'p1l');
+    await priced('Rs 450');
+    await hold();
+    await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
+    expect(stored()[0]).toMatchObject({ customer: { id: 'c1' }, priceType: 'wholesale' }); // what was put away
+    expect(customerName()).toBe(T.customer.walkIn);
+    expect(screen.getByRole('radio', { name: T.retail }).getAttribute('aria-checked')).toBe('true');
+    await resumeFirst();
+    await waitFor(() => expect(document.querySelector('[data-line=p1l]')).toBeTruthy());
+    expect(customerName()).toBe('Rashid');
+    expect(screen.getByRole('radio', { name: T.wholesale }).getAttribute('aria-checked')).toBe('true');
+    await priced('Rs 450');
+    const reprice = shell.of('sale:quote').filter((c) => c.input.customer_id === 'c1' && c.input.price_type === 'wholesale');
+    expect(reprice.length).toBeGreaterThanOrEqual(2); // the check on resume, and the quote of the restored bill
+    expect(shell.of('sale:quote').at(-1)!.input).toMatchObject({ customer_id: 'c1', price_type: 'wholesale' });
+  });
+
+  it('keeps several held bills: holding one does not replace the others', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await pick(/Rashid/, T.customer.use('Rashid'));
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await hold();
+    await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
+    await pick(/Bashir/, T.customer.use('Bashir'));
+    await addSize('insect', 'p250');
+    await priced('Rs 190');
+    await hold();
+    await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
+    expect(stored().map((b) => b.customer?.id)).toEqual(['c1', 'c3']);
+    fireEvent.keyDown(window, { key: 'F6' });
+    const dialog = await screen.findByRole('dialog', { name: T.held.title });
+    expect(dialog.querySelectorAll('[data-held]')).toHaveLength(2);
+  });
+
+  it('will not resume over a bill that is on the screen: it says so, and nothing is lost on either side', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await addSize('insect', 'p250');
+    await priced('Rs 190');
+    await hold();
+    await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    const quotesBefore = shell.of('sale:quote').length;
+    await resumeFirst();
+    expect(await screen.findByText(T.held.replaceTitle)).toBeTruthy();
+    expect(document.querySelector('[data-line=p250]')).toBeNull();
+    expect(document.querySelector('[data-line=p1l]')).toBeTruthy();
+    expect(stored()).toHaveLength(1); // still held
+    expect(shell.of('sale:quote')).toHaveLength(quotesBefore); // not even priced
+  });
+
+  it('a resumed bill is a new bill: it gets its own request_id, never the one of an earlier try', async () => {
+    let tries = 0;
+    const shell = fakeShell(STAFF, {
+      'sale:create': (input) => {
+        tries += 1;
+        if (tries === 1) return fail('INTERNAL');
+        return ok({ invoice: { id: 'i1', invoice_no: 'INV-A-000002', total: 19_000, paid_amount: input.paid_amount, payment_method: 'cash' }, items: [], payment_id: 'p' });
+      },
+    });
+    show(shell);
+    await addSize('insect', 'p250');
+    await priced('Rs 190');
+    await hold();
+    await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await userEvent.setup().click(completeButton()); // fails: the bill keeps its request_id for the retry
+    await waitFor(() => expect(shell.sales()).toHaveLength(1));
+    await waitFor(() => expect(completeButton().disabled).toBe(false));
+    await userEvent.setup().click(screen.getByRole('button', { name: new RegExp(`${T.removeLine}: `) })); // the screen is empty again, but this is not Clear
+    await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
+    await resumeFirst();
+    await priced('Rs 190');
+    await userEvent.setup().click(completeButton());
+    await waitFor(() => expect(shell.sales()).toHaveLength(2));
+    expect(shell.sales()[1]!.input.request_id).not.toBe(shell.sales()[0]!.input.request_id);
+  });
+
+  it('a resumed line keeps the price it was just checked against, not the one from before it was held', async () => {
+    let quotes = 0;
+    const shell = fakeShell(STAFF, {
+      'sale:quote': (input) => {
+        quotes += 1;
+        return quotes >= 3 ? new Promise(() => undefined) : ok(quoteOf(input, 'staff')); // 1: the bill, 2: the check on resume, 3 on: never answers
+      },
+    });
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await hold();
+    await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
+    expect(stored()[0]!.lines[0]!.seenPrice).toBe(50_000);
+    PRODUCTS.p1l!.retail = 52_000;
+    try {
+      await resumeFirst();
+      const note = await screen.findByRole('dialog', { name: T.resumed.title });
+      await userEvent.setup().click(within(note).getByRole('button', { name: T.resumed.gotIt }));
+      await hold(); // put it away again before any quote of the restored bill has come back
+      await waitFor(() => expect(stored()).toHaveLength(1));
+      expect(stored()[0]!.lines[0]!.seenPrice).toBe(52_000);
+    } finally {
+      PRODUCTS.p1l!.retail = 50_000;
+    }
+  });
+
+  it('when the bill cannot be stored it stays on the screen and says so', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
+    try {
+      await hold();
+      await waitFor(() => expect(document.querySelector('[data-line=p1l]')).toBeTruthy());
+      await new Promise((r) => setTimeout(r, 50));
+      expect(document.querySelector('[data-line=p1l]')).toBeTruthy(); // not cleared
+      expect(screen.queryByText(T.held.held)).toBeNull(); // and not reported as held
+    } finally {
+      spy.mockRestore();
+    }
+    expect(localStorage.getItem('pos.heldBills.v1')).toBeNull();
+  });
+});
+
+describe('the shortcut keys', () => {
+  it.each(['F2', 'F4', 'F6', 'F8', 'F12'])('%s is taken by the screen: the browser does not also act on it', async (key) => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    expect(fireEvent.keyDown(window, { key })).toBe(false); // false = preventDefault was called
+  });
+
+  it('while a dialog is open the keys are left alone', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    expect(fireEvent.keyDown(window, { key: 'F4' })).toBe(false);
+    await screen.findByRole('dialog', { name: T.customer.dialogTitle });
+    expect(fireEvent.keyDown(window, { key: 'F2' })).toBe(true);
   });
 });
 

@@ -73,6 +73,15 @@ describe('invoice history, receipts and printing', () => {
       expect((await h()['print:getConfig']({})).shop_phone).toBeNull();
     });
 
+    it('the settings and their audit row are one transaction: if the audit row cannot be written, no setting changes', async () => {
+      shop.runtime.db.exec("CREATE TEMP TRIGGER fail_cfg_audit BEFORE INSERT ON audit_log WHEN NEW.action = 'print_config_changed' BEGIN SELECT RAISE(ABORT, 'audit write failed'); END");
+      const before = [shop.count('settings'), shop.count('audit_log')];
+      await expect(h()['print:setConfig']({ shop_phone: '0300 1234567', printer_name: 'POS-80' })).rejects.toThrow(/audit write failed/);
+      expect([shop.count('settings'), shop.count('audit_log')]).toEqual(before);
+      expect((await h()['print:getConfig']({})).shop_phone).toBeNull();
+      shop.runtime.db.exec('DROP TRIGGER fail_cfg_audit');
+    });
+
     it('nobody signed in: every invoice and print channel says NOT_SIGNED_IN', async () => {
       const sold = await designSale();
       await shop.signOut();
@@ -96,7 +105,10 @@ describe('invoice history, receipts and printing', () => {
     it('the owner changes the settings, which are written to the audit log; staff then see them', async () => {
       const config = await h()['print:setConfig']({ printer_name: 'POS-80', receipt_language: 'ur', shop_address: 'Main Road, Chak 12', shop_phone: '0300 1234567', shop_name_ur: 'پیسٹیسائیڈ کلب شاپ' });
       expect(config).toEqual({ printer_name: 'POS-80', receipt_language: 'ur', invoice_language: 'en', shop_name_ur: 'پیسٹیسائیڈ کلب شاپ', shop_address: 'Main Road, Chak 12', shop_phone: '0300 1234567' });
-      expect(shop.runtime.db.prepare("SELECT user_id FROM audit_log WHERE action = 'print_config_changed'").all()).toEqual([{ user_id: shop.ownerId }]);
+      const rows = shop.runtime.db.prepare("SELECT user_id, table_name, details FROM audit_log WHERE action = 'print_config_changed'").all() as { user_id: string; table_name: string; details: string }[];
+      expect(rows.map((r) => r.user_id)).toEqual([shop.ownerId]);
+      expect(rows[0]!.table_name).toBe('settings');
+      expect(JSON.parse(rows[0]!.details)).toEqual({ fields: ['printer_name', 'receipt_language', 'shop_address', 'shop_phone', 'shop_name_ur'] });
       // a partial change leaves the rest; null clears
       expect(await h()['print:setConfig']({ shop_phone: null })).toMatchObject({ shop_phone: null, shop_address: 'Main Road, Chak 12', receipt_language: 'ur' });
       await shop.signOut();
