@@ -43,17 +43,17 @@ export function LanguageSwitch({ tone, className }: { tone: 'light' | 'dark'; cl
 export function Sidebar({ shopName, deviceText, user, onSignOut }: { shopName: string; deviceText: string; user: SessionUser; onSignOut: () => void }) {
   const { m, dir } = useI18n();
   return (
-    <aside className="flex h-screen flex-col bg-sidebar px-4 py-8 text-sidebar-ink max-[1365px]:items-center max-[1365px]:px-3">
-      <div className="mb-10 px-2 max-[1365px]:mb-8 max-[1365px]:px-0">
-        <p className="text-[17px] font-bold leading-tight max-[1365px]:hidden">{shopName}</p>
-        <p className="num mt-1 text-sm text-sidebar-muted max-[1365px]:hidden">{deviceText}</p>
+    <aside className="flex h-screen flex-col bg-sidebar px-4 py-8 text-sidebar-ink narrow:items-center narrow:px-3">
+      <div className="mb-10 px-2 narrow:mb-8 narrow:px-0">
+        <p className="text-[17px] font-bold leading-tight narrow:hidden">{shopName}</p>
+        <p className="num mt-1 text-sm text-sidebar-muted narrow:hidden">{deviceText}</p>
         {/* collapsed: a monogram instead of the name */}
-        <p aria-hidden className="hidden size-11 place-items-center rounded-md bg-nav-hover text-lg font-bold max-[1365px]:grid">
+        <p aria-hidden className="hidden size-11 place-items-center rounded-md bg-nav-hover text-lg font-bold narrow:grid">
           {shopName.trim().charAt(0).toUpperCase()}
         </p>
       </div>
 
-      <nav aria-label={m.nav.label} className="flex flex-1 flex-col gap-1 max-[1365px]:w-full">
+      <nav aria-label={m.nav.label} className="flex flex-1 flex-col gap-1 narrow:w-full">
         {NAV_ITEMS.map(({ key, path, icon: Icon, mirrorInRtl }, index) => (
           <NavLink
             key={key}
@@ -62,34 +62,34 @@ export function Sidebar({ shopName, deviceText, user, onSignOut }: { shopName: s
             style={{ '--i': index } as React.CSSProperties}
             className={({ isActive }) =>
               cn(
-                'stagger lift flex min-h-12 items-center gap-2.5 whitespace-nowrap rounded-md px-4 text-base font-medium text-sidebar-ink hover:bg-nav-hover max-[1365px]:justify-center max-[1365px]:px-0',
+                'stagger lift flex min-h-12 items-center gap-2.5 whitespace-nowrap rounded-md px-4 text-base font-medium text-sidebar-ink hover:bg-nav-hover narrow:justify-center narrow:px-0',
                 isActive && 'bg-nav-active font-bold text-white hover:bg-nav-active',
               )
             }
           >
             <Icon aria-hidden className={cn('size-[22px] shrink-0', mirrorInRtl && dir === 'rtl' && '-scale-x-100')} />
-            <span className="max-[1365px]:sr-only">{m.nav[key]}</span>
+            <span className="narrow:sr-only">{m.nav[key]}</span>
           </NavLink>
         ))}
       </nav>
 
-      <div className="flex flex-col gap-4 max-[1365px]:w-full">
-        <LanguageSwitch tone="dark" className="max-[1365px]:flex-col" />
-        <div className="border-t border-white/10 px-2 pt-4 max-[1365px]:flex max-[1365px]:flex-col max-[1365px]:items-center max-[1365px]:gap-2 max-[1365px]:px-0">
-          <p className="text-sm text-sidebar-muted max-[1365px]:hidden">
+      <div className="flex flex-col gap-4 narrow:w-full">
+        <LanguageSwitch tone="dark" className="narrow:flex-col" />
+        <div className="border-t border-white/10 px-2 pt-4 narrow:flex narrow:flex-col narrow:items-center narrow:gap-2 narrow:px-0">
+          <p className="text-sm text-sidebar-muted narrow:hidden">
             {m.sidebar.signedInAs} <b className="text-sidebar-ink">{m.role[user.role]}</b>
           </p>
-          <p aria-hidden title={`${user.name} · ${m.role[user.role]}`} className="hidden size-9 place-items-center rounded-full bg-nav-hover text-sm font-bold max-[1365px]:grid">
+          <p aria-hidden title={`${user.name} · ${m.role[user.role]}`} className="hidden size-9 place-items-center rounded-full bg-nav-hover text-sm font-bold narrow:grid">
             {user.name.trim().charAt(0).toUpperCase()}
           </p>
           <button
             type="button"
             onClick={onSignOut}
             title={m.sidebar.signOut}
-            className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-sm text-sm font-medium text-sidebar-muted hover:text-white max-[1365px]:mt-0 max-[1365px]:justify-center"
+            className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-sm text-sm font-medium text-sidebar-muted hover:text-white narrow:mt-0 narrow:justify-center"
           >
             <LogOut aria-hidden className={cn('size-[18px]', dir === 'rtl' && '-scale-x-100')} />
-            <span className="max-[1365px]:sr-only">{m.sidebar.signOut}</span>
+            <span className="narrow:sr-only">{m.sidebar.signOut}</span>
           </button>
         </div>
       </div>

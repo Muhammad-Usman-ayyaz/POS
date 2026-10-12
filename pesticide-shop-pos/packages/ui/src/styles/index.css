@@ -17,6 +17,19 @@
 /* Tailwind only generates classes it finds in source files, so tell it to look in this package. */
 @source "../";
 
+/*
+ * `narrow:` is the 76px icon-only sidebar: under 1366px wide, and also whenever an ancestor says data-compact="true" (the POS screen
+ * wants the room at any width). Use it like `max-[1365px]:`.
+ */
+@custom-variant narrow {
+  @media (max-width: 1365px) {
+    @slot;
+  }
+  &:where([data-compact="true"] *) {
+    @slot;
+  }
+}
+
 @theme {
   /* ---- colours ---- */
   --color-page: #f4f2ec;

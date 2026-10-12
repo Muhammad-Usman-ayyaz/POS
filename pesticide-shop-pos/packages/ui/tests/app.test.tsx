@@ -213,10 +213,10 @@ describe('the signed-in layout', () => {
     return screen.findByRole('navigation');
   }
 
-  it('lands on POS and shows a placeholder for each page', async () => {
+  it('lands on the POS billing screen (with the compact sidebar) and shows the real screens for the other pages', async () => {
     const nav = await openApp();
-    expect(await screen.findByRole('heading', { name: 'POS', level: 1 })).toBeTruthy();
-    expect(screen.getByText('This screen is built in Phase 5.')).toBeTruthy();
+    expect(await screen.findByRole('searchbox', { name: 'Search products' })).toBeTruthy(); // the real POS screen, not a placeholder
+    expect(document.querySelector('[data-compact="true"]')).not.toBeNull();
     await user().click(within(nav).getByRole('link', { name: 'Products' }));
     expect(await screen.findByRole('heading', { name: 'Products and stock' })).toBeTruthy();
     expect(await screen.findByText('No products yet')).toBeTruthy(); // the real Products screen, not a placeholder
@@ -237,7 +237,7 @@ describe('the signed-in layout', () => {
     const nav = await openApp('ur');
     expect(root().getAttribute('dir')).toBe('rtl');
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['بلنگ', 'مصنوعات', 'خریداری', 'گاہک اور کھاتہ', 'واپسی', 'رپورٹس', 'ترتیبات']);
-    expect(await screen.findByRole('heading', { name: 'بلنگ', level: 1 })).toBeTruthy();
+    expect(await screen.findByRole('searchbox', { name: 'مصنوعات تلاش کریں' })).toBeTruthy();
   });
 
   it('the Returns icon is mirrored in Urdu and not in English', async () => {
