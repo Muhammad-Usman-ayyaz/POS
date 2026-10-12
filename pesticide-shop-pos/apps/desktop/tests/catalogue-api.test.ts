@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerIpc, type IpcEventLike, type IpcMainLike } from '../src/main/ipc.js';
 import { CAPABILITY_ROLES, CHANNEL_POLICY, can, guardHandlers, sanitizeErrorFor, type Capability } from '../src/main/permissions.js';
 import type { Handlers } from '../src/main/runtime.js';
-import { day, makeShop, type Shop } from './support.js';
+import { day, fakePrinting, makeShop, type Shop } from './support.js';
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // What the policy SHOULD be, written out by hand. If someone loosens a channel, this table must be changed on purpose.
@@ -28,6 +28,13 @@ const EXPECTED: Record<Channel, Who> = {
   'customers:search': 'signed-in',
   'approval:request': 'signed-in',
   'salesReturn:create': 'owner',
+  'invoices:list': 'signed-in',
+  'invoices:get': 'signed-in',
+  'invoices:receipt': 'signed-in',
+  'print:document': 'signed-in',
+  'printers:list': 'signed-in',
+  'print:getConfig': 'signed-in',
+  'print:setConfig': 'owner',
   'stock:batchesOf': 'signed-in',
   'stock:openingStock': 'owner',
   'stock:adjust': 'owner',
@@ -70,6 +77,13 @@ const SAMPLES: Record<Channel, () => Record<string, unknown>> = {
   'customers:search': () => ({ query: 'rashid' }),
   'approval:request': () => ({ username: 'owner', password: 'x', actions: ['credit_override'], sale: { paid_amount: 0, lines: [{ product_id: randomUUID(), qty: 1000 }] } }),
   'salesReturn:create': () => ({ invoice_id: randomUUID(), refund_method: 'khata_credit', items: [{ invoice_item_id: randomUUID(), qty: 1000, condition: 'resellable' }] }),
+  'invoices:list': () => ({ query: 'rashid' }),
+  'invoices:get': () => ({ invoice_id: randomUUID() }),
+  'invoices:receipt': () => ({ invoice_id: randomUUID() }),
+  'print:document': () => ({ invoice_id: randomUUID(), kind: 'receipt' }),
+  'printers:list': () => ({}),
+  'print:getConfig': () => ({}),
+  'print:setConfig': () => ({ shop_phone: '0300 1234567' }),
   'stock:batchesOf': () => ({ productId: randomUUID() }),
   'stock:openingStock': () => ({ product_id: randomUUID(), batch_no: 'B-1', expiry_date: '2027-01-31', cost_price: 40_000, qty: 5000 }),
   'stock:adjust': () => ({ batch_id: randomUUID(), qty_delta: -100 }),
@@ -242,7 +256,7 @@ describe('with a real shop', () => {
 
   beforeEach(async () => {
     jobs = [];
-    shop = await makeShop({ schedule: (job) => void jobs.push(job) });
+    shop = await makeShop({ schedule: (job) => void jobs.push(job), printing: fakePrinting().driver });
   });
   afterEach(() => shop.runtime.close());
 
@@ -406,6 +420,10 @@ describe('with a real shop', () => {
 
     it('a staff session calls EVERY channel, with good input and with bad, and nothing it gets back (as the renderer would see it) holds a cost', async () => {
       const { five, one, made, supplier } = await ownerSetsUp();
+      // The owner's own sale: its line holds the batch's cost in the database (a distinctive one). Staff must not be able to learn it from
+      // any invoice or print channel (history, one invoice, the document data, printing, the print settings, the printer list).
+      const owners = await h()['sale:create']({ customer_id: shop.demo.customers['rashid']!, paid_amount: 10_000, lines: [{ product_id: five.id, qty: 500 }] });
+      const invoiceId = owners.invoice.id;
       await shop.signOut();
       await shop.signInAs('staff');
       const ipc = fakeIpc();
@@ -413,6 +431,16 @@ describe('with a real shop', () => {
 
       const real: Partial<Record<Channel, object[]>> = {
         'catalogue:list': [{}, { query: 'booster' }, { filter: 'low' }, { include_inactive: true, limit: 5 }],
+        'invoices:list': [{}, { query: 'rashid' }, { query: 'INV' }, { status: 'active', limit: 5 }, { customer_id: shop.demo.customers['rashid']! }],
+        'invoices:get': [{ invoice_id: invoiceId }],
+        'invoices:receipt': [{ invoice_id: invoiceId }, { invoice_id: invoiceId, kind: 'invoice' }],
+        'print:document': [
+          { invoice_id: invoiceId, kind: 'receipt' }, { invoice_id: invoiceId, kind: 'receipt', language: 'ur' }, { invoice_id: invoiceId, kind: 'invoice', output: 'pdf' },
+          { invoice_id: invoiceId, kind: 'invoice', language: 'ur', output: 'printer' },
+        ],
+        'printers:list': [{}],
+        'print:getConfig': [{}],
+        'print:setConfig': [{ printer_name: 'POS-80' }], // staff: refused, and the refusal must not hold a cost either
         'stock:batchesOf': [{ productId: five.id }, { productId: five.id, includeCost: true }, { productId: one.id }],
         'suppliers:list': [{}],
         'categories:list': [{}],
@@ -425,15 +453,26 @@ describe('with a real shop', () => {
         'catalogue:updateGroup': [{ group_id: made.group.id, name_en: 'x' }],
       };
       const replies: unknown[] = [];
+      const succeeded = new Set<Channel>();
       for (const channel of channels) {
         const payloads: object[] = [...(real[channel] ?? []), SAMPLES[channel](), { surprise: 1 }, {}];
-        for (const payload of payloads) replies.push(await ipc.invoke(channel, payload));
+        for (const payload of payloads) {
+          const reply = await ipc.invoke(channel, payload);
+          replies.push(reply);
+          if (reply.ok) succeeded.add(channel);
+          // `auth:logout` (and a reset) ends the session. Without signing the staff user back in, every channel after it would only answer
+          // NOT_SIGNED_IN and this scan would look at nothing (it did, before: only the channels before auth:logout were really exercised).
+          if (!shop.runtime.session.current()) await shop.signInAs('staff');
+        }
       }
       expect(replies.length).toBeGreaterThan(100);
       const found = replies.flatMap((r, i) => leaks(r).map((l) => `reply #${i} ${JSON.stringify(r).slice(0, 120)} -> ${l}`));
       expect(found).toEqual([]);
-      // The calls were real: at least one sale and one list succeeded, so this is not an empty exercise.
-      expect(replies.some((r) => (r as { ok: boolean }).ok === true)).toBe(true);
+      // The calls were real, as STAFF: these channels really answered with data (not NOT_SIGNED_IN, not INVALID_INPUT), so a clean scan means something.
+      for (const channel of ['catalogue:list', 'stock:batchesOf', 'sale:create', 'invoices:list', 'invoices:get', 'invoices:receipt', 'print:document', 'printers:list', 'print:getConfig'] as const) {
+        expect(succeeded.has(channel), `${channel} never succeeded for staff`).toBe(true);
+      }
+      expect(succeeded.has('print:setConfig')).toBe(false); // owner-only: staff only ever got the refusal
     });
 
     it('the staff sale reply has no cost_price on its lines (it used to)', async () => {

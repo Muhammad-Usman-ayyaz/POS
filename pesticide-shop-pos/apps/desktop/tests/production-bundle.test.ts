@@ -70,6 +70,13 @@ describe('the production build', () => {
     expect(Object.keys(pkg.dependencies)).toContain('better-sqlite3'); // see the "//" note in package.json before removing it
   });
 
+  it('carries the print fonts INSIDE the main process bundle (woff2 data, no font file to ship or lose) and can render a document there', () => {
+    const main = readFileSync(join(out, 'main', 'index.js'), 'utf8');
+    expect(main.match(/data:font\/woff2;base64,d09GMg/g)?.length).toBeGreaterThanOrEqual(4); // Plex 400, 600, 700 and Naskh
+    expect(main).toContain("font-family:'Naskh'"); // the document stylesheet is in the bundle too
+    expect(main).toContain('renderToStaticMarkup');
+  });
+
   it('ships the strict Content-Security-Policy in index.html, with no relaxed rule', () => {
     const html = readFileSync(join(out, 'renderer', 'index.html'), 'utf8');
     expect(html).toContain('Content-Security-Policy');

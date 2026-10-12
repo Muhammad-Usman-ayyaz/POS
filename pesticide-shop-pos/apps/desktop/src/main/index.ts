@@ -2,6 +2,7 @@ import { join, resolve } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, Menu, session } from 'electron';
 import { parseMigrationFiles } from '@pos/db-sqlite';
 import { registerIpc, type IpcEventLike } from './ipc.js';
+import { createElectronPrintDriver } from './printing/electron-driver.js';
 import { resolveNativeBinding } from './native.js';
 import { createRuntime, type Runtime } from './runtime.js';
 import { isAllowedNavigation, isTrustedSender, windowOptions, type TrustedPages } from './security.js';
@@ -95,6 +96,7 @@ async function start(): Promise<void> {
     }),
     migrations: parseMigrationFiles(migrationFiles),
     prefsPath: join(app.getPath('userData'), 'preferences.json'),
+    printing: createElectronPrintDriver(),
   });
   const trusted = (event: IpcEventLike): boolean =>
     isTrustedSender(

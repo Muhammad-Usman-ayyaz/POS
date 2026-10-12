@@ -241,3 +241,29 @@ Written by the developer, not by a native speaker: please check. `{seconds}` is 
 | `APPROVAL_REQUIRED` | The owner has to approve this | Ask the owner to approve it with their password. | اس کے لیے مالک کی منظوری چاہیے | مالک سے ان کے پاس ورڈ کے ساتھ منظوری لیں۔ | |
 | `APPROVAL_INVALID` | The owner's approval does not work for this bill | It may have run out (it lasts one minute), been used already, or been given for a different bill. Ask the owner to approve again. | مالک کی منظوری اس بل کے لیے کام نہیں کر رہی | ہو سکتا ہے اس کا وقت ختم ہو گیا ہو (یہ ایک منٹ چلتی ہے)، یہ پہلے استعمال ہو چکی ہو، یا کسی اور بل کے لیے دی گئی ہو۔ مالک سے دوبارہ منظوری لیں۔ | |
 | `TOO_MANY_ATTEMPTS` | Too many wrong passwords | Wait {seconds} seconds and try again. | غلط پاس ورڈ بہت بار لکھا گیا | {seconds} سیکنڈ انتظار کریں اور دوبارہ کوشش کریں۔ | |
+
+## New Urdu text on receipts and invoices (Phase 5, M5/M6)
+
+Written by the developer, not by a native speaker: please check. Numbers, dates, invoice numbers and "Rs" stay in Latin digits and letters, as in the approved designs. The English month names are kept (see the question about month names above). The Urdu text is in `packages/ui/src/print/labels.ts`.
+
+| Where | English | Urdu | Reviewer's correction |
+|---|---|---|---|
+| Title of the receipt | Receipt | رسید | |
+| Title of the A4 invoice, and the label before the invoice number | Invoice | بل | |
+| Reprint mark (the word COPY is printed as it is, as the owner asked, with the Urdu word beside it) | COPY | COPY · نقل | |
+| Cancelled invoice mark | VOIDED | منسوخ | |
+| Customer | Customer | گاہک | |
+| Discount | Discount | رعایت | |
+| Total | Total | کل رقم | |
+| Tax is inside the total | Includes tax | ٹیکس سمیت | |
+| Amount paid, then the method | Paid · Cash | ادا شدہ · نقد | |
+| Methods | Cash, Bank, Easypaisa, JazzCash | نقد، بینک، ایزی پیسہ، جیز کیش | |
+| What went on the customer's Khata with this sale | On Khata | کھاتے میں باقی | |
+| The customer's balance right after this sale | Your balance now | آپ کا کل بقایا | |
+| Due date | Pay by | ادائیگی کی تاریخ | |
+| Footer | Thank you. Please keep this receipt. | شکریہ۔ رسید سنبھال کر رکھیں۔ | |
+| Placeholder until the owner gives the address and phone | [Address and phone] | [پتہ اور فون] | |
+| Marks a loose sale after the name (the design writes "کھلی"; the Products screen says "کھلا": which one for each product?) | loose | کھلی | |
+| A4 table headings | # / Item / Batch / Qty / Rate / Disc. / Tax / Amount | نمبر / آئٹم / بیچ / مقدار / ریٹ / رعایت / ٹیکس / رقم | |
+| A4 signatures | Customer signature / Authorised signature | گاہک کے دستخط / مجاز دستخط | |
+| Units in a loose quantity and its rate ("250 گرام × Rs 200/کلو") | g, kg, ml, L, pc | گرام، کلو، ملی لیٹر، لیٹر، عدد | |

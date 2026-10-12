@@ -15,25 +15,34 @@ import {
   type DeviceScope,
   type IdGenerator,
 } from '@pos/core';
+import { PAGE, renderDocumentHtml, type DocumentFonts } from '@pos/ui/print';
 import {
   createSqliteRepositories,
   createSqliteUnitOfWork,
   findActiveOwnerId,
+  getInvoiceDetail,
+  getPrintConfig,
   findUserForLogin,
   firstLaunchSetup,
   hasInvoiceForRequest,
+  invoiceDocumentData,
   isSetupDone,
+  listInvoices,
   loadDeviceInfo,
   migrate,
   openDatabase,
+  PRINT_AUDIT_ACTION,
   profitByDay,
   resetCredentials,
+  setPrintConfig,
   setRecoveryCodeHash,
   type Db,
   type DeviceInfo,
   type Migration,
 } from '@pos/db-sqlite';
 import { createApprovalStore, neededApprovals, subjectHash } from './approvals.js';
+import { noPrinting, type PrintDriver } from './printing/driver.js';
+import { documentFonts } from './printing/fonts.js';
 import { argon2Hasher, type PasswordHasher } from './password.js';
 import { guardHandlers, requireCapability } from './permissions.js';
 import { PrefsStore } from './prefs.js';
@@ -58,6 +67,10 @@ export interface RuntimeOptions {
    * can see WHICH calls schedule a pre-warm.
    */
   schedule?: (job: () => void) => void;
+  /** Puts a document on paper (Electron's printing in the app, a fake in tests). Left out: no printer, no PDF. */
+  printing?: PrintDriver;
+  /** The fonts a printed document carries inside itself. Defaults to the ones bundled with the app. */
+  fonts?: DocumentFonts;
 }
 
 /** One function per channel in the contract. Input is already validated and cleaned by the time it arrives. */
@@ -85,6 +98,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const approvalThrottle = new AttemptThrottle(clock);
   const approvals = createApprovalStore(clock);
   const prefs = new PrefsStore(options.prefsPath);
+  const printing = options.printing ?? noPrinting;
+  const fonts = options.fonts ?? documentFonts;
 
   // ---- services: built once the shop exists, because they need its shop, branch and device ids ----
   interface Services {
@@ -403,6 +418,101 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const user = session.require();
       requireCapability(user, 'returns.approve');
       return services().salesReturn.create({ ...input, approved_by: user.id });
+    },
+
+    // ---------- invoice history and printing: for anyone signed in. Nothing here holds a cost (the queries never select it). ----------
+    'invoices:list': async (input) => {
+      session.require();
+      return listInvoices(db, input);
+    },
+
+    'invoices:get': async ({ invoice_id }) => {
+      session.require();
+      const detail = getInvoiceDetail(db, invoice_id);
+      if (!detail) throw new DomainError('NOT_FOUND', 'there is no such invoice');
+      return detail;
+    },
+
+    // The document as data (the screen can show it): the balance is as of that sale, and `is_copy` says whether printing it now would say COPY.
+    'invoices:receipt': async ({ invoice_id, kind }) => {
+      session.require();
+      const data = invoiceDocumentData(db, invoice_id, kind ?? 'receipt');
+      if (!data) throw new DomainError('NOT_FOUND', 'there is no such invoice');
+      return data;
+    },
+
+    'printers:list': async () => {
+      session.require();
+      try {
+        return await printing.listPrinters();
+      } catch {
+        return []; // "no printer available" is an answer, not an error: the screen offers the PDF
+      }
+    },
+
+    'print:getConfig': async () => {
+      session.require();
+      return getPrintConfig(db);
+    },
+
+    'print:setConfig': async (input) => {
+      const user = session.require();
+      requireCapability(user, 'print.configure');
+      const changes = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
+      const result = setPrintConfig(db, services().scope, changes);
+      inTransaction((s) => audit(s.repos, { userId: user.id, action: 'print_config_changed', table: 'settings', rowId: null, details: { fields: Object.keys(changes) } }));
+      return result;
+    },
+
+    // Prints the document, or, when there is no printer or it fails, saves a PDF instead. That is a normal outcome (`fallback` says why), not an error.
+    // The print is written to the audit log; the SECOND and later print of the same kind of document for an invoice says COPY.
+    'print:document': async ({ invoice_id, kind, language, output }) => {
+      const user = session.require();
+      const data = invoiceDocumentData(db, invoice_id, kind);
+      if (!data) throw new DomainError('NOT_FOUND', 'there is no such invoice');
+      const config = getPrintConfig(db);
+      const chosen = language ?? (kind === 'receipt' ? config.receipt_language : config.invoice_language);
+      const html = renderDocumentHtml(data, chosen, fonts);
+      const page = PAGE[kind];
+      const pageSpec = { widthMm: page.widthMm, heightMm: page.heightMm };
+
+      let fallback: 'no_printer' | 'print_failed' | null = null;
+      let printed = false;
+      if (output !== 'pdf') {
+        const available = await printing.listPrinters().catch(() => []);
+        const target = config.printer_name;
+        if (available.length === 0 || (target !== null && !available.some((p) => p.name === target))) fallback = 'no_printer';
+        else {
+          try {
+            await printing.print(html, { page: pageSpec, printerName: target });
+            printed = true;
+          } catch {
+            fallback = 'print_failed';
+          }
+        }
+      }
+
+      let pdfPath: string | null = null;
+      if (!printed) {
+        try {
+          const pdf = await printing.toPdf(html, { page: pageSpec });
+          pdfPath = await printing.savePdf(`${data.invoice.invoice_no}-${kind}${data.is_copy ? '-copy' : ''}-${chosen}.pdf`, pdf);
+        } catch {
+          // Not even a PDF could be made: this IS an error (nothing was printed or saved), and nothing is recorded.
+          throw new DomainError('INTERNAL', 'the document could not be printed or saved as a PDF');
+        }
+      }
+
+      inTransaction((s) =>
+        audit(s.repos, {
+          userId: user.id,
+          action: PRINT_AUDIT_ACTION,
+          table: 'invoices',
+          rowId: invoice_id,
+          details: { kind, language: chosen, result: printed ? 'printed' : 'pdf_saved', fallback, copy: data.is_copy },
+        }),
+      );
+      return { status: printed ? 'printed' : 'pdf_saved', pdf_path: pdfPath, fallback, kind, language: chosen, is_copy: data.is_copy };
     },
 
     'stock:batchesOf': async ({ productId, includeCost }) => {

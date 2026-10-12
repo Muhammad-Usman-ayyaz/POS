@@ -5,6 +5,12 @@ import type {
   ApprovalGrant,
   AppState,
   CustomerMatch,
+  InvoiceDetail,
+  InvoiceDocumentData,
+  InvoiceList,
+  PrintConfig,
+  PrinterInfo,
+  PrintResult,
   SaleQuoteView,
   BatchView,
   CatalogueList,
@@ -203,6 +209,41 @@ export const SalesReturnCreateInput = z.strictObject({
     .min(1),
 });
 
+// ---------- invoices and printing ----------
+// No user id anywhere: the shell takes the signed-in user from the session. Nothing here (or in its replies) carries a cost.
+const Language2 = z.enum(['en', 'ur']);
+export const DocumentKindSchema = z.enum(['receipt', 'invoice']);
+
+export const InvoiceListInput = z.strictObject({
+  /** The invoice number, or part of the customer's name (English or Urdu) or phone. */
+  query: z.string().max(100).optional(),
+  from: IsoDate.optional(),
+  to: IsoDate.optional(),
+  customer_id: Id.optional(),
+  status: z.enum(['active', 'voided']).optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+
+export const PrintDocumentInput = z.strictObject({
+  invoice_id: Id,
+  /** 'receipt' is the 80 mm thermal slip, 'invoice' the A4 page. */
+  kind: DocumentKindSchema,
+  /** Left out: the language chosen in the print settings for this kind of document. */
+  language: Language2.optional(),
+  /** 'pdf' skips the printer and makes a PDF file. 'printer' falls back to a PDF by itself when there is no printer or printing fails. */
+  output: z.enum(['printer', 'pdf']).optional(),
+});
+
+export const PrintConfigInput = z.strictObject({
+  printer_name: z.string().trim().max(200).nullable().optional(),
+  receipt_language: Language2.optional(),
+  invoice_language: Language2.optional(),
+  shop_name_ur: z.string().trim().max(80).nullable().optional(),
+  shop_address: z.string().trim().max(200).nullable().optional(),
+  shop_phone: z.string().trim().max(40).nullable().optional(),
+});
+
 /** channel -> input schema. Add a channel here first, then implement it in the shell. */
 export const contract = {
   'app:getState': { input: nothing },
@@ -226,6 +267,14 @@ export const contract = {
   'customers:search': { input: CustomerSearchInput },
   'approval:request': { input: ApprovalRequestInput },
   'salesReturn:create': { input: SalesReturnCreateInput },
+
+  'invoices:list': { input: InvoiceListInput },
+  'invoices:get': { input: z.strictObject({ invoice_id: Id }) },
+  'invoices:receipt': { input: z.strictObject({ invoice_id: Id, kind: DocumentKindSchema.optional() }) },
+  'print:document': { input: PrintDocumentInput },
+  'printers:list': { input: nothing },
+  'print:getConfig': { input: nothing },
+  'print:setConfig': { input: PrintConfigInput },
 
   'stock:batchesOf': { input: z.strictObject({ productId: Id, includeCost: z.boolean().optional() }) },
   'stock:openingStock': {
@@ -319,6 +368,13 @@ export interface Outputs {
   'customers:search': CustomerMatch[];
   'approval:request': ApprovalGrant;
   'salesReturn:create': SalesReturnResult;
+  'invoices:list': InvoiceList;
+  'invoices:get': InvoiceDetail;
+  'invoices:receipt': InvoiceDocumentData;
+  'print:document': PrintResult;
+  'printers:list': PrinterInfo[];
+  'print:getConfig': PrintConfig;
+  'print:setConfig': PrintConfig;
   'stock:batchesOf': BatchView[];
   'stock:openingStock': { batch_id: string };
   'stock:adjust': null;
