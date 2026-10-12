@@ -1,5 +1,7 @@
 // The receipt and the A4 invoice, as pure rendering from data. (The same documents made from a real database, with the real fonts, are
 // tested in apps/desktop/tests/printing.test.ts.)
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { InvoiceDocumentData } from '@pos/core';
 import { describe, expect, it } from 'vitest';
 import { documentCss, lineQuantity, PAGE, quantityText, renderDocumentHtml, renderDocumentMarkup, type DocumentFonts } from '../src/print/index.js';
@@ -41,7 +43,7 @@ const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s
 describe('the 80 mm receipt', () => {
   it('English: the shop, the invoice, the lines as sold, the discount, the total, what is on Khata and the balance AS OF THE SALE', () => {
     const t = text(renderDocumentMarkup(sale(), 'en'));
-    for (const part of ['Pesticide Club Shop', 'Receipt', 'INV-A-000002', '12 Oct 2026, 10:42', 'Rashid · Chak 12', 'Insecticide 1 L', 'Rs 1,000', '2 × Rs 500', 'Fertilizer · loose', '250 g × Rs 200/kg', 'Fungicide 250 ml', '3 × Rs 350', 'Discount', '– Rs 50', 'Total', 'Rs 2,050', 'Includes tax', 'Paid · Cash', 'On Khata', 'Rs 1,050', 'Your balance now', 'Rs 3,050', 'Pay by', '30 Nov 2026', 'Thank you. Please keep this receipt.']) {
+    for (const part of ['Pesticide Club Shop', 'Receipt', 'INV-A-000002', '12 Oct 2026, 10:42', 'Rashid · Chak 12', 'Insecticide 1 L', 'Rs 1,000', '2 × Rs 500', 'Fertilizer · loose', '250 g × Rs 200/kg', 'Fungicide 250 ml', '3 × Rs 350', 'Discount', '− Rs 50', 'Total', 'Rs 2,050', 'Includes tax', 'Paid · Cash', 'On Khata', 'Rs 1,050', 'Your balance now', 'Rs 3,050', 'Pay by', '30 Nov 2026', 'Thank you. Please keep this receipt.']) {
       expect(t, part).toContain(part);
     }
   });
@@ -190,5 +192,57 @@ describe('quantities', () => {
     const piece = { ...line[0]!, base_unit: 'piece' as const, pack_size: 1, qty: 3, unit_price: 12_000 };
     expect(lineQuantity(piece, 'en')).toMatchObject({ loose: false, packs: 3, qtyText: '3', rateText: 'Rs 120' });
     expect(quantityText(3, 'piece', 'en')).toBe('3 pc');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Conformance with the design files: docs/design/Receipts80.dc.html and InvoiceA4.dc.html are plain HTML. Every piece of text the design prints
+// (English and Urdu, exact) must be on the built page, and the main measurements are the design's.
+// ---------------------------------------------------------------------------------------------------------------------------
+describe('conformance with docs/design (Receipts80.dc.html, InvoiceA4.dc.html)', () => {
+  const read = (name: string): string => readFileSync(join(__dirname, '..', '..', '..', 'docs', 'design', name), 'utf8');
+  /** The text pieces of the part of the design between two markers, one per element (empty ones dropped). */
+  const designTexts = (html: string, from: string, to: string): string[] => {
+    const start = html.indexOf(from);
+    const part = html.slice(start, html.indexOf(to, start + 1));
+    return [...part.matchAll(/>([^<>]+)</g)].map((m) => m[1]!.replace(/\s+/g, ' ').trim()).filter((t) => t !== '' && !t.includes('right to left'));
+  };
+  const urduSale = (): InvoiceDocumentData => sale({ customer: { name_en: 'Rashid', name_ur: 'راشد', village: 'چک 12' }, shop: { name: 'Pesticide Club Shop', name_ur: 'پیسٹیسائیڈ کلب شاپ', address: null, phone: null } });
+
+  const cases: { file: string; kind: 'receipt' | 'invoice'; language: 'en' | 'ur'; from: string; to: string }[] = [
+    { file: 'Receipts80.dc.html', kind: 'receipt', language: 'en', from: 'dir="ltr" lang="en"', to: 'dir="rtl" lang="ur"' },
+    { file: 'Receipts80.dc.html', kind: 'receipt', language: 'ur', from: 'dir="rtl" lang="ur"', to: '>Notes<' },
+    { file: 'InvoiceA4.dc.html', kind: 'invoice', language: 'en', from: 'dir="ltr" lang="en"', to: 'dir="rtl" lang="ur"' },
+    { file: 'InvoiceA4.dc.html', kind: 'invoice', language: 'ur', from: 'dir="rtl" lang="ur"', to: '</x-dc>' },
+  ];
+  for (const c of cases) {
+    it(`every text the design prints is on the built ${c.kind === 'receipt' ? '80 mm receipt' : 'A4 invoice'} (${c.language}), word for word`, () => {
+      const wanted = designTexts(read(c.file), c.from, c.to);
+      expect(wanted.length).toBeGreaterThan(25);
+      const data = c.language === 'ur' ? urduSale() : sale();
+      const page = text(renderDocumentMarkup(c.kind === 'receipt' ? data : asInvoice(data), c.language));
+      const missing = wanted.filter((w) => !page.includes(w));
+      expect(missing).toEqual([]);
+    });
+  }
+
+  it("the measurements are the design's: 14px text, 19px shop name, 22px total on the receipt; 26px name, 24px title, 22px total, 340px totals block, 56px margins on the A4 page", () => {
+    const css = documentCss(FONTS, 'receipt').replace(/\s+/g, '');
+    for (const rule of [
+      '.receipt{width:72mm;margin:0auto;padding:18px024px;font-size:14px;line-height:1.5',
+      '.receipt.shop{font-size:19px;font-weight:700}',
+      '.receipt.row.total{font-size:22px;font-weight:700}',
+      '.receipt.totals{margin-top:8px;border-top:2pxsolid#111;padding-top:8px}',
+      '.receipt.items.item{padding:6px0;border-bottom:1pxdashed#9AA39D}',
+      '.invoice{width:182mm;height:1120px;margin:0auto;padding:56px0;font-size:14px;line-height:1.6',
+      '.invoice.shop{font-size:26px;font-weight:700}',
+      '.invoice.title{font-size:24px;font-weight:700;letter-spacing:.06em}',
+      '.invoice.sums{width:340px',
+      'gap:28px',
+      '.invoice.sums.row.total{font-size:22px;font-weight:700;color:#1F5D3A;padding-top:8px;border-top:2pxsolid#1B2A22}',
+      '.invoicetable.linesth{background:#EFEDE4;border-bottom:1pxsolid#CFCBBE;font-size:12px;font-weight:700;letter-spacing:.04em;padding:10px12px',
+    ]) {
+      expect(css, rule).toContain(rule);
+    }
   });
 });

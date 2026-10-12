@@ -93,6 +93,30 @@ describe('who sees the form', () => {
   });
 });
 
+describe('conformance with docs/design/Settings.dc.html', () => {
+  it('has the design\'s page header, "Owner only" chip, section list, section heading and wording, word for word', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const design = readFileSync(join(__dirname, '..', '..', '..', 'docs', 'design', 'Settings.dc.html'), 'utf8');
+    const inDesign = (s: string) => expect(design, `the design no longer says "${s}"`).toContain(s);
+    await ready();
+    const heading = screen.getByRole('heading', { name: 'Settings', level: 1 });
+    expect(heading.parentElement!.textContent).toBe('SettingsShop, staff and backups.');
+    for (const words of ['Settings', 'Shop, staff and backups.', 'Owner only', 'Shop details', 'These appear on every receipt and invoice.', 'Save shop details', 'Default receipt language', 'Default printer', 'Phone', 'Address']) {
+      inDesign(words);
+      expect(document.body.textContent, words).toContain(words);
+    }
+    expect(screen.getByRole('heading', { name: 'Shop details', level: 2 })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Settings sections' }).textContent).toBe('Shop details');
+    expect(saveButton().textContent).toBe('Save shop details');
+    // sizes of the design: 30px page title, 20px section title, 48px fields, 12px capital labels, 14px panel corners
+    expect(heading.className).toContain('text-[30px]');
+    expect(screen.getByRole('heading', { name: 'Shop details', level: 2 }).className).toContain('text-[20px]');
+    expect(screen.getByLabelText(en.settings.phone).className).toContain('h-12');
+    expect(screen.getByText(en.settings.phone, { selector: 'label' }).className).toMatch(/text-xs.*uppercase|uppercase.*text-xs/);
+  });
+});
+
 describe('saving', () => {
   it('sends exactly what was changed, nothing else, and shows a toast', async () => {
     const shell = await ready();
