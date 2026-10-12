@@ -1,6 +1,6 @@
 # Database rules and service flows
 
-The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later numbered migrations (`002_invoice_payment_method.sql` adds `invoices.payment_method`; `003_user_recovery_code.sql` adds `users.recovery_code_hash`; `004_product_groups.sql` adds product groups and pack sizes). Never edit an applied migration. The database refuses many bad writes by itself (negative stock, selling expired batches, over-returns, editing history). The services below create the rows. The database does NOT create stock or ledger rows automatically.
+The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later numbered migrations (`002_invoice_payment_method.sql` adds `invoices.payment_method`; `003_user_recovery_code.sql` adds `users.recovery_code_hash`; `004_product_groups.sql` adds product groups and pack sizes; `005_return_tax_and_name_snapshot.sql` adds the invoice line names, `tax_refund` and the low-stock rule; `006_sale_request_id_and_held_bills.sql` adds `invoices.request_id` and `held_bills`). Never edit an applied migration. The database refuses many bad writes by itself (negative stock, selling expired batches, over-returns, editing history). The services below create the rows. The database does NOT create stock or ledger rows automatically.
 
 ## Units and money
 - `products.base_unit` is ml, g or piece. `pack_size` is base units per pack (1L bottle = 1000 ml).
@@ -88,6 +88,9 @@ The app must create the `shops`, `branches` and `devices` rows, the owner user, 
 | `group_deactivated` / `group_reactivated` | a product was switched off (with the sizes it switched off) or on | the owner |
 | `size_moved` | a size was moved to another product (both groups, both labels, whether the old product was switched off) | the owner |
 | `receipt_backdated` | a purchase was recorded with a receipt date other than today (yesterday's delivery entered today). A date after today is refused with `FUTURE_DATE`. A date more than 30 days ago (`OLD_RECEIPT_DAYS`) is refused with `RECEIPT_DATE_OLD` (with `days`) until the caller sends `confirm_old_date: true`; there is no hard limit. `details`: `purchase_date`, `entered_on`, `supplier_id`, `total`, and for a confirmed old one `days_ago` and `confirmed_by_user`. "Today" is the UTC date, like every other date in core | the user who recorded it |
+| `invoice_printed` | an invoice was printed or saved as a PDF (`table_name` `invoices`, `row_id` the invoice; `details`: `kind` receipt or A4 invoice, and how it came out). The count of these rows is what makes the next print say COPY | the user who printed |
+| `print_config_changed` | the owner changed the print or shop-document settings (`table_name` `settings`; `details`: `fields`, the names changed, never the values). Written in the same transaction as the settings | the owner |
+| `approval_used` | a one-use owner approval was spent on a sale (`table_name` `invoices`, `row_id` the invoice; `details`: `requested_by`, `actions`). Written by the sale service inside the sale's own transaction, so the invoice and this row exist together or not at all | the approving owner |
 | `stock_adjustment` / `stock_write_off` | a stock count correction or a write-off | who did it |
 | `owner_password_reset` / `owner_password_reset_failed` / `recovery_code_regenerated` | owner recovery | the owner, or NULL |
 
@@ -98,6 +101,8 @@ Passwords and recovery codes are never written to the log.
 
 ## Sync support
 Triggers write `change_log` on every insert and update. Set `synced_at` after a successful sync. Unsynced rows cannot be deleted.
+
+**Must be done before sync is built: a stable ledger sequence.** The "balance as of that sale" on a receipt (`balanceAsOfSale`) takes the ledger rows that come before the invoice's own entry, and today "before" means a smaller SQLite `rowid`. `rowid` is only the order of insertion on this one PC. When rows can arrive from another device they could land between local ones and change an old receipt's balance. So, before sync, a new migration must add an explicit monotonic sequence column to `ledger_entries` (filled for the existing rows in `rowid` order, assigned by the database or one writer, never by the screen), and `balanceAsOfSale` must order by it. Until then the function is correct for a single-PC shop only.
 
 ## Sale request id, held bills, quote and approvals (migration 006, Phase 5)
 - `invoices.request_id` (nullable, 8 to 100 characters, unique when set, cannot change once set). `sale.create` first looks the id up: found means return that invoice (`replayed`), nothing written. Found with a different user, customer, amount paid or product quantities means `REQUEST_ID_REUSED`.

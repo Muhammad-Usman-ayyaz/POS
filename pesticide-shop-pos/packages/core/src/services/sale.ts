@@ -64,6 +64,11 @@ export const SaleInput = z.strictObject({
    * gets the invoice that already exists instead of making another. The same id with a different sale is refused (REQUEST_ID_REUSED).
    */
   request_id: z.string().min(8).max(100).optional(),
+  /**
+   * The shell spent a one-use owner approval on this sale. The `approval_used` audit row is written in the sale's own transaction, so the
+   * sale and the record that it used an approval exist together or not at all. Core does not check the approval itself (the shell does).
+   */
+  approval_used: z.strictObject({ approved_by: Id, requested_by: Id, actions: z.array(z.string().min(1)).min(1) }).optional(),
 });
 export type SaleInput = z.input<typeof SaleInput>;
 
@@ -395,6 +400,14 @@ export function createSaleService(deps: ServiceDeps) {
             user_id: p.price_override.approved_by,
             action: 'price_override',
             details: { product_id: p.product.id, price_type, list_price: listPrice, unit_price: p.unit_price },
+          });
+        }
+        if (input.approval_used) {
+          ownerUser(tx, input.approval_used.approved_by);
+          approvals.push({
+            user_id: input.approval_used.approved_by,
+            action: 'approval_used',
+            details: { requested_by: input.approval_used.requested_by, actions: input.approval_used.actions },
           });
         }
         // The names as the catalogue has them NOW: copied onto each invoice line, so a later rename cannot change this receipt.

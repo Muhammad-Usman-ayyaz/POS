@@ -81,7 +81,7 @@ export function SaleDoneDialog({
   receiptActions,
 }: {
   sale: SaleView;
-  /** The cash the customer handed over, when it was more than the bill. */
+  /** The cash the customer handed over, when it was more than the bill. Only ever set for a cash sale (the screen prices change for cash alone). */
   tendered: number | null;
   isCash: boolean;
   onNewSale: () => void;
@@ -111,7 +111,7 @@ export function SaleDoneDialog({
             <dd className="num text-end">{money(onKhata)}</dd>
           </>
         )}
-        {isCash && tendered !== null && (
+        {tendered !== null && (
           <>
             <dt className="mt-3 self-end font-semibold">{t.changeDue}</dt>
             <dd data-change-due className="num mt-3 text-end text-4xl font-bold text-accent">
@@ -120,7 +120,7 @@ export function SaleDoneDialog({
           </>
         )}
       </dl>
-      {isCash && tendered !== null && <p className="mt-3 text-sm text-muted">{t.note}</p>}
+      {tendered !== null && <p className="mt-3 text-sm text-muted">{t.note}</p>}
       <div className="mt-5 flex flex-wrap justify-end gap-3">
         {receiptActions?.(sale)}
         <Button onClick={onNewSale}>{t.newSale}</Button>

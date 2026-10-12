@@ -7,9 +7,7 @@ import { Badge, Num } from '../../components/ui/primitives.js';
 import { formatMoney, useI18n } from '../../i18n/index.js';
 import { customerText, formatDateTime, lineName, lineQuantity } from '../../print/format.js';
 import { PrintActions } from './print-actions.js';
-
-/** The shop's time zone is a setting the shell keeps; the history rows do not carry it, so dates use the default (see docs/design-system.md). */
-export const SHOP_TIME_ZONE = 'Asia/Karachi';
+import { SHOP_TIME_ZONE } from './time-zone.js';
 
 /** One past sale: its lines as they were sold, the totals, and the print buttons. */
 export function InvoiceDetailDialog({ api, row, onClose, onPrinted }: { api: Api; row: InvoiceListRow; onClose: () => void; onPrinted: () => void }) {

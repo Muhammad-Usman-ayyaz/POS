@@ -175,9 +175,11 @@ function readSetting(db: Db, key: string): string | null {
 }
 
 function writeSetting(db: Db, scope: DeviceScope, key: string, value: string | null): void {
-  const existing = db.prepare('SELECT id FROM settings WHERE "key" = ?').get(key) as { id: string } | undefined;
+  const existing = db.prepare('SELECT id, deleted_at FROM settings WHERE "key" = ?').get(key) as { id: string; deleted_at: string | null } | undefined;
   if (existing) {
-    db.prepare('UPDATE settings SET value = ?, deleted_at = NULL WHERE id = ?').run(value ?? '', existing.id);
+    // Nothing soft-deletes a setting. If one ever is, bringing it back is a decision for the code that deleted it, not a side effect of saving.
+    if (existing.deleted_at !== null) throw new Error(`setting ${key} is deleted and cannot be changed here`);
+    db.prepare('UPDATE settings SET value = ? WHERE id = ?').run(value ?? '', existing.id);
   } else if (value !== null) {
     db.prepare('INSERT INTO settings (id, "key", value, shop_id, branch_id, device_id) VALUES (?, ?, ?, ?, ?, ?)').run(randomUUID(), key, value, scope.shop_id, scope.branch_id, scope.device_id);
   }
@@ -197,8 +199,11 @@ export function getPrintConfig(db: Db): PrintConfig {
   };
 }
 
-/** Changes only the fields given. null (or an empty text) clears a field. Returns the settings as they are now. */
-export function setPrintConfig(db: Db, scope: DeviceScope, changes: Partial<PrintConfig>): PrintConfig {
+/**
+ * Changes only the fields given. null (or an empty text) clears a field. Returns the settings as they are now.
+ * `audit` runs inside the same transaction, after the settings are written, with the fields changed: if it throws, the settings roll back too.
+ */
+export function setPrintConfig(db: Db, scope: DeviceScope, changes: Partial<PrintConfig>, audit?: (fields: string[]) => void): PrintConfig {
   db.transaction(() => {
     for (const key of Object.keys(SETTING_KEYS) as (keyof PrintConfig)[]) {
       if (!(key in changes)) continue;
@@ -206,7 +211,8 @@ export function setPrintConfig(db: Db, scope: DeviceScope, changes: Partial<Prin
       const value = typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : null;
       writeSetting(db, scope, SETTING_KEYS[key], value);
     }
-  })();
+    audit?.(Object.keys(changes));
+  }).immediate();
   return getPrintConfig(db);
 }
 

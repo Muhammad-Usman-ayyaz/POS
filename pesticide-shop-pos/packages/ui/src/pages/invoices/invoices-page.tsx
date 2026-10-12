@@ -9,8 +9,9 @@ import { cn } from '../../lib/cn.js';
 import { useDebouncedSearch } from '../../lib/use-debounced-search.js';
 import { formatMoney, useI18n } from '../../i18n/index.js';
 import { formatDateTime, lineName } from '../../print/format.js';
-import { InvoiceDetailDialog, SHOP_TIME_ZONE } from './invoice-detail.js';
+import { InvoiceDetailDialog } from './invoice-detail.js';
 import { buildListRequest, PAGE_SIZE, type StatusFilter } from './invoices-requests.js';
+import { SHOP_TIME_ZONE } from './time-zone.js';
 
 export { PAGE_SIZE, type StatusFilter };
 

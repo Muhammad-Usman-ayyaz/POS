@@ -373,14 +373,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         created_by: user.id,
         ...(credit_override || spent.includes('credit_override') ? { credit_override: { approved_by: stand } } : {}),
         ...(spent.includes('discount_override') ? { discount_override: { approved_by: stand } } : {}),
+        // Recorded by the sale itself, in its transaction: both the invoice and the 'approval_used' row, or neither.
+        ...(spent.length > 0 && approver !== null ? { approval_used: { approved_by: approver, requested_by: user.id, actions: spent } } : {}),
         lines: lines.map(({ price_override, ...line }) => ({
           ...line,
           ...(price_override ? { price_override: { unit_price: price_override.unit_price, approved_by: stand } } : {}),
         })),
       });
-      if (spent.length > 0) {
-        inTransaction((s) => audit(s.repos, { userId: approver, action: 'approval_used', table: 'invoices', rowId: sold.invoice.id, details: { requested_by: user.id, actions: spent } }));
-      }
       // Each line carries its batch's cost price (for profit). Only the owner may see it.
       return user.role === 'owner' ? sold : { ...sold, items: sold.items.map(({ cost_price: _cost, ...line }) => line) };
     },
@@ -459,9 +458,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const user = session.require();
       requireCapability(user, 'print.configure');
       const changes = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
-      const result = setPrintConfig(db, services().scope, changes);
-      inTransaction((s) => audit(s.repos, { userId: user.id, action: 'print_config_changed', table: 'settings', rowId: null, details: { fields: Object.keys(changes) } }));
-      return result;
+      const s = services();
+      // The settings and their audit row are one transaction.
+      return setPrintConfig(db, s.scope, changes, (fields) =>
+        audit(s.repos, { userId: user.id, action: 'print_config_changed', table: 'settings', rowId: null, details: { fields } }),
+      );
     },
 
     // Prints the document, or, when there is no printer or it fails, saves a PDF instead. That is a normal outcome (`fallback` says why), not an error.
