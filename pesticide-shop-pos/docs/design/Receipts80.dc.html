@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>80 mm receipts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+*{box-sizing:border-box}
+a{color:#1F5D3A}a:hover{color:#14412A}
+button,input{font-family:inherit}
+.num{font-family:'IBM Plex Sans',sans-serif;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+.btn{cursor:pointer;transition:transform .14s ease,box-shadow .18s ease,background-color .18s ease,border-color .18s ease}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(23,38,30,.14)}
+.btn:active{transform:translateY(0) scale(.98);box-shadow:none}
+.nav-link{transition:background-color .18s ease}
+.nav-link:hover{background:#25402F}
+.card{transition:border-color .2s ease,box-shadow .2s ease}
+.card:hover{border-color:#B7CFC0;box-shadow:0 8px 22px rgba(23,38,30,.08)}
+.row{transition:background-color .15s ease}
+.row:hover{background:#F6F5EE}
+.field{transition:border-color .15s ease,box-shadow .15s ease}
+.field:focus-within{border-color:#1F5D3A;box-shadow:0 0 0 4px rgba(47,122,78,.18)}
+.field input:focus-visible{outline:0}
+:focus-visible{outline:3px solid #7DBE97;outline-offset:2px}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(176,108,0,.38)}55%{box-shadow:0 0 0 7px rgba(176,108,0,0)}}
+@keyframes pop{0%{transform:scale(.94);opacity:.4}60%{transform:scale(1.04)}100%{transform:scale(1);opacity:1}}
+.rise{animation:rise .42s cubic-bezier(.2,.7,.2,1) both}
+.stagger>.rise:nth-child(2){animation-delay:.05s}
+.stagger>.rise:nth-child(3){animation-delay:.1s}
+.stagger>.rise:nth-child(4){animation-delay:.15s}
+.stagger>.rise:nth-child(5){animation-delay:.2s}
+.stagger>.rise:nth-child(6){animation-delay:.25s}
+.stagger>.rise:nth-child(7){animation-delay:.3s}
+.stagger>.rise:nth-child(8){animation-delay:.35s}
+.stagger>.rise:nth-child(9){animation-delay:.4s}
+.stagger>.rise:nth-child(10){animation-delay:.45s}
+.bar{transform-origin:left center;animation:grow .8s .2s cubic-bezier(.2,.7,.2,1) both}
+.bar-rtl{transform-origin:right center}
+.warn{animation:pulse 2.4s ease-in-out infinite}
+.pop{animation:pop .5s .1s ease both;display:inline-block}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+.ur{font-family:'Noto Naskh Arabic',serif;line-height:1.7}
+.pill{cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:0;min-width:0;flex:1;padding:8px 12px;border-radius:10px;border:1px solid #CFCBBE;background:#FFFFFF;color:#1B2A22;text-align:start;transition:transform .14s ease,box-shadow .18s ease,border-color .18s ease,background-color .18s ease}
+.pill:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(23,38,30,.14);border-color:#2F7A4E}
+.pill:active{transform:scale(.98)}
+.pill.low{background:#FBEBCB;border-color:#E3C27E;color:#4A2F00}
+.pill.added{background:#E3EFE6;border:2px solid #1F5D3A;padding:7px 11px;color:#14412A}
+.pill.out{background:#EFEDE4;border-style:dashed;color:#7A847D;cursor:not-allowed}
+.pill.out:hover{transform:none;box-shadow:none;border-color:#CFCBBE}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:1.4;font-weight:600;border-radius:8px;padding:1px 8px;background:#EFEDE4;color:#3E4A43}
+.chip.warn2{background:#FBEBCB;color:#7A4B00}
+.chip.dis{background:#E3EFE6;color:#14412A}
+.chip.bad{background:#F8DADA;color:#8E1F1F}
+.in{width:100%;height:44px;padding:0 12px;border:1px solid #CFCBBE;border-radius:10px;background:#FFFFFF;font-size:15px;color:#1B2A22;transition:border-color .15s ease,box-shadow .15s ease}
+.in:focus{outline:0;border-color:#1F5D3A;box-shadow:0 0 0 4px rgba(47,122,78,.18)}
+.lbl{display:block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#4A564E;margin-bottom:6px}
+.chev{transition:transform .2s ease}
+.chev.open{transform:rotate(90deg)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes dlg{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+.scrim{animation:fade .25s ease both}.dlg{animation:dlg .35s .05s cubic-bezier(.2,.7,.2,1) both}
+</style>
+</helmet>
+<div style="min-height:900px;background:#CFCBBE;font-family:'IBM Plex Sans',sans-serif;padding:40px;display:flex;gap:60px;align-items:flex-start;justify-content:center"><div><div style="font-weight:700;margin-bottom:10px">80 mm receipt · English</div><div dir="ltr" lang="en" style="width:302px;background:#FFFFFF;color:#111;font-family:'IBM Plex Sans',sans-serif;font-size:14px;line-height:1.5;padding:18px 15px 24px;box-shadow:0 8px 28px rgba(0,0,0,.2)"><div style="text-align:center"><div style="font-size:19px;font-weight:700">Pesticide Club Shop</div><div style="font-size:12px;color:#444">[Address and phone]</div><div style="margin-top:6px;font-weight:700;letter-spacing:.08em">Receipt</div></div><div style="margin:10px 0;border-top:1px dashed #111;padding-top:8px"><div style="display:flex;justify-content:space-between;gap:8px;"><span>Invoice</span><span class="num">INV-A-000002</span></div><div style="display:flex;justify-content:space-between;gap:8px;"><span></span><span class="num">12 Oct 2026, 10:42</span></div><div style="display:flex;justify-content:space-between;gap:8px;"><span>Customer</span><span class="num">Rashid · Chak 12</span></div></div><div style="padding:6px 0;border-bottom:1px dashed #9AA39D"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600">Insecticide 1 L</span><span class="num" style="font-weight:600">Rs 1,000</span></div><div class="num" style="font-size:12px;color:#444">2 × Rs 500</div></div><div style="padding:6px 0;border-bottom:1px dashed #9AA39D"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600">Fertilizer · loose</span><span class="num" style="font-weight:600">Rs 50</span></div><div class="num" style="font-size:12px;color:#444">250 g × Rs 200/kg</div></div><div style="padding:6px 0;border-bottom:1px dashed #9AA39D"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600">Fungicide 250 ml</span><span class="num" style="font-weight:600">Rs 1,050</span></div><div class="num" style="font-size:12px;color:#444">3 × Rs 350</div></div><div style="padding:6px 0;border-bottom:1px dashed #9AA39D"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600">Discount</span><span class="num" style="font-weight:600">− Rs 50</span></div></div><div style="margin-top:8px;border-top:2px solid #111;padding-top:8px"><div style="display:flex;justify-content:space-between;font-size:22px;font-weight:700"><span>Total</span><span class="num">Rs 2,050</span></div><div style="font-size:12px;color:#444;display:flex;justify-content:space-between"><span>Includes tax</span><span class="num">Rs 91</span></div></div><div style="margin-top:8px;border-top:1px dashed #111;padding-top:8px;display:flex;flex-direction:column;gap:2px"><div style="display:flex;justify-content:space-between;gap:8px;"><span>Paid · Cash</span><span class="num">Rs 1,000</span></div><div style="display:flex;justify-content:space-between;gap:8px;font-weight:700;"><span>On Khata</span><span class="num">Rs 1,050</span></div><div style="display:flex;justify-content:space-between;gap:8px;"><span>Your balance now</span><span class="num">Rs 3,050</span></div><div style="display:flex;justify-content:space-between;gap:8px;"><span>Pay by</span><span class="num">30 Nov 2026</span></div></div><div style="text-align:center;margin-top:14px;font-size:13px">Thank you. Please keep this receipt.</div></div></div><div><div style="font-weight:700;margin-bottom:10px">80 mm receipt · اردو (right to left)</div><div dir="rtl" lang="ur" style="width:302px;background:#FFFFFF;color:#111;font-family:'Noto Naskh Arabic',serif;font-size:14px;line-height:1.5;padding:18px 15px 24px;box-shadow:0 8px 28px rgba(0,0,0,.2)"><div style="text-align:center"><div style="font-size:19px;font-weight:700">پیسٹیسائیڈ کلب شاپ</div><div style="font-size:12px;color:#444">[پتہ اور فون]</div><div style="margin-top:6px;font-weight:700;letter-spacing:.08em">رسید</div></div><div style="margin:10px 0;border-top:1px dashed #111;padding-top:8px"><div style="display:flex;justify-content:space-between;gap:8px;"><span>بل</span><span class="num">INV-A-000002</span></div><div style="display:flex;justify-content:space-between;gap:8px;"><span></span><span class="num">12 Oct 2026, 10:42</span></div><div style="display:flex;justify-content:space-between;gap:8px;"><span>گاہک</span><span class="num">راشد · چک 12</span></div></div><div style="padding:6px 0;border-bottom:1px dashed #9AA39D"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600">کیڑے مار دوا 1 لیٹر</span><span class="num" style="font-weight:600">Rs 1,000</span></div><div class="num" style="font-size:12px;color:#444">2 × Rs 500</div></div><div style="padding:6px 0;border-bottom:1px dashed #9AA39D"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600">کھاد · کھلی</span><span class="num" style="font-weight:600">Rs 50</span></div><div class="num" style="font-size:12px;color:#444">250 گرام × Rs 200/کلو</div></div><div style="padding:6px 0;border-bottom:1px dashed #9AA39D"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600">پھپھوندی کش 250 ملی لیٹر</span><span class="num" style="font-weight:600">Rs 1,050</span></div><div class="num" style="font-size:12px;color:#444">3 × Rs 350</div></div><div style="padding:6px 0;border-bottom:1px dashed #9AA39D"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font-weight:600">رعایت</span><span class="num" style="font-weight:600">− Rs 50</span></div></div><div style="margin-top:8px;border-top:2px solid #111;padding-top:8px"><div style="display:flex;justify-content:space-between;font-size:22px;font-weight:700"><span>کل رقم</span><span class="num">Rs 2,050</span></div><div style="font-size:12px;color:#444;display:flex;justify-content:space-between"><span>ٹیکس سمیت</span><span class="num">Rs 91</span></div></div><div style="margin-top:8px;border-top:1px dashed #111;padding-top:8px;display:flex;flex-direction:column;gap:2px"><div style="display:flex;justify-content:space-between;gap:8px;"><span>ادا شدہ · نقد</span><span class="num">Rs 1,000</span></div><div style="display:flex;justify-content:space-between;gap:8px;font-weight:700;"><span>کھاتے میں باقی</span><span class="num">Rs 1,050</span></div><div style="display:flex;justify-content:space-between;gap:8px;"><span>آپ کا کل بقایا</span><span class="num">Rs 3,050</span></div><div style="display:flex;justify-content:space-between;gap:8px;"><span>ادائیگی کی تاریخ</span><span class="num">30 Nov 2026</span></div></div><div style="text-align:center;margin-top:14px;font-size:13px">شکریہ۔ رسید سنبھال کر رکھیں۔</div></div></div><div style="width:300px;font-size:14px;color:#2B3A31;line-height:1.55"><b>Notes</b><br>Paper 80 mm, printable about 72 mm. Prints as a picture, so Urdu stays joined. The font is built in, no internet needed.<br><br>No cost, batch or profit ever appears. Names are the ones saved at the time of sale. The balance is as of this sale, also on a reprint. Reprints add a "COPY" line at the top.<br><br>Address and phone are placeholders until the owner gives them.</div></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1F5D3A","section":"Look"},"$preview":{"width":1366,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#1F5D3A' };
+  }
+}
+</script>
+</body>
+</html>

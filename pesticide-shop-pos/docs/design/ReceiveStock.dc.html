@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Receive stock</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+*{box-sizing:border-box}
+a{color:#1F5D3A}a:hover{color:#14412A}
+button,input{font-family:inherit}
+.num{font-family:'IBM Plex Sans',sans-serif;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+.btn{cursor:pointer;transition:transform .14s ease,box-shadow .18s ease,background-color .18s ease,border-color .18s ease}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(23,38,30,.14)}
+.btn:active{transform:translateY(0) scale(.98);box-shadow:none}
+.nav-link{transition:background-color .18s ease}
+.nav-link:hover{background:#25402F}
+.card{transition:border-color .2s ease,box-shadow .2s ease}
+.card:hover{border-color:#B7CFC0;box-shadow:0 8px 22px rgba(23,38,30,.08)}
+.row{transition:background-color .15s ease}
+.row:hover{background:#F6F5EE}
+.field{transition:border-color .15s ease,box-shadow .15s ease}
+.field:focus-within{border-color:#1F5D3A;box-shadow:0 0 0 4px rgba(47,122,78,.18)}
+.field input:focus-visible{outline:0}
+:focus-visible{outline:3px solid #7DBE97;outline-offset:2px}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(176,108,0,.38)}55%{box-shadow:0 0 0 7px rgba(176,108,0,0)}}
+@keyframes pop{0%{transform:scale(.94);opacity:.4}60%{transform:scale(1.04)}100%{transform:scale(1);opacity:1}}
+.rise{animation:rise .42s cubic-bezier(.2,.7,.2,1) both}
+.stagger>.rise:nth-child(2){animation-delay:.05s}
+.stagger>.rise:nth-child(3){animation-delay:.1s}
+.stagger>.rise:nth-child(4){animation-delay:.15s}
+.stagger>.rise:nth-child(5){animation-delay:.2s}
+.stagger>.rise:nth-child(6){animation-delay:.25s}
+.stagger>.rise:nth-child(7){animation-delay:.3s}
+.stagger>.rise:nth-child(8){animation-delay:.35s}
+.stagger>.rise:nth-child(9){animation-delay:.4s}
+.stagger>.rise:nth-child(10){animation-delay:.45s}
+.bar{transform-origin:left center;animation:grow .8s .2s cubic-bezier(.2,.7,.2,1) both}
+.bar-rtl{transform-origin:right center}
+.warn{animation:pulse 2.4s ease-in-out infinite}
+.pop{animation:pop .5s .1s ease both;display:inline-block}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+.ur{font-family:'Noto Naskh Arabic',serif;line-height:1.7}
+.pill{cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:0;min-width:0;flex:1;padding:8px 12px;border-radius:10px;border:1px solid #CFCBBE;background:#FFFFFF;color:#1B2A22;text-align:start;transition:transform .14s ease,box-shadow .18s ease,border-color .18s ease,background-color .18s ease}
+.pill:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(23,38,30,.14);border-color:#2F7A4E}
+.pill:active{transform:scale(.98)}
+.pill.low{background:#FBEBCB;border-color:#E3C27E;color:#4A2F00}
+.pill.added{background:#E3EFE6;border:2px solid #1F5D3A;padding:7px 11px;color:#14412A}
+.pill.out{background:#EFEDE4;border-style:dashed;color:#7A847D;cursor:not-allowed}
+.pill.out:hover{transform:none;box-shadow:none;border-color:#CFCBBE}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:1.4;font-weight:600;border-radius:8px;padding:1px 8px;background:#EFEDE4;color:#3E4A43}
+.chip.warn2{background:#FBEBCB;color:#7A4B00}
+.chip.dis{background:#E3EFE6;color:#14412A}
+.chip.bad{background:#F8DADA;color:#8E1F1F}
+.in{width:100%;height:44px;padding:0 12px;border:1px solid #CFCBBE;border-radius:10px;background:#FFFFFF;font-size:15px;color:#1B2A22;transition:border-color .15s ease,box-shadow .15s ease}
+.in:focus{outline:0;border-color:#1F5D3A;box-shadow:0 0 0 4px rgba(47,122,78,.18)}
+.lbl{display:block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#4A564E;margin-bottom:6px}
+.chev{transition:transform .2s ease}
+.chev.open{transform:rotate(90deg)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes dlg{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+.scrim{animation:fade .25s ease both}.dlg{animation:dlg .35s .05s cubic-bezier(.2,.7,.2,1) both}
+</style>
+</helmet>
+<div dir="ltr" style="display:flex;min-height:860px;background:#F4F2EC;color:#1B2A22;font-family:'IBM Plex Sans',sans-serif;font-size:15px;line-height:1.5"><div style="width:232px;flex-shrink:0;background:#17261E;color:#E7EFE9;display:flex;flex-direction:column;padding:24px 16px;gap:24px"><div style="padding:0 8px"><div style="font-size:17px;font-weight:700;line-height:1.4">Pesticide Club Shop</div><div style="font-size:13px;color:#A9BDB0;margin-top:4px">Counter PC · A1</div></div><nav aria-label="Main" style="display:flex;flex-direction:column;gap:4px"><a class="nav-link" href="Main.dc.html" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M3 4h2.5l2.2 11h10.6L21 8H6.2"/></svg>POS</a>
+<a class="nav-link" href="Products.dc.html" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5M12 12v9"/></svg>Products</a>
+<a class="nav-link" href="ReceiveStock.dc.html" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;background:#2F7A4E;color:#FFFFFF;font-weight:600"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>Purchases</a>
+<a class="nav-link" href="Khata.dc.html" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.8a3.5 3.5 0 010 6.4M18 14.4c2 .8 3.5 2.6 3.5 5.6"/></svg>Customers & Khata</a>
+<a class="nav-link" href="#" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg>Returns</a>
+<a class="nav-link" href="#" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Reports</a>
+<a class="nav-link" href="#" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Settings</a>
+</nav><div style="flex-grow:1"></div><div style="display:flex;gap:8px"><button class="btn" style="flex:1;min-height:44px;border-radius:10px;border:0;background:#2F7A4E;color:#FFFFFF;font-weight:600;font-size:14px">EN</button><a class="btn ur" href="PosUrdu.dc.html" style="flex:1;min-height:44px;border-radius:10px;border:1px solid #3B5446;color:#E7EFE9;font-size:17px;display:flex;align-items:center;justify-content:center;text-decoration:none">اردو</a></div><div style="padding:16px 8px 0;border-top:1px solid #2C4235;font-size:13px;color:#A9BDB0">Signed in as <span style="color:#E7EFE9;font-weight:600">Owner</span></div></div>
+<main style="flex-grow:1;min-width:0;padding:24px 32px;display:flex;flex-direction:column;gap:20px">
+ <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px">
+  <div><a href="Products.dc.html" style="font-size:14px;text-decoration:none;font-weight:600">← Products</a>
+  <h1 style="margin:4px 0 0;font-size:30px;font-weight:700;line-height:1.2">Receive stock</h1>
+  <div style="font-size:14px;color:#5B675F;margin-top:4px">Add what arrived from a supplier. Each line becomes a batch with its own expiry.</div></div>
+ </div>
+ <div class="card" style="background:#FFFFFF;border:1px solid #D9D6CC;border-radius:14px;padding:20px;display:grid;grid-template-columns:2fr 1.2fr 1fr;gap:16px">
+  <div><label class="lbl">Supplier</label><select class="in"><option>Green Valley Traders</option></select></div>
+  <div><label class="lbl">Supplier invoice no.</label><input class="in num" value="GV-20418"></div>
+  <div><label class="lbl">Date received</label><input class="in num" value="08 Oct 2026"></div>
+ </div>
+ <div style="background:#FFFFFF;border:1px solid #D9D6CC;border-radius:14px;overflow:hidden">
+  <div style="display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.1fr) minmax(0,1.2fr) 90px minmax(0,1fr) minmax(0,1fr) 40px;column-gap:16px;padding:12px 20px;background:#EFEDE4;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#4A564E">
+   <div>Product and size</div><div>Batch no.</div><div>Expiry</div><div style="text-align:end">Packs</div><div style="text-align:end">Cost / pack</div><div style="text-align:end">Line total</div><div></div></div>
+  <div class="row" style="display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.1fr) minmax(0,1.2fr) 90px minmax(0,1fr) minmax(0,1fr) 40px;column-gap:16px;align-items:center;padding:12px 20px;border-top:1px solid #ECE9DF;min-height:72px">
+   <div><div style="font-weight:600">Insecticide</div><span class="chip">1 L</span></div>
+   <input class="in num" value="B-014" aria-label="Batch number"><input class="in num" value="12 Mar 2027" aria-label="Expiry">
+   <input class="in num" value="12" style="text-align:end"><input class="in num" value="Rs 400" style="text-align:end"><div class="num" style="text-align:end;font-weight:700">Rs 4,800</div><div></div></div>
+  <div style="border-top:1px solid #ECE9DF;background:{{ rowBg }}">
+   <div class="row" style="display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.1fr) minmax(0,1.2fr) 90px minmax(0,1fr) minmax(0,1fr) 40px;column-gap:16px;align-items:center;padding:12px 20px;min-height:72px">
+    <div><div style="font-weight:600">Insecticide</div><span class="chip">500 ml</span></div>
+    <input class="in num" value="{{ batchVal }}" aria-label="Batch number" aria-invalid="{{ isConflict }}" style="{{ batchStyle }}"><input class="in num" value="{{ expVal }}" aria-label="Expiry" style="{{ expStyle }}">
+    <input class="in num" value="20" style="text-align:end"><input class="in num" value="Rs 215" style="text-align:end"><div class="num" style="text-align:end;font-weight:700">Rs 4,300</div>
+    <button class="btn" aria-label="Remove line" style="width:36px;height:36px;border:0;border-radius:9px;background:transparent;color:#8E1F1F;font-size:18px">×</button></div>
+   <sc-if value="{{ isConflict }}" hint-placeholder-val="{{ true }}">
+    <div class="rise" role="alert" style="margin:0 20px 14px;background:#FBEBCB;border:1px solid #E3C27E;border-radius:12px;padding:14px 16px;display:flex;gap:16px;align-items:center;justify-content:space-between">
+     <div style="min-width:0"><div style="font-weight:700;color:#4A2F00">Batch B-014 is already used for this size, with a different expiry</div>
+     <div style="font-size:14px;color:#6B4400;margin-top:2px">Existing B-014 expires <b class="num">12 Mar 2027</b>. You typed <b class="num">30 Jun 2027</b>. One batch number can only have one expiry.</div></div>
+     <div style="display:flex;gap:10px;flex-shrink:0">
+      <button class="btn" onClick="{{ useExpiry }}" style="min-height:44px;padding:0 16px;border:1px solid #C9A04E;border-radius:10px;background:#FFFFFF;font-weight:600;font-size:14px;color:#4A2F00">Use expiry 12 Mar 2027</button>
+      <button class="btn" onClick="{{ newBatch }}" style="min-height:44px;padding:0 16px;border:0;border-radius:10px;background:{{accent}};font-weight:700;font-size:14px;color:#FFFFFF">Save as new batch number</button>
+     </div></div>
+   </sc-if>
+   <sc-if value="{{ isResolved }}" hint-placeholder-val="{{ false }}">
+    <div class="rise" style="margin:0 20px 14px;background:#EAF3EC;border-radius:12px;padding:10px 16px;font-size:14px;color:#14412A;font-weight:600">{{ resolvedText }}</div>
+   </sc-if>
+  </div>
+  <div style="padding:12px 20px;border-top:1px solid #ECE9DF"><button class="btn" style="min-height:44px;padding:0 18px;border:1px dashed #9FB7A8;border-radius:10px;background:#FFFFFF;font-weight:600;font-size:14px;color:#14412A">+ Add a line (search product or scan barcode)</button></div>
+ </div>
+ <div style="flex-grow:1"></div>
+ <div style="display:flex;justify-content:space-between;align-items:center;background:#FFFFFF;border:1px solid #D9D6CC;border-radius:14px;padding:16px 20px;gap:20px">
+  <div><div style="font-size:13px;color:#5B675F">2 lines · 32 packs</div><div style="display:flex;align-items:baseline;gap:12px"><span style="font-weight:700">Total cost</span><span class="num" style="font-size:28px;font-weight:700;color:{{accent}}">Rs 9,100</span></div></div>
+  <div style="display:flex;gap:12px"><button class="btn" style="min-height:52px;padding:0 24px;border:1px solid #CFCBBE;border-radius:12px;background:#FFFFFF;font-weight:600;color:#1B2A22">Save draft</button>
+  <button class="btn" aria-disabled="{{ isConflict }}" style="min-height:52px;padding:0 28px;border:0;border-radius:12px;background:{{ saveBg }};color:#FFFFFF;font-weight:700;font-size:15px">Receive stock</button></div>
+ </div>
+</main></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1F5D3A","section":"Look"},"$preview":{"width":1366,"height":860}}'>
+class Component extends DCLogic {
+  constructor(p){ super(p); this.state = { res: null }; }
+  renderVals() {
+    const res = this.state.res; const accent = this.props.accent ?? '#1F5D3A';
+    const isConflict = res === null;
+    const bad = 'border-color:#C9892B;background:#FFF8E8;';
+    return { accent, isConflict, isResolved: !isConflict,
+      rowBg: isConflict ? '#FFFBF1' : '#FFFFFF',
+      batchVal: res === 'new' ? 'B-014-2' : 'B-014',
+      expVal: res === 'expiry' ? '12 Mar 2027' : '30 Jun 2027',
+      batchStyle: isConflict ? bad : '', expStyle: isConflict ? bad : '',
+      saveBg: isConflict ? '#8FA79A' : accent,
+      resolvedText: res === 'new' ? 'Saved as a new batch B-014-2 with expiry 30 Jun 2027. Ready to receive.' : 'Using the existing expiry 12 Mar 2027 for batch B-014. Ready to receive.',
+      newBatch: () => this.setState({ res: 'new' }), useExpiry: () => this.setState({ res: 'expiry' }) };
+  }
+}
+</script>
+</body>
+</html>

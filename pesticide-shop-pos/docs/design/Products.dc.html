@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Products and stock</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+*{box-sizing:border-box}
+a{color:#1F5D3A}a:hover{color:#14412A}
+button,input{font-family:inherit}
+.num{font-family:'IBM Plex Sans',sans-serif;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+.btn{cursor:pointer;transition:transform .14s ease,box-shadow .18s ease,background-color .18s ease,border-color .18s ease}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(23,38,30,.14)}
+.btn:active{transform:translateY(0) scale(.98);box-shadow:none}
+.nav-link{transition:background-color .18s ease}
+.nav-link:hover{background:#25402F}
+.card{transition:border-color .2s ease,box-shadow .2s ease}
+.card:hover{border-color:#B7CFC0;box-shadow:0 8px 22px rgba(23,38,30,.08)}
+.row{transition:background-color .15s ease}
+.row:hover{background:#F6F5EE}
+.field{transition:border-color .15s ease,box-shadow .15s ease}
+.field:focus-within{border-color:#1F5D3A;box-shadow:0 0 0 4px rgba(47,122,78,.18)}
+.field input:focus-visible{outline:0}
+:focus-visible{outline:3px solid #7DBE97;outline-offset:2px}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(176,108,0,.38)}55%{box-shadow:0 0 0 7px rgba(176,108,0,0)}}
+@keyframes pop{0%{transform:scale(.94);opacity:.4}60%{transform:scale(1.04)}100%{transform:scale(1);opacity:1}}
+.rise{animation:rise .42s cubic-bezier(.2,.7,.2,1) both}
+.stagger>.rise:nth-child(2){animation-delay:.05s}
+.stagger>.rise:nth-child(3){animation-delay:.1s}
+.stagger>.rise:nth-child(4){animation-delay:.15s}
+.stagger>.rise:nth-child(5){animation-delay:.2s}
+.stagger>.rise:nth-child(6){animation-delay:.25s}
+.stagger>.rise:nth-child(7){animation-delay:.3s}
+.stagger>.rise:nth-child(8){animation-delay:.35s}
+.stagger>.rise:nth-child(9){animation-delay:.4s}
+.stagger>.rise:nth-child(10){animation-delay:.45s}
+.bar{transform-origin:left center;animation:grow .8s .2s cubic-bezier(.2,.7,.2,1) both}
+.bar-rtl{transform-origin:right center}
+.warn{animation:pulse 2.4s ease-in-out infinite}
+.pop{animation:pop .5s .1s ease both;display:inline-block}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+.ur{font-family:'Noto Naskh Arabic',serif;line-height:1.7}
+.pill{cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:0;min-width:0;flex:1;padding:8px 12px;border-radius:10px;border:1px solid #CFCBBE;background:#FFFFFF;color:#1B2A22;text-align:start;transition:transform .14s ease,box-shadow .18s ease,border-color .18s ease,background-color .18s ease}
+.pill:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(23,38,30,.14);border-color:#2F7A4E}
+.pill:active{transform:scale(.98)}
+.pill.low{background:#FBEBCB;border-color:#E3C27E;color:#4A2F00}
+.pill.added{background:#E3EFE6;border:2px solid #1F5D3A;padding:7px 11px;color:#14412A}
+.pill.out{background:#EFEDE4;border-style:dashed;color:#7A847D;cursor:not-allowed}
+.pill.out:hover{transform:none;box-shadow:none;border-color:#CFCBBE}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:1.4;font-weight:600;border-radius:8px;padding:1px 8px;background:#EFEDE4;color:#3E4A43}
+.chip.warn2{background:#FBEBCB;color:#7A4B00}
+.chip.dis{background:#E3EFE6;color:#14412A}
+.chip.bad{background:#F8DADA;color:#8E1F1F}
+.in{width:100%;height:44px;padding:0 12px;border:1px solid #CFCBBE;border-radius:10px;background:#FFFFFF;font-size:15px;color:#1B2A22;transition:border-color .15s ease,box-shadow .15s ease}
+.in:focus{outline:0;border-color:#1F5D3A;box-shadow:0 0 0 4px rgba(47,122,78,.18)}
+.lbl{display:block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#4A564E;margin-bottom:6px}
+.chev{transition:transform .2s ease}
+.chev.open{transform:rotate(90deg)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes dlg{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+.scrim{animation:fade .25s ease both}.dlg{animation:dlg .35s .05s cubic-bezier(.2,.7,.2,1) both}
+</style>
+</helmet>
+<div dir="ltr" style="display:flex;min-height:860px;background:#F4F2EC;color:#1B2A22;font-family:'IBM Plex Sans',sans-serif;font-size:15px;line-height:1.5"><div style="width:232px;flex-shrink:0;background:#17261E;color:#E7EFE9;display:flex;flex-direction:column;padding:24px 16px;gap:24px"><div style="padding:0 8px"><div style="font-size:17px;font-weight:700;line-height:1.4">Pesticide Club Shop</div><div style="font-size:13px;color:#A9BDB0;margin-top:4px">Counter PC · A1</div></div><nav aria-label="Main" style="display:flex;flex-direction:column;gap:4px"><a class="nav-link" href="Main.dc.html" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M3 4h2.5l2.2 11h10.6L21 8H6.2"/></svg>POS</a>
+<a class="nav-link" href="Products.dc.html" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;background:#2F7A4E;color:#FFFFFF;font-weight:600"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5M12 12v9"/></svg>Products</a>
+<a class="nav-link" href="ReceiveStock.dc.html" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>Purchases</a>
+<a class="nav-link" href="Khata.dc.html" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.8a3.5 3.5 0 010 6.4M18 14.4c2 .8 3.5 2.6 3.5 5.6"/></svg>Customers & Khata</a>
+<a class="nav-link" href="#" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg>Returns</a>
+<a class="nav-link" href="#" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Reports</a>
+<a class="nav-link" href="#" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:10px;text-decoration:none;color:#DCE7DF"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Settings</a>
+</nav><div style="flex-grow:1"></div><div style="display:flex;gap:8px"><button class="btn" style="flex:1;min-height:44px;border-radius:10px;border:0;background:#2F7A4E;color:#FFFFFF;font-weight:600;font-size:14px">EN</button><a class="btn ur" href="PosUrdu.dc.html" style="flex:1;min-height:44px;border-radius:10px;border:1px solid #3B5446;color:#E7EFE9;font-size:17px;display:flex;align-items:center;justify-content:center;text-decoration:none">اردو</a></div><div style="padding:16px 8px 0;border-top:1px solid #2C4235;font-size:13px;color:#A9BDB0">Signed in as <span style="color:#E7EFE9;font-weight:600">Owner</span></div></div>
+<main style="flex-grow:1;min-width:0;padding:24px 32px;display:flex;flex-direction:column;gap:20px">
+ <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px">
+  <div><h1 style="margin:0;font-size:30px;font-weight:700;line-height:1.2">Products and stock</h1>
+  <div style="font-size:14px;color:#5B675F;margin-top:4px">One product, many sizes. Stock is counted per batch. Cost is visible to the owner only.</div></div>
+  <div style="display:flex;gap:12px">
+   <a class="btn" href="AddProduct.dc.html" style="display:inline-flex;align-items:center;min-height:52px;padding:0 24px;border:1px solid #CFCBBE;border-radius:12px;background:#FFFFFF;font-weight:600;font-size:15px;color:#1B2A22;text-decoration:none">Add product</a>
+   <a class="btn" href="ReceiveStock.dc.html" style="display:inline-flex;align-items:center;min-height:52px;padding:0 24px;border:0;border-radius:12px;background:{{accent}};color:#FFFFFF;font-weight:700;font-size:15px;box-shadow:0 6px 16px rgba(31,93,58,.28);text-decoration:none">Receive stock</a>
+  </div>
+ </div>
+ <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+  <div class="field" style="display:flex;align-items:center;gap:12px;width:400px;height:52px;padding:0 16px;background:#FFFFFF;border:1px solid #CFCBBE;border-radius:12px">
+   <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B675F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+   <input aria-label="Search products in English or Urdu" placeholder="Search in English or اردو" style="flex-grow:1;min-width:0;height:100%;border:0;outline:0;background:transparent;font-size:15px;color:#1B2A22">
+  </div>
+  <div role="group" aria-label="Filter" style="display:flex;gap:8px">
+   <button class="btn" style="min-height:44px;padding:0 20px;border:2px solid {{accent}};border-radius:22px;background:#E3EFE6;font-weight:600;color:#14412A">All · 7 products</button>
+   <button class="btn" style="min-height:44px;padding:0 20px;border:1px solid #CFCBBE;border-radius:22px;background:#FFFFFF;color:#1B2A22">Low stock · 4</button>
+   <button class="btn" style="min-height:44px;padding:0 20px;border:1px solid #CFCBBE;border-radius:22px;background:#FFFFFF;color:#1B2A22">Near expiry · 1</button>
+   <button class="btn" style="min-height:44px;padding:0 20px;border:1px solid #CFCBBE;border-radius:22px;background:#FFFFFF;color:#1B2A22">Expired · 1</button>
+  </div>
+  <div style="flex-grow:1"></div>
+  <button class="btn" onClick="{{ toggleAll }}" style="min-height:44px;padding:0 18px;border:1px solid #CFCBBE;border-radius:10px;background:#FFFFFF;font-weight:600;font-size:14px;color:#1B2A22">{{ toggleAllLabel }}</button>
+ </div>
+ <div style="flex-grow:1;display:flex;flex-direction:column;background:#FFFFFF;border:1px solid #D9D6CC;border-radius:14px;overflow:hidden">
+  <div style="display:grid;grid-template-columns:28px minmax(0,2.4fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,.95fr) minmax(0,1fr) minmax(0,.95fr) 56px minmax(0,1.7fr);column-gap:20px;padding:14px 24px;background:#EFEDE4;font-size:12px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#4A564E">
+   <div></div><div>Product / size</div><div>Category</div><div>Stock</div><div style="text-align:end">Cost</div><div style="text-align:end">Retail</div><div style="text-align:end">Wholesale</div><div style="text-align:end">Tax</div><div>Next expiry</div>
+  </div>
+  <sc-for list="{{ groups }}" as="g" hint-placeholder-count="7">
+   <div style="border-top:1px solid #ECE9DF">
+    <div class="row" role="button" tabindex="0" aria-expanded="{{ g.open }}" onClick="{{ g.toggle }}" style="cursor:pointer;display:grid;grid-template-columns:28px minmax(0,2.4fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,.95fr) minmax(0,1fr) minmax(0,.95fr) 56px minmax(0,1.7fr);column-gap:20px;align-items:center;padding:12px 24px;min-height:72px">
+     <svg class="chev {{ g.chevCls }}" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E4A43" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+     <div style="min-width:0">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-weight:700;font-size:16px;line-height:1.4">{{ g.name }}</span><span class="chip">{{ g.count }}</span></div>
+      <div lang="ur" dir="rtl" class="ur" style="font-size:14px;color:#5B675F;text-align:left">{{ g.ur }}</div>
+     </div>
+     <div style="color:#3E4A43">{{ g.cat }}</div>
+     <div class="num" style="font-weight:700">{{ g.stock }}</div>
+     <div></div>
+     <div class="num" style="text-align:end;color:#3E4A43;grid-column:span 2">{{ g.range }}</div>
+     <div></div>
+     <div>
+      <sc-if value="{{ g.hasBadge }}" hint-placeholder-val="{{ false }}"><span class="chip {{ g.badgeCls }}">{{ g.badge }}</span></sc-if>
+     </div>
+    </div>
+    <sc-if value="{{ g.open }}" hint-placeholder-val="{{ false }}">
+     <div class="stagger" style="background:#FAF9F5;border-top:1px solid #ECE9DF">
+      <sc-for list="{{ g.sizes }}" as="s" hint-placeholder-count="3">
+       <div class="row rise" style="display:grid;grid-template-columns:28px minmax(0,2.4fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,.95fr) minmax(0,1fr) minmax(0,.95fr) 56px minmax(0,1.7fr);column-gap:20px;align-items:center;padding:10px 24px;min-height:60px;border-top:1px solid #F0EDE3">
+        <div></div>
+        <div style="padding-inline-start:4px;border-inline-start:3px solid #CFE0D4;padding-inline-start:14px"><span style="font-weight:600">{{ s.l }}</span></div>
+        <div></div>
+        <div class="num" style="font-weight:600">{{ s.stock }}</div>
+        <div class="num" style="text-align:end;color:#3E4A43">{{ s.cost }}</div>
+        <div class="num" style="text-align:end">{{ s.retail }}</div>
+        <div class="num" style="text-align:end">{{ s.wh }}</div>
+        <div class="num" style="text-align:end;color:#3E4A43">{{ s.tax }}</div>
+        <div><div class="num" style="font-size:14px">{{ s.exp }}</div>
+         <sc-if value="{{ s.hasBadge }}" hint-placeholder-val="{{ false }}"><span class="chip {{ s.badgeCls }}" style="margin-top:2px">{{ s.badge }}</span></sc-if></div>
+       </div>
+      </sc-for>
+     </div>
+    </sc-if>
+   </div>
+  </sc-for>
+ </div>
+</main></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1F5D3A","section":"Look"},"$preview":{"width":1366,"height":860}}'>
+class Component extends DCLogic {
+  constructor(p){ super(p); this.state = { open: { ins: true } }; }
+  renderVals() {
+    const data = [{"id": "ins", "name": "Insecticide", "ur": "کیڑے مار دوا", "cat": "Insecticide", "count": "3 sizes", "stock": "35 packs", "range": "Rs 190 – 500", "hasBadge": true, "badge": "1 size low", "badgeCls": "warn2", "sizes": [{"l": "250 ml", "stock": "3 packs", "cost": "Rs 130", "retail": "Rs 190", "wh": "Rs 170", "tax": "0%", "exp": "18 Jan 2027", "hasBadge": true, "badge": "Low stock · min 5", "badgeCls": "warn2 warn"}, {"l": "500 ml", "stock": "20 packs", "cost": "Rs 215", "retail": "Rs 270", "wh": "Rs 245", "tax": "0%", "exp": "18 Jan 2027", "hasBadge": false, "badge": "", "badgeCls": ""}, {"l": "1 L", "stock": "12 packs", "cost": "Rs 400", "retail": "Rs 500", "wh": "Rs 450", "tax": "0%", "exp": "12 Mar 2027", "hasBadge": false, "badge": "", "badgeCls": ""}], "initOpen": true}, {"id": "fun", "name": "Fungicide", "ur": "پھپھوندی کش", "cat": "Fungicide", "count": "2 sizes", "stock": "24 packs", "range": "Rs 160 – 350", "hasBadge": true, "badge": "1 size near expiry", "badgeCls": "warn2", "sizes": [{"l": "100 ml", "stock": "15 packs", "cost": "Rs 120", "retail": "Rs 160", "wh": "Rs 145", "tax": "10%", "exp": "02 Feb 2028", "hasBadge": false, "badge": "", "badgeCls": ""}, {"l": "250 ml", "stock": "9 packs", "cost": "Rs 280", "retail": "Rs 350", "wh": "Rs 320", "tax": "10%", "exp": "26 Oct 2026", "hasBadge": true, "badge": "Near expiry · 24 days", "badgeCls": "warn2 warn"}], "initOpen": false}, {"id": "wee", "name": "Weedicide", "ur": "جڑی بوٹی مار دوا", "cat": "Weedicide", "count": "2 sizes", "stock": "9 packs", "range": "Rs 780 – 3,400", "hasBadge": true, "badge": "1 size low", "badgeCls": "warn2", "sizes": [{"l": "1 L", "stock": "3 packs", "cost": "Rs 620", "retail": "Rs 780", "wh": "Rs 720", "tax": "0%", "exp": "04 Jun 2027", "hasBadge": true, "badge": "Low stock · min 5", "badgeCls": "warn2 warn"}, {"l": "5 L", "stock": "6 packs", "cost": "Rs 2,900", "retail": "Rs 3,400", "wh": "Rs 3,200", "tax": "0%", "exp": "11 Sep 2027", "hasBadge": false, "badge": "", "badgeCls": ""}], "initOpen": false}, {"id": "dap", "name": "DAP fertilizer", "ur": "ڈی اے پی کھاد", "cat": "Fertilizer", "count": "1 size", "stock": "14 bags", "range": "Rs 12,500", "hasBadge": false, "badge": "", "badgeCls": "", "sizes": [{"l": "50 kg bag", "stock": "14 bags", "cost": "Rs 11,800", "retail": "Rs 12,500", "wh": "Rs 12,200", "tax": "0%", "exp": "15 Aug 2028", "hasBadge": false, "badge": "", "badgeCls": ""}], "initOpen": false}, {"id": "fer", "name": "Fertilizer", "ur": "کھاد", "cat": "Fertilizer", "count": "1 size", "stock": "9,750 g", "range": "Rs 200", "hasBadge": false, "badge": "", "badgeCls": "", "sizes": [{"l": "1 kg · loose", "stock": "9,750 g", "cost": "Rs 150", "retail": "Rs 200", "wh": "Rs 180", "tax": "0%", "exp": "30 Sep 2027", "hasBadge": false, "badge": "", "badgeCls": ""}], "initOpen": false}, {"id": "veg", "name": "Vegetable seed", "ur": "سبزی کا بیج", "cat": "Seeds", "count": "1 size", "stock": "2 packs", "range": "Rs 2,400", "hasBadge": true, "badge": "Low stock", "badgeCls": "warn2", "sizes": [{"l": "1 kg", "stock": "2 packs", "cost": "Rs 1,900", "retail": "Rs 2,400", "wh": "Rs 2,200", "tax": "0%", "exp": "10 Dec 2026", "hasBadge": true, "badge": "Low stock · min 4", "badgeCls": "warn2 warn"}], "initOpen": false}, {"id": "rod", "name": "Rodenticide", "ur": "چوہے مار دوا", "cat": "Rodenticide", "count": "1 size", "stock": "1 pack", "range": "Rs 130", "hasBadge": true, "badge": "Expired", "badgeCls": "bad", "sizes": [{"l": "100 g", "stock": "1 pack", "cost": "Rs 90", "retail": "Rs 130", "wh": "Rs 115", "tax": "0%", "exp": "15 Sep 2026", "hasBadge": true, "badge": "Expired 23 days ago", "badgeCls": "bad"}], "initOpen": false}];
+    const open = this.state.open || {};
+    const groups = data.map(g => ({ ...g, open: !!open[g.id], chevCls: open[g.id] ? 'open' : '',
+      toggle: () => this.setState({ open: { ...open, [g.id]: !open[g.id] } }) }));
+    const allOpen = groups.every(g => g.open);
+    return { accent: this.props.accent ?? '#1F5D3A', groups,
+      toggleAllLabel: allOpen ? 'Collapse all' : 'Expand all',
+      toggleAll: () => { const n = {}; data.forEach(g => { n[g.id] = !allOpen; }); this.setState({ open: n }); } };
+  }
+}
+</script>
+</body>
+</html>
