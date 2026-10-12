@@ -57,6 +57,7 @@ export async function createSqliteWorld(options: WorldOptions = {}): Promise<Sql
   for (const r of seed.batches) insertSeed(db, 'batches', r);
 
   let settingNo = 0;
+  let customerNo = 0;
   let seedNo = 0;
   const addStock = (batch_id: string, qty: number) =>
     insertSeed(db, 'stock_movements', {
@@ -89,6 +90,11 @@ export async function createSqliteWorld(options: WorldOptions = {}): Promise<Sql
       if (result.changes !== 1) throw new Error(`update: no row ${id} in ${table}`);
     },
     addStock,
+    addCustomer: (row = {}) => {
+      const id = (row['id'] as string | undefined) ?? `00000000-0000-4000-8000-0000000071${String(customerNo++).padStart(2, '0')}`;
+      insertSeed(db, 'customers', { id, name_en: 'Customer', name_ur: null, phone: null, village: null, credit_limit: 0, default_price_type: 'retail', notes: null, ...SCOPE, ...row });
+      return id;
+    },
     setSetting: (key, value) => {
       const changed = db.prepare('UPDATE settings SET value = ? WHERE "key" = ?').run(value, key).changes;
       if (changed === 0) insertSeed(db, 'settings', { id: `00000000-0000-4000-8000-0000000009${String(settingNo++).padStart(2, '0')}`, key, value, ...SCOPE });

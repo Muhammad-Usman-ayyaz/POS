@@ -42,6 +42,7 @@ Categories, brands, products as groups with pack sizes (each size has its own pr
 ## Phase 5: POS and invoices
 Fast keyboard-friendly billing, product search in English and Urdu, batch auto-pick with override, discounts per item, retail or wholesale, tax, thermal and A4 printing.
 - **DONE in migration 005: the name snapshot on `invoice_items`** (see "Migration 005" below). Receipts and reprints must use it.
+- **DONE in M1 - foundations** (no screen yet): migration 006 (`invoices.request_id`, `held_bills`); `sale.quote`; `customers.search`; staff discount limit (setting `staff_max_discount_percent`, default 5); the owner's approval at the counter (`approval:request`: one use, 60 seconds, bound to the action, the cart and the person; wrong-password lock shared with sign-in). Behaviour changes: staff now get `APPROVAL_REQUIRED` (not `NOT_AUTHORIZED` / `CREDIT_LIMIT_EXCEEDED`) for those three cases; a lock now exists on sign-in. Not proven yet: the screens; approvals and locks are in memory by design and do not survive a restart. M2 starts when the missing screen designs arrive.
 
 ## Phase 6: Customers and Khata
 Customers, credit limit and due date, payments, customer statement (printable and shareable), opening balances.

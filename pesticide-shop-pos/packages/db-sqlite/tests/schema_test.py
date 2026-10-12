@@ -336,6 +336,30 @@ check("a size with no minimum is not in v_low_stock", one("SELECT COUNT(*) c FRO
 db.execute("UPDATE products SET min_stock = 500 WHERE id=?", (unwatched,))
 check("the same size with a minimum and no stock is", one("SELECT COUNT(*) c FROM v_low_stock WHERE product_id=?", unwatched)["c"] == 1)
 
+print("\n--- migration 006: request_id and held bills ---")
+rid = "req-" + str(uuid.uuid4())
+inv_r = ins("invoices", invoice_no="INV-A-000777", created_by=staff, subtotal=0, paid_amount=0, total=0, request_id=rid)
+expect_fail("a second invoice with the same request_id is refused",
+            lambda: ins("invoices", invoice_no="INV-A-000778", created_by=staff, subtotal=0, paid_amount=0, total=0, request_id=rid), "unique")
+expect_fail("a request_id cannot be changed once set",
+            lambda: db.execute("UPDATE invoices SET request_id = 'another-request-id' WHERE id=?", (inv_r,)), "request_id")
+expect_fail("a request_id that is too short is refused",
+            lambda: ins("invoices", invoice_no="INV-A-000779", created_by=staff, subtotal=0, paid_amount=0, total=0, request_id="short"), "check")
+ins("invoices", invoice_no="INV-A-000780", created_by=staff, subtotal=0, paid_amount=0, total=0)
+ins("invoices", invoice_no="INV-A-000781", created_by=staff, subtotal=0, paid_amount=0, total=0)
+check("invoices without a request_id do not clash with each other", True)
+payload = '{"lines":[{"product_id":"x","qty":1000}]}'
+hb = ins("held_bills", held_by=owner, price_type="retail", line_count=1, payload=payload)
+expect_fail("a held bill needs at least one line", lambda: ins("held_bills", held_by=owner, price_type="retail", line_count=0, payload=payload), "check")
+expect_fail("a held bill's payload must be JSON", lambda: ins("held_bills", held_by=owner, price_type="retail", line_count=1, payload="not json"), "check")
+expect_fail("a held bill cannot be deleted", lambda: db.execute("DELETE FROM held_bills WHERE id=?", (hb,)), "")
+expect_fail("a held bill's cart cannot be edited", lambda: db.execute("UPDATE held_bills SET payload=? WHERE id=?", ('{"lines":[]}', hb)), "")
+expect_fail("resolving needs who and when", lambda: db.execute("UPDATE held_bills SET status='resumed' WHERE id=?", (hb,)), "check")
+db.execute("UPDATE held_bills SET status='resumed', resolved_by=?, resolved_at=datetime('now') WHERE id=?", (owner, hb))
+expect_fail("a held bill can be resolved only once", lambda: db.execute("UPDATE held_bills SET status='discarded', resolved_by=?, resolved_at=datetime('now') WHERE id=?", (owner, hb)), "")
+check("resolving bumped the version", one("SELECT version v FROM held_bills WHERE id=?", hb)["v"] == 2)
+check("held bills are not in the change log (a local draft)", one("SELECT COUNT(*) c FROM change_log WHERE table_name='held_bills'")["c"] == 0)
+
 print("\n--- integrity ---")
 check("PRAGMA integrity_check is ok", one("PRAGMA integrity_check")[0] == "ok")
 check("no foreign key violations", db.execute("PRAGMA foreign_key_check").fetchall() == [])

@@ -140,7 +140,7 @@ describe('migration 005 on 5,000 products x 3 sizes with thousands of sales and 
     facts.backupMb = copy.bytes / 1_048_576;
 
     const started = performance.now();
-    const result = await migrate(db);
+    const result = await migrate(db, { migrations: loadMigrations().slice(0, 5) });
     timings['migrate() in total, backup included'] = performance.now() - started;
     expect(result.applied).toEqual([5]);
     expect(result.backupPath).not.toBeNull();

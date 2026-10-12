@@ -1,4 +1,4 @@
-import type { BatchStockView, Brand, CatalogueList, Category, ErrorParams, DomainErrorCode, NewRow, Product, ProductGroup, SaleResult, SalesReturnResult, Supplier } from '@pos/core';
+import type { BatchStockView, Brand, CatalogueList, Category, CustomerMatch, ErrorParams, DomainErrorCode, NewRow, Product, ProductGroup, SaleQuote, SaleResult, SalesReturnResult, Supplier } from '@pos/core';
 
 // What the shell sends back. Plain data only: it crosses a process boundary (structured clone).
 
@@ -53,6 +53,22 @@ export type { CatalogueList, SaleResult, SalesReturnResult };
  * A sale as the screen gets it. Each line carries the cost price of its batch (profit uses it), which only the OWNER may see:
  * for anyone else the shell leaves `cost_price` out of every line.
  */
+/**
+ * A cart priced and checked by the core, without selling it (nothing here carries a cost). `requires_approval` is what the owner would have to
+ * approve if the person selling is not the owner: going over the credit limit, a different price, a discount above the staff limit.
+ */
+export type SaleQuoteView = SaleQuote & { requires_approval: ('credit_override' | 'price_override' | 'discount_override')[] };
+
+/** The owner's approval at the counter: a one-use token for exactly these actions and this cart, good for a minute. */
+export interface ApprovalGrant {
+  token: string;
+  /** ISO date-time. */
+  expires_at: string;
+  actions: ('credit_override' | 'price_override' | 'discount_override')[];
+}
+
+export type { CustomerMatch };
+
 export type SaleView = Omit<SaleResult, 'items'> & { items: (Omit<SaleResult['items'][number], 'cost_price'> & { cost_price?: number })[] };
 
 // ---- catalogue answers (plain data; none carries a cost: cost is only in `catalogue:list` rows, for the owner) ----

@@ -8,6 +8,7 @@ import { defineDirectoryTests } from './directory.js';
 import { definePaymentKhataTests } from './payment-khata.js';
 import { definePurchaseTests, defineStockTests } from './purchase-stock.js';
 import { defineSaleTests } from './sale.js';
+import { defineSaleQuoteTests } from './sale-quote.js';
 import { defineSalesReturnTests } from './sales-return.js';
 import { defineScenarioTests } from './scenario.js';
 
@@ -19,6 +20,7 @@ export function defineServiceSuites(label: string, make: WorldFactory): void {
   describe(label, () => {
     defineContractTests(make);
     defineSaleTests(make);
+    defineSaleQuoteTests(make);
     definePurchaseTests(make);
     defineStockTests(make);
     definePaymentKhataTests(make);

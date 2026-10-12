@@ -34,6 +34,8 @@ afterEach(() => {
 });
 
 const upTo4 = () => loadMigrations().slice(0, 4);
+// 005 is tested at its own version: later migrations have their own test files.
+const upTo5 = () => loadMigrations().slice(0, 5);
 const all = (db: Db, sql: string, ...p: unknown[]) => db.prepare(sql).all(...p) as Row[];
 const one = (db: Db, sql: string, ...p: unknown[]) => db.prepare(sql).get(...p) as Row;
 const tables = (db: Db) => all(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").map((r) => r.name as string);
@@ -129,7 +131,7 @@ describe('migration 005 on a shop that already has sales and returns', () => {
   it('takes a backup of the version-4 file first, applies, and leaves a database that passes its integrity check', async () => {
     const file = join(dir, 'shop.db');
     const db = await shopAtVersion4(file);
-    const result = await migrate(db);
+    const result = await migrate(db, { migrations: upTo5() });
     expect(result.applied).toEqual([5]);
     expect(currentSchemaVersion(db)).toBe(5);
     expect(result.backupPath).not.toBeNull();
@@ -149,7 +151,7 @@ describe('migration 005 on a shop that already has sales and returns', () => {
     const items = dump(db, 'invoice_items', ['version']);
     const returnLines = dump(db, 'sales_return_items', ['version']);
     const log = dump(db, 'change_log');
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     for (const t of untouched(db)) expect(dump(db, t), t).toEqual(before[t]);
     expect(dump(db, 'invoice_items', ['version', 'name_en', 'name_ur'])).toEqual(items);
     expect(dump(db, 'sales_return_items', ['version', 'tax_refund'])).toEqual(returnLines);
@@ -161,7 +163,7 @@ describe('migration 005 on a shop that already has sales and returns', () => {
 
   it('gives each return line its share of the line\'s tax, in the order the returns were MADE (created_at), not the order the rows were written', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     const share = (line: string) => one(db, 'SELECT tax_refund FROM sales_return_items WHERE id = ?', line).tax_refund;
     // 74746 of tax over 10000 ml: after 2000 ml 14949 (14949.2), after 5000 ml 37373, so the second return gets 22424
     expect(share(ID.l1)).toBe(14_949);
@@ -225,7 +227,7 @@ describe('migration 005 on a shop that already has sales and returns', () => {
       insertReturn(db, header, lineId, ID.inv1, write.line.id, { at, qty: write.qty, refund });
       expected.set(lineId, taxRefundFor({ invoice_item_id: write.line.id, qty: write.line.qty, line_total: write.line.total, tax_amount: write.line.tax, qty_returned: write.before }, write.qty));
     }
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     const stored = all(db, 'SELECT id, tax_refund FROM sales_return_items');
     expect(stored).toHaveLength(expected.size);
     for (const row of stored) expect(row.tax_refund, `seed ${seed}, line ${String(row.id)}`).toBe(expected.get(row.id as string));
@@ -236,7 +238,7 @@ describe('migration 005 on a shop that already has sales and returns', () => {
 
   it('bumps the version of exactly the rows it changed: lines that got a name, and return lines that got tax (the others stay at 1)', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     const versions = (table: string) => Object.fromEntries(all(db, `SELECT id, version FROM ${table}`).map((r) => [r.id, r.version]));
     expect(versions('invoice_items')).toEqual({ [ID.ii1]: 2, [ID.ii2]: 2, [ID.ii3]: 2, [ID.ii4]: 2 });
     expect(versions('sales_return_items')).toEqual({ [ID.l1]: 2, [ID.l2]: 2, [ID.l3]: 1, [ID.l4]: 2, [ID.l5]: 1, [ID.l6]: 1 }); // l3, l5, l6 got no tax: unchanged
@@ -246,7 +248,7 @@ describe('migration 005 on a shop that already has sales and returns', () => {
 
   it('gives every existing line the product\'s CURRENT name (both languages, or just the one it has)', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     const name = (id: string) => one(db, 'SELECT name_en, name_ur FROM invoice_items WHERE id = ?', id);
     expect(name(ID.ii1)).toEqual({ name_en: 'Insecticide 1L', name_ur: 'کیڑے مار دوا 1 لیٹر' });
     expect(name(ID.ii4)).toEqual({ name_en: null, name_ur: 'کھاد' }); // an Urdu-only product
@@ -258,7 +260,7 @@ describe('migration 005 on a shop that already has sales and returns', () => {
   it('writes a change_log update row only for changed rows whose insert was ALREADY synced (an unsynced insert will carry the final row)', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
     const before = one(db, 'SELECT COUNT(*) AS c FROM change_log').c as number;
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     const added = all(db, 'SELECT table_name, row_id, operation, synced_at FROM change_log ORDER BY rowid').slice(before);
     // synced lines: ii1 and ii4 (both got names). Synced return lines: l1 (got tax), l3 (got none), l4 (got tax).
     expect(added.map((r) => `${r.table_name}:${r.row_id}:${r.operation}`).sort()).toEqual(
@@ -273,14 +275,14 @@ describe('the append-only triggers after the backfill', () => {
   it('all four exist again, with exactly the text 001 gave them', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
     for (const [name, sql] of Object.entries(APPEND_ONLY)) expect(sqlOf(db, name), `${name} before`).toBe(sql);
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     for (const [name, sql] of Object.entries(APPEND_ONLY)) expect(sqlOf(db, name), `${name} after`).toBe(sql);
     db.close();
   });
 
   it('and they refuse UPDATE and DELETE on every old row, new columns included', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     const refused = (sql: string, ...p: unknown[]) => failure(() => db.prepare(sql).run(...p));
     expect(refused('UPDATE sales_return_items SET tax_refund = 999 WHERE id = ?', ID.l1)).toMatch(/append-only/);
     expect(refused('UPDATE sales_return_items SET qty = 1 WHERE id = ?', ID.l1)).toMatch(/append-only/);
@@ -294,7 +296,7 @@ describe('the append-only triggers after the backfill', () => {
 
   it('also on a fresh database where every migration ran from the start', async () => {
     const db = openDatabase(':memory:');
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     for (const [name, sql] of Object.entries(APPEND_ONLY)) expect(sqlOf(db, name), name).toBe(sql);
     db.close();
   });
@@ -303,7 +305,7 @@ describe('the append-only triggers after the backfill', () => {
 describe('the new guards', () => {
   it('all the tax refunded on a line can never pass the tax charged on it: up to the last paisa is fine, one more is refused', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     // ii1 has 74746 of tax; 14949 + 22424 = 37373 is back; 37373 is still to come. 5000 ml are still returnable.
     const add = (line: string, header: string, tax: number) =>
       db.prepare("INSERT INTO sales_return_items (id, sales_return_id, invoice_item_id, qty, refund_amount, tax_refund, condition, shop_id, branch_id, device_id) VALUES (?, ?, ?, 1000, 98000, ?, 'resellable', 's1', 'b1', 'd1')").run(line, header, ID.ii1, tax);
@@ -315,7 +317,7 @@ describe('the new guards', () => {
 
   it('a negative tax_refund is refused, and a return line with no tax_refund stored means 0', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     const insert = (id: string, tax: string) => db.prepare(`INSERT INTO sales_return_items (id, sales_return_id, invoice_item_id, qty, refund_amount, ${tax ? 'tax_refund, ' : ''}condition, shop_id, branch_id, device_id) VALUES (?, ?, ?, 1000, 10, ${tax ? `${tax}, ` : ''}'resellable', 's1', 'b1', 'd1')`).run(id, ID.r6, ID.ii3);
     expect(failure(() => insert('c3000000-0000-4000-8000-000000000004', '-1'))).toMatch(/constraint|check/i);
     insert('c3000000-0000-4000-8000-000000000005', '');
@@ -325,7 +327,7 @@ describe('the new guards', () => {
 
   it('the cap also holds for an UPDATE (should the append-only trigger ever be dropped by hand)', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     db.exec('BEGIN');
     db.exec('DROP TRIGGER trg_sales_return_items_no_update');
     expect(failure(() => db.prepare('UPDATE sales_return_items SET tax_refund = 74747 WHERE id = ?').run(ID.l1))).toMatch(/cannot pass the tax charged/);
@@ -335,7 +337,7 @@ describe('the new guards', () => {
 
   it('the cap on an UPDATE leaves the row itself out of the sum: a legal value up to the last paisa passes, one more is refused', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     db.exec('BEGIN');
     db.exec('DROP TRIGGER trg_sales_return_items_no_update');
     // ii1 has 74746 of tax; the other return line of it holds 22424, so this one may hold 52322 and no more
@@ -347,7 +349,7 @@ describe('the new guards', () => {
 
   it('a new invoice line needs a name in at least one language; an empty one does not count', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     const add = (id: string, en: string | null, ur: string | null) =>
       db.prepare("INSERT INTO invoice_items (id, invoice_id, product_id, batch_id, qty, unit_price, cost_price, line_total, name_en, name_ur, shop_id, branch_id, device_id) VALUES (?, ?, ?, ?, 1000, 1, 1, 1, ?, ?, 's1', 'b1', 'd1')").run(id, ID.inv1, ID.bottle, ID.bBottle, en, ur);
     expect(failure(() => add('f9000000-0000-4000-8000-000000000001', null, null))).toMatch(/needs the name of the product as it was at sale time/);
@@ -365,7 +367,7 @@ describe('the views after the migration', () => {
     db.prepare('UPDATE products SET min_stock = 0 WHERE id IN (?, ?)').run(ID.piece, ID.plain);
     db.prepare("INSERT INTO stock_movements (id, batch_id, qty_delta, movement_type, created_by, shop_id, branch_id, device_id) VALUES ('m9000000-0000-4000-8000-000000000001', ?, -100000, 'sale', 'u1', 's1', 'b1', 'd1')").run(ID.bPlain); // the plain size is now at 0 stock, minimum 0
     expect(all(db, 'SELECT product_id FROM v_low_stock').map((r) => r.product_id)).toContain(ID.plain); // the old view says low (0 <= 0)
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     expect(all(db, 'SELECT product_id FROM v_low_stock').map((r) => r.product_id)).not.toContain(ID.plain); // no minimum: not low
     db.prepare('UPDATE products SET min_stock = 1 WHERE id = ?').run(ID.plain);
     expect(all(db, 'SELECT product_id FROM v_low_stock').map((r) => r.product_id)).toContain(ID.plain); // a minimum and 0 stock: low
@@ -377,7 +379,7 @@ describe('the views after the migration', () => {
 
   it('v_profit_by_day takes a return\'s revenue as the refund minus its tax: the total equals the rows to the paisa', async () => {
     const db = await shopAtVersion4(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, { migrations: upTo5() });
     const expected =
       (one(db, 'SELECT SUM(line_total - tax_amount) AS v FROM invoice_items').v as number) - (one(db, 'SELECT SUM(refund_amount - tax_refund) AS v FROM sales_return_items').v as number);
     const view = one(db, 'SELECT SUM(revenue) AS revenue FROM v_profit_by_day');
@@ -395,7 +397,7 @@ describe('failing, repeating, and starting fresh', () => {
     const before = snapshot();
     const lowBefore = sqlOf(db, 'v_low_stock');
     const profitBefore = sqlOf(db, 'v_profit_by_day');
-    const broken = loadMigrations().map((m) => (m.version === 5 ? { ...m, sql: `${m.sql}\nSELECT * FROM a_table_that_does_not_exist;` } : m));
+    const broken = upTo5().map((m) => (m.version === 5 ? { ...m, sql: `${m.sql}\nSELECT * FROM a_table_that_does_not_exist;` } : m));
     await expect(migrate(db, { migrations: broken })).rejects.toThrow(/Migration 5_return_tax_and_name_snapshot failed/);
 
     expect(currentSchemaVersion(db)).toBe(4);
@@ -414,9 +416,9 @@ describe('failing, repeating, and starting fresh', () => {
   it('a second run changes nothing, and a shop with no sales at all just gets the new columns', async () => {
     const db = openDatabase(join(dir, 'empty.db'));
     await migrate(db, { migrations: upTo4() });
-    const result = await migrate(db);
+    const result = await migrate(db, { migrations: upTo5() });
     expect(result.applied).toEqual([5]);
-    expect(await migrate(db)).toMatchObject({ applied: [], currentVersion: 5 });
+    expect(await migrate(db, { migrations: upTo5() })).toMatchObject({ applied: [], currentVersion: 5 });
     expect(all(db, 'PRAGMA table_info(invoice_items)').map((c) => c.name)).toEqual(expect.arrayContaining(['name_en', 'name_ur']));
     expect(all(db, 'PRAGMA table_info(sales_return_items)').map((c) => c.name)).toContain('tax_refund');
     db.close();

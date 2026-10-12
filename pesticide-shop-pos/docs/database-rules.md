@@ -98,3 +98,9 @@ Passwords and recovery codes are never written to the log.
 
 ## Sync support
 Triggers write `change_log` on every insert and update. Set `synced_at` after a successful sync. Unsynced rows cannot be deleted.
+
+## Sale request id, held bills, quote and approvals (migration 006, Phase 5)
+- `invoices.request_id` (nullable, 8 to 100 characters, unique when set, cannot change once set). `sale.create` first looks the id up: found means return that invoice (`replayed`), nothing written. Found with a different user, customer, amount paid or product quantities means `REQUEST_ID_REUSED`.
+- `held_bills`: a saved cart (JSON `payload`, `line_count` > 0) with who held it, customer and price type. Status `held` then once `resumed` or `discarded` (with `resolved_by` and `resolved_at`). The cart cannot be edited and the row cannot be deleted (triggers). Not in `change_log`: it is a draft, not a business record.
+- `sale.quote` uses the same planning as `sale.create` and writes nothing. It reports `issues` (stock, credit, payment, due date, approval) instead of throwing, and `discount_over_limit` per line (discount x 100 > gross x staff limit percent).
+- Approvals and the wrong-password lock live in the main process (memory), not in the database. Audit rows: `approval_granted`, `approval_used`, `approval_failed`, `approval_locked`, `login_locked`, `discount_override`.

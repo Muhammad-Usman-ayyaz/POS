@@ -55,3 +55,15 @@ export function resetCredentials(db: Db, userId: string, passwordHash: string, r
     if (result.changes !== 1) throw new Error(`no user ${userId}`);
   })();
 }
+
+/** The id of an active owner, or undefined. The shell uses it to PRICE a cart that someone other than the owner asked a different price for
+ *  (the quote only needs a valid approver to show the effect; nothing is written). */
+export function findActiveOwnerId(db: Db): string | undefined {
+  const row = db.prepare("SELECT id FROM users WHERE role = 'owner' AND is_active = 1 AND deleted_at IS NULL ORDER BY created_at, rowid LIMIT 1").get() as { id: string } | undefined;
+  return row?.id;
+}
+
+/** Whether an invoice was already made for this request id (migration 006). */
+export function hasInvoiceForRequest(db: Db, requestId: string): boolean {
+  return db.prepare('SELECT 1 FROM invoices WHERE request_id = ?').get(requestId) !== undefined;
+}

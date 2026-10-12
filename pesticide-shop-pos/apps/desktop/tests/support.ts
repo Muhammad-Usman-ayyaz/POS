@@ -1,6 +1,6 @@
 // Test setup for the main process: a real SQLite database in memory, the real migrations, the real handlers.
 // (Does not use @pos/core/testing: desktop tests build their own shop.)
-import { addDays, systemClock, todayUtc } from '@pos/core';
+import { addDays, systemClock, todayUtc, type Clock } from '@pos/core';
 import { createUser, loadDeviceInfo } from '@pos/db-sqlite';
 import { seedDemoData, type DemoIds } from '@pos/db-sqlite/demo';
 import { createRuntime, type Runtime } from '../src/main/runtime.js';
@@ -32,9 +32,15 @@ export interface Shop {
 }
 
 /** A set-up shop: owner and staff users, demo products and customers. Nobody is signed in. */
-export async function makeShop(options: { hasher?: PasswordHasher; prefsPath?: string | null; schedule?: (job: () => void) => void } = {}): Promise<Shop> {
+/** A clock a test can move: the approval minute and the lock-outs depend on time. */
+export function movableClock(startIso = new Date().toISOString()): Clock & { advance(ms: number): void } {
+  let now = new Date(startIso).getTime();
+  return { now: () => new Date(now), advance: (ms: number) => void (now += ms) };
+}
+
+export async function makeShop(options: { hasher?: PasswordHasher; prefsPath?: string | null; schedule?: (job: () => void) => void; clock?: Clock; dbPath?: string } = {}): Promise<Shop> {
   const hasher = options.hasher ?? fastHasher;
-  const runtime = await createRuntime({ dbPath: ':memory:', prefsPath: options.prefsPath ?? null, hasher, ...(options.schedule ? { schedule: options.schedule } : {}) });
+  const runtime = await createRuntime({ dbPath: options.dbPath ?? ':memory:', prefsPath: options.prefsPath ?? null, hasher, ...(options.schedule ? { schedule: options.schedule } : {}), ...(options.clock ? { clock: options.clock } : {}) });
   const setup = await runtime.handlers['setup:createShop']({ ...OWNER });
 
   const info = loadDeviceInfo(runtime.db);

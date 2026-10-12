@@ -23,6 +23,11 @@ export const Invoice = z
     status: InvoiceStatus,
     void_reason: z.string().nullable(),
     voided_by: Id.nullable(),
+    /**
+     * The id the screen made for this attempt to complete the sale (migration 006). A second request with the same id gets this invoice back
+     * instead of making another. Unique, never changed once set. Null for invoices made before it existed, or without one.
+     */
+    request_id: z.string().nullable(),
     ...syncScope,
     ...editableMeta,
   })
@@ -92,3 +97,25 @@ export const SalesReturnItem = z.object({
   ...lineMeta,
 });
 export type SalesReturnItem = z.infer<typeof SalesReturnItem>;
+
+export const HeldBillStatus = z.enum(['held', 'resumed', 'discarded']);
+
+/**
+ * A bill put on hold at the counter (migration 006): a DRAFT of a cart, not a sale. `payload` is the cart as the screen made it (JSON text:
+ * product, quantity, batches chosen, discount); it holds no price, no stock and no money, and is re-priced and re-checked when resumed.
+ * Written once; it is later resumed or discarded, once.
+ */
+export const HeldBill = z.object({
+  id: Id,
+  held_by: Id,
+  customer_id: Id.nullable(),
+  price_type: PriceType,
+  line_count: z.number().int().positive(),
+  payload: z.string().min(2),
+  status: HeldBillStatus,
+  resolved_by: Id.nullable(),
+  resolved_at: IsoDateTime.nullable(),
+  ...syncScope,
+  ...editableMeta,
+});
+export type HeldBill = z.infer<typeof HeldBill>;

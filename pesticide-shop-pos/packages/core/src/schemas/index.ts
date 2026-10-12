@@ -1,7 +1,7 @@
 import { Brand, Batch, Category, Customer, Product, ProductGroup, Supplier } from './catalog.js';
 import { Expense, LedgerEntry, Payment, StockMovement } from './ledger.js';
 import { Purchase, PurchaseItem, PurchaseReturn, PurchaseReturnItem } from './purchasing.js';
-import { Invoice, InvoiceItem, SalesReturn, SalesReturnItem } from './sales.js';
+import { HeldBill, Invoice, InvoiceItem, SalesReturn, SalesReturnItem } from './sales.js';
 import { Branch, Device, NumberSequence, Setting, Shop, User } from './setup.js';
 import { AuditLog, BackupLog, ChangeLog } from './system.js';
 
@@ -36,6 +36,7 @@ export const entitySchemas = {
   invoice_items: InvoiceItem,
   sales_returns: SalesReturn,
   sales_return_items: SalesReturnItem,
+  held_bills: HeldBill,
   stock_movements: StockMovement,
   payments: Payment,
   ledger_entries: LedgerEntry,

@@ -86,7 +86,10 @@ describe('enforced in the handlers', () => {
       'an opening balance': 'khata.openingBalance',
     };
 
-    it.each(Object.keys(ownerOnlyCalls))('cannot do this: %s -> NOT_AUTHORIZED from the main process, and nothing is written', async (name) => {
+    // A different price and going over the credit limit are not refused outright any more: staff may do them with the owner's one-use approval
+    // (see pos-foundations.test.ts). Without it they are refused with APPROVAL_REQUIRED, tested below.
+    const needsApproval = new Set(['price override on a sale', 'credit-limit override on a sale']);
+    it.each(Object.keys(ownerOnlyCalls).filter((name) => !needsApproval.has(name)))('cannot do this: %s -> NOT_AUTHORIZED from the main process, and nothing is written', async (name) => {
       const before = footprint();
       const error = await failureOf(ownerOnlyCalls[name]!());
       expect(error.code).toBe('NOT_AUTHORIZED');
@@ -129,7 +132,24 @@ describe('enforced in the handlers', () => {
       // Sajid has a limit of Rs 5,000 and owes nothing: one pack is fine, then ten more (Rs 5,500 in all) are not.
       await expect(h()['sale:create']({ customer_id: shop.demo.customers['sajid']!, paid_amount: 0, lines: [{ product_id: product, qty: 1000 }] })).resolves.toBeTruthy();
       const error = await failureOf(h()['sale:create']({ customer_id: shop.demo.customers['sajid']!, paid_amount: 0, lines: [{ product_id: product, qty: 10_000 }] }));
-      expect(error.code).toBe('CREDIT_LIMIT_EXCEEDED');
+      // The limit stops staff before the sale: the owner has to approve it (APPROVAL_REQUIRED says what for).
+      expect(error.code).toBe('APPROVAL_REQUIRED');
+      expect(error.params).toEqual({ actions: 'credit_override' });
+    });
+
+    it('a different price needs the owner\'s approval: APPROVAL_REQUIRED, and nothing is written', async () => {
+      const before = footprint();
+      const error = await failureOf(ownerOnlyCalls['price override on a sale']!());
+      expect(error.code).toBe('APPROVAL_REQUIRED');
+      expect(error.params).toEqual({ actions: 'price_override' });
+      expect(footprint()).toEqual(before);
+    });
+
+    it('asking for a credit override on a sale that is within the limit changes nothing: it is just a sale', async () => {
+      const before = footprint();
+      await expect(ownerOnlyCalls['credit-limit override on a sale']!()).resolves.toBeTruthy();
+      expect(footprint()).not.toEqual(before); // the sale was recorded, with no override and no approval
+      expect(shop.runtime.db.prepare("SELECT COUNT(*) AS c FROM audit_log WHERE action IN ('credit_limit_override', 'approval_used')").get()).toEqual({ c: 0 });
     });
   });
 
@@ -210,7 +230,7 @@ describe('enforced in the handlers', () => {
 
     it('covers every channel: each one is public, listed above, or covered by catalogue-api.test.ts (catalogue, receiving stock, quick-add, lists)', () => {
       const publicChannels: Channel[] = ['app:getState', 'setup:createShop', 'auth:login', 'auth:logout', 'auth:me', 'auth:resetOwnerPassword', 'prefs:setLanguage'];
-      const coveredElsewhere = channels.filter((c) => /^(catalogue|suppliers|categories|brands):/.test(c) || c === 'stock:receive');
+      const coveredElsewhere = channels.filter((c) => /^(catalogue|suppliers|categories|brands|customers|approval):/.test(c) || c === 'stock:receive' || c === 'sale:quote');
       expect([...publicChannels, ...business, ...coveredElsewhere].sort()).toEqual([...channels].sort());
     });
   });

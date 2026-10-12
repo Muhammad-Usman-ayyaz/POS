@@ -252,6 +252,7 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
 
     customers: {
       getById: (id) => one<Customer>('customers', 'SELECT * FROM customers WHERE id = ?', id),
+      list: () => all<Customer>('customers', 'SELECT * FROM customers WHERE deleted_at IS NULL ORDER BY COALESCE(name_en, name_ur), id'),
     },
 
     suppliers: {
@@ -266,6 +267,7 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
 
     invoices: {
       getById: (id) => one<Invoice>('invoices', 'SELECT * FROM invoices WHERE id = ?', id),
+      getByRequestId: (requestId) => one<Invoice>('invoices', 'SELECT * FROM invoices WHERE request_id = ?', requestId),
       listItems: (invoiceId) => all<InvoiceItem>('invoices', 'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY rowid', invoiceId),
       insert: (row) => insert('invoices', row),
       insertItem: (row) => insert('invoice_items', row),

@@ -102,6 +102,8 @@ export interface StockRepository {
 
 export interface CustomerRepository {
   getById(id: string): Customer | undefined;
+  /** Every live customer in name order (a shop has hundreds, not millions: the service filters in memory, with the same name matching as the catalogue). */
+  list(): Customer[];
 }
 
 export interface SupplierRepository {
@@ -118,6 +120,8 @@ export interface UserRepository {
 
 export interface InvoiceRepository {
   getById(id: string): Invoice | undefined;
+  /** The invoice made for this request id (migration 006), if any. */
+  getByRequestId(requestId: string): Invoice | undefined;
   listItems(invoiceId: string): InvoiceItem[];
   insert(row: NewRow<Invoice>): void;
   insertItem(row: NewRow<InvoiceItem>): void;

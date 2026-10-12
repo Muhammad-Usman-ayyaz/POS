@@ -16,7 +16,7 @@ const invoice = () => ({
   id: randomUUID(), invoice_no: 'INV-A-000001', customer_id: randomUUID(), created_by: randomUUID(),
   invoice_date: '2026-10-01T10:00:00.000Z', due_date: null, price_type: 'retail' as const,
   subtotal: 500_000, tax_total: 0, total: 500_000, paid_amount: 200_000, payment_method: 'cash' as const, status: 'active' as const,
-  void_reason: null, voided_by: null, ...scope(), ...meta(),
+  void_reason: null, voided_by: null, request_id: null, ...scope(), ...meta(),
 });
 
 describe('Product', () => {
@@ -124,7 +124,7 @@ describe('PublicUser', () => {
 });
 
 describe('entitySchemas', () => {
-  it('has a schema for each of the 28 tables', () => {
-    expect(Object.keys(entitySchemas)).toHaveLength(28);
+  it('has a schema for each of the 29 tables', () => {
+    expect(Object.keys(entitySchemas)).toHaveLength(29);
   });
 });

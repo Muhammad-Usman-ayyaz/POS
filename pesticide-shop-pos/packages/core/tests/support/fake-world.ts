@@ -7,7 +7,7 @@
 import type { Batch, Brand, Category, Customer, Invoice, InvoiceItem, LedgerEntry, Product, ProductGroup, PublicUser, Repositories, SizeStatus, Supplier, UnitOfWork } from '../../src/index.js';
 import { todayUtc, systemClock, addDays } from '../../src/index.js';
 import { Instrument, instrument } from './instrument.js';
-import { ID, idGenerator, SCOPE, seedData, testClock, type InsertTable, type Row, type ServiceWorld, type TableName, type WorldOptions } from './world.js';
+import { ID, idGenerator, SCOPE, seedData, testClock, uuid, type InsertTable, type Row, type ServiceWorld, type TableName, type WorldOptions } from './world.js';
 
 const META_COLUMNS = ['created_at', 'updated_at', 'deleted_at', 'version'] as const;
 const STAMP = '2026-01-01T00:00:00.000Z';
@@ -221,7 +221,10 @@ function createRepositories(store: FakeStore): Repositories {
       stockOfBatch: (id) => (store.needTx('stock'), store.stockOf(id)),
       insert: (row) => store.insert('stock_movements', row),
     },
-    customers: { getById: (id) => (store.needTx('customers'), store.data.customers.find((c) => c.id === id)) },
+    customers: {
+      getById: (id) => (store.needTx('customers'), store.data.customers.find((c) => c.id === id)),
+      list: () => (store.needTx('customers'), byName(store.data.customers.filter((c) => c.deleted_at === null)).map((c) => ({ ...c }))),
+    },
     suppliers: {
       getById: (id) => (store.needTx('suppliers'), store.data.suppliers.find((s) => s.id === id)),
       list: () => (store.needTx('suppliers'), byName(store.data.suppliers.filter((s) => s.deleted_at === null)).map((s) => ({ ...s }))),
@@ -230,8 +233,13 @@ function createRepositories(store: FakeStore): Repositories {
     users: { getById: (id) => (store.needTx('users'), store.data.users.find((u) => u.id === id)) },
     invoices: {
       getById: (id) => (store.needTx('invoices'), store.data.invoices.find((i) => i.id === id)),
+      getByRequestId: (requestId) => (store.needTx('invoices'), store.data.invoices.find((i) => i.request_id === requestId)),
       listItems: (invoiceId) => (store.needTx('invoices'), store.data.invoice_items.filter((i) => i.invoice_id === invoiceId)),
-      insert: (row) => store.insert('invoices', row),
+      insert: (row) => {
+        // The database has a unique index on request_id: the fake behaves the same, so a bug cannot hide behind it.
+        if (row.request_id != null && store.data.invoices.some((i) => i.request_id === row.request_id)) throw new Error('UNIQUE constraint failed: invoices.request_id');
+        store.insert('invoices', row);
+      },
       insertItem: (row) => store.insert('invoice_items', row),
     },
     salesReturns: {
@@ -306,8 +314,9 @@ export function createFakeWorld(options: WorldOptions = {}): ServiceWorld {
   d.products.push(...(seed.products.map((r) => ({ ...r, ...meta })) as unknown as Product[]));
   d.batches.push(...(seed.batches.map((r) => ({ ...r, ...meta })) as unknown as Batch[]));
 
+  // `store.data` is replaced when a unit of work is rolled back, so the helpers go through it, never through a reference kept from before.
   const addStock = (batch_id: string, qty: number) =>
-    (store.writes += 1, d.stock_movements.push({ id: `seed-${d.stock_movements.length}`, batch_id, qty_delta: qty, movement_type: 'opening', ref_type: null, ref_id: null, created_by: ID.owner, ...SCOPE, ...meta }));
+    (store.writes += 1, store.data.stock_movements.push({ id: `seed-${store.data.stock_movements.length}`, batch_id, qty_delta: qty, movement_type: 'opening', ref_type: null, ref_id: null, created_by: ID.owner, ...SCOPE, ...meta }));
   for (const o of seed.openings) addStock(o.batch_id, o.qty);
 
   const day = (n: number) => addDays(today, n);
@@ -338,6 +347,12 @@ export function createFakeWorld(options: WorldOptions = {}): ServiceWorld {
     setSetting: (key, value) => {
       store.writes += 1;
       store.settings.set(key, value);
+    },
+    addCustomer: (row = {}) => {
+      const id = (row.id as string | undefined) ?? uuid(7000 + store.data.customers.length);
+      store.writes += 1;
+      store.data.customers.push({ id, name_en: 'Customer', name_ur: null, phone: null, village: null, credit_limit: 0, default_price_type: 'retail', notes: null, ...SCOPE, ...meta, ...row } as unknown as Customer);
+      return id;
     },
     failOnInsert: (table, nth) => probe.failOnInsert(table, nth),
     clearFailure: () => probe.clearFailure(),

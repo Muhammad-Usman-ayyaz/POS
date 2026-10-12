@@ -15,7 +15,10 @@ const samples: Record<Channel, () => Record<string, unknown>> = {
   'auth:regenerateRecoveryCode': () => ({ password: 'x' }),
   'auth:resetOwnerPassword': () => ({ username: 'owner', recoveryCode: 'ABCD-EFGH-JKMN-PQRS-TVWX', newPassword: 'another-long-1' }),
   'prefs:setLanguage': () => ({ language: 'ur' }),
+  'sale:quote': () => ({ lines: [{ product_id: id(), qty: 1000 }] }),
   'sale:create': () => ({ paid_amount: 50_000, lines: [{ product_id: id(), qty: 1000 }] }),
+  'customers:search': () => ({ query: 'rashid' }),
+  'approval:request': () => ({ username: 'owner', password: 'x', actions: ['credit_override'], sale: { paid_amount: 0, lines: [{ product_id: id(), qty: 1000 }] } }),
   'salesReturn:create': () => ({ invoice_id: id(), refund_method: 'khata_credit', items: [{ invoice_item_id: id(), qty: 1000, condition: 'resellable' }] }),
   'stock:batchesOf': () => ({ productId: id() }),
   'stock:openingStock': () => ({ product_id: id(), batch_no: 'B-1', expiry_date: '2027-01-31', cost_price: 40_000, qty: 5000 }),
@@ -155,7 +158,7 @@ describe('field rules', () => {
 describe('buildApi', () => {
   it('turns channels into named functions: app:getState is api.app.getState', () => {
     const api = buildApi(async () => ({ ok: true, data: null }));
-    expect(Object.keys(api).sort()).toEqual(['app', 'auth', 'brands', 'catalogue', 'categories', 'khata', 'prefs', 'reports', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
+    expect(Object.keys(api).sort()).toEqual(['app', 'approval', 'auth', 'brands', 'catalogue', 'categories', 'customers', 'khata', 'prefs', 'reports', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
     expect(Object.keys(api.auth).sort()).toEqual(['login', 'logout', 'me', 'regenerateRecoveryCode', 'resetOwnerPassword']);
     // one function per channel, nothing else
     const functions = Object.values(api).flatMap((ns) => Object.values(ns as Record<string, unknown>));

@@ -12,6 +12,7 @@ import {
   createSaleService,
   createSalesReturnService,
   createCatalogueService,
+  createCustomerDirectoryService,
   createStockService,
   DomainError,
   type Repositories,
@@ -72,6 +73,8 @@ export interface ServiceWorld {
   addStock(batchId: string, qty: number): void;
   /** Write a setting (for example near_expiry_days), as the settings screen would. */
   setSetting(key: string, value: string): void;
+  /** Add a customer as the Khata screens will (not through a service: there is none yet). Returns its id. */
+  addCustomer(row?: Row): string;
 
   /** Make the Nth insert (1-based, counted per unit of work) into `table` throw. */
   failOnInsert(table: InsertTable, nth?: number): void;
@@ -94,6 +97,7 @@ export function services(w: ServiceWorld) {
     khata: createKhataService(w.deps),
     salesReturn: createSalesReturnService(w.deps),
     catalogue: createCatalogueService(w.deps),
+    customers: createCustomerDirectoryService(w.deps),
   };
 }
 

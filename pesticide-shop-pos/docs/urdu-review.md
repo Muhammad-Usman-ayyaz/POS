@@ -230,3 +230,14 @@ Dates are shown with English month names and Latin digits in Urdu mode too ("15 
 | `receive.receive.loading` | 'Loading…' | 'لوڈ ہو رہا ہے…' | |
 | `purchases.purchases.note` | 'Receive stock from here. The list of past receipts is built later.' | 'یہاں سے اسٹاک وصول کریں۔ پرانی رسیدوں کی فہرست بعد میں بنے گی۔' | |
 | `purchases.purchases.receiveLink` | 'Receive stock' | 'اسٹاک وصول کریں' | |
+
+## New Urdu error messages (Phase 5, M1: the owner's approval at the counter)
+
+Written by the developer, not by a native speaker: please check. `{seconds}` is replaced by the number of seconds.
+
+| Code | English: what went wrong | English: what to do next | Urdu: what went wrong | Urdu: what to do next | Reviewer's correction |
+|---|---|---|---|---|---|
+| `REQUEST_ID_REUSED` | This bill was already used for a different sale | Start the bill again. | یہ بل پہلے ہی ایک اور فروخت کے لیے استعمال ہو چکا ہے | بل دوبارہ شروع کریں۔ | |
+| `APPROVAL_REQUIRED` | The owner has to approve this | Ask the owner to approve it with their password. | اس کے لیے مالک کی منظوری چاہیے | مالک سے ان کے پاس ورڈ کے ساتھ منظوری لیں۔ | |
+| `APPROVAL_INVALID` | The owner's approval does not work for this bill | It may have run out (it lasts one minute), been used already, or been given for a different bill. Ask the owner to approve again. | مالک کی منظوری اس بل کے لیے کام نہیں کر رہی | ہو سکتا ہے اس کا وقت ختم ہو گیا ہو (یہ ایک منٹ چلتی ہے)، یہ پہلے استعمال ہو چکی ہو، یا کسی اور بل کے لیے دی گئی ہو۔ مالک سے دوبارہ منظوری لیں۔ | |
+| `TOO_MANY_ATTEMPTS` | Too many wrong passwords | Wait {seconds} seconds and try again. | غلط پاس ورڈ بہت بار لکھا گیا | {seconds} سیکنڈ انتظار کریں اور دوبارہ کوشش کریں۔ | |

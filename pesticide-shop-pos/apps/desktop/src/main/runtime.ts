@@ -1,7 +1,8 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import type { AppState, Channel, Output, ParsedInput, SessionUser } from '@pos/api-contract';
+import type { AppState, ApprovalAction, Channel, Output, ParsedInput, SessionUser } from '@pos/api-contract';
 import {
   createCatalogueService,
+  createCustomerDirectoryService,
   createKhataService,
   createPurchaseService,
   createReferenceService,
@@ -17,8 +18,10 @@ import {
 import {
   createSqliteRepositories,
   createSqliteUnitOfWork,
+  findActiveOwnerId,
   findUserForLogin,
   firstLaunchSetup,
+  hasInvoiceForRequest,
   isSetupDone,
   loadDeviceInfo,
   migrate,
@@ -30,11 +33,13 @@ import {
   type DeviceInfo,
   type Migration,
 } from '@pos/db-sqlite';
+import { createApprovalStore, neededApprovals, subjectHash } from './approvals.js';
 import { argon2Hasher, type PasswordHasher } from './password.js';
 import { guardHandlers, requireCapability } from './permissions.js';
 import { PrefsStore } from './prefs.js';
 import { generateRecoveryCode, normalizeRecoveryCode } from './recovery.js';
 import { SessionStore } from './session.js';
+import { AttemptThrottle } from './throttle.js';
 
 export interface RuntimeOptions {
   dbPath: string;
@@ -75,6 +80,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   await migrate(db, options.migrations ? { migrations: options.migrations } : {});
 
   const session = new SessionStore();
+  // Wrong passwords at sign-in and at the owner's approval share one lock-out policy; approvals are one-use tokens kept in memory only.
+  const loginThrottle = new AttemptThrottle(clock);
+  const approvalThrottle = new AttemptThrottle(clock);
+  const approvals = createApprovalStore(clock);
   const prefs = new PrefsStore(options.prefsPath);
 
   // ---- services: built once the shop exists, because they need its shop, branch and device ids ----
@@ -89,6 +98,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     sale: ReturnType<typeof createSaleService>;
     salesReturn: ReturnType<typeof createSalesReturnService>;
     khata: ReturnType<typeof createKhataService>;
+    customers: ReturnType<typeof createCustomerDirectoryService>;
   }
   let built: Services | null = null;
   const services = (): Services => {
@@ -107,6 +117,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       sale: createSaleService(deps),
       salesReturn: createSalesReturnService(deps),
       khata: createKhataService(deps),
+      customers: createCustomerDirectoryService(deps),
     };
     return built;
   };
@@ -117,13 +128,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     action: string;
     rowId: string | null;
     details: Record<string, unknown>;
+    /** Default 'users'. */
+    table?: string;
   }
   const audit = (repos: Services['repos'], entry: AuditEntry): void => {
     repos.audit.insert({
       id: ids.newId(),
       user_id: entry.userId,
       action: entry.action,
-      table_name: 'users',
+      table_name: entry.table ?? 'users',
       row_id: entry.rowId,
       details: JSON.stringify(entry.details),
     });
@@ -177,6 +190,27 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     return user;
   };
 
+  /** An active owner's id, for PRICING a cart someone else asked a different price for (the quote needs a valid approver; nothing is written). */
+  const requireOwnerId = (): string => {
+    const id = findActiveOwnerId(db);
+    if (!id) throw new DomainError('NOT_FOUND', 'there is no active owner');
+    return id;
+  };
+  /** The cart as the core takes it. `approvedBy` stands behind any price override in it. */
+  const coreCart = (input: ParsedInput<'sale:quote'>, userId: string, approvedBy: string) => ({
+    ...(input.customer_id ? { customer_id: input.customer_id } : {}),
+    ...(input.price_type ? { price_type: input.price_type } : {}),
+    ...(input.due_date ? { due_date: input.due_date } : {}),
+    ...(input.paid_amount !== undefined ? { paid_amount: input.paid_amount } : {}),
+    ...(input.payment_method ? { payment_method: input.payment_method } : {}),
+    ...(input.reference_no ? { reference_no: input.reference_no } : {}),
+    created_by: userId,
+    lines: input.lines.map(({ price_override, ...line }) => ({
+      ...line,
+      ...(price_override ? { price_override: { unit_price: price_override.unit_price, approved_by: approvedBy } } : {}),
+    })),
+  });
+
   const rawHandlers: Handlers = {
     // ---------- start-up ----------
     'app:getState': async () => getState(),
@@ -210,17 +244,27 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
     // ---------- sign in ----------
     'auth:login': async ({ username, password }) => {
+      // A locked name is refused before the password is looked at, so the answer never says whether the password was right.
+      const key = `login:${username.trim().toLowerCase()}`;
+      loginThrottle.check(key);
       const record = findUserForLogin(db, username);
       const passwordOk = record ? await hasher.verify(record.password_hash, password) : (await hasher.verify(await dummyHash(), password), false);
       const usable = record !== undefined && passwordOk && record.is_active === 1 && record.deleted_at === null;
 
       if (!usable) {
         const reason = !record ? 'unknown_user' : !passwordOk ? 'wrong_password' : 'inactive_user';
-        if (isSetupDone(db)) inTransaction((s) => audit(s.repos, { userId: record?.id ?? null, action: 'login_failed', rowId: record?.id ?? null, details: { username, reason } }));
+        const lock = loginThrottle.fail(key);
+        if (isSetupDone(db)) {
+          inTransaction((s) => {
+            audit(s.repos, { userId: record?.id ?? null, action: 'login_failed', rowId: record?.id ?? null, details: { username, reason } });
+            if (lock) audit(s.repos, { userId: record?.id ?? null, action: 'login_locked', rowId: record?.id ?? null, details: { username, seconds: lock.lockedForSeconds } });
+          });
+        }
         // The same answer for every reason: the screen must not say which part was wrong.
         throw new DomainError('INVALID_CREDENTIALS', 'wrong username or password');
       }
 
+      loginThrottle.succeed(key);
       const user = startSession(record);
       inTransaction((s) => audit(s.repos, { userId: record.id, action: 'login', rowId: record.id, details: { username } }));
       return user;
@@ -281,24 +325,78 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
 
     // ---------- business calls: signed in, role-checked here, the user comes from the session ----------
+    // The cart priced and checked by the core, nothing written. For someone who is not the owner it also says what the owner would have to approve.
+    'sale:quote': async (input) => {
+      const user = session.require();
+      const quote = services().sale.quote(coreCart(input, user.id, user.role === 'owner' ? user.id : requireOwnerId()));
+      return { ...quote, requires_approval: neededApprovals(user, quote, input.lines) };
+    },
+
     'sale:create': async (input) => {
       const user = session.require();
-      if (input.lines.some((l) => l.price_override)) requireCapability(user, 'prices.override');
-      if (input.credit_override) requireCapability(user, 'credit.override');
+      const { credit_override, approval_token, lines, ...rest } = input;
 
-      const { credit_override, lines, ...rest } = input;
+      // Who stands behind a different price, going over the credit limit, or a discount above the staff limit. The owner, on their own sale,
+      // is their own approver. Anyone else needs the owner's one-use approval for EXACTLY what this sale needs and for exactly this cart.
+      let approver: string | null = user.role === 'owner' ? user.id : null;
+      let spent: ApprovalAction[] = [];
+      const alreadyMade = rest.request_id !== undefined && hasInvoiceForRequest(db, rest.request_id);
+      if (user.role !== 'owner' && !alreadyMade) {
+        const quote = services().sale.quote(coreCart({ ...rest, lines }, user.id, requireOwnerId()));
+        const needs = neededApprovals(user, quote, lines);
+        if (needs.length > 0) {
+          if (!approval_token) throw new DomainError('APPROVAL_REQUIRED', 'the owner has to approve this sale', { actions: needs.join(',') });
+          approver = approvals.consume(approval_token, needs, subjectHash({ ...rest, lines }), user.id).ownerId;
+          spent = needs;
+        }
+      }
+      // (A repeat of a sale already made never uses an approval: the core hands back the invoice it made the first time.)
+      const stand = approver ?? requireOwnerId();
+
       const sold = services().sale.create({
         ...rest,
         created_by: user.id,
-        // The owner asked for this and is the signed-in user, so they are the approver. A staff session never gets here.
-        ...(credit_override ? { credit_override: { approved_by: user.id } } : {}),
+        ...(credit_override || spent.includes('credit_override') ? { credit_override: { approved_by: stand } } : {}),
+        ...(spent.includes('discount_override') ? { discount_override: { approved_by: stand } } : {}),
         lines: lines.map(({ price_override, ...line }) => ({
           ...line,
-          ...(price_override ? { price_override: { unit_price: price_override.unit_price, approved_by: user.id } } : {}),
+          ...(price_override ? { price_override: { unit_price: price_override.unit_price, approved_by: stand } } : {}),
         })),
       });
+      if (spent.length > 0) {
+        inTransaction((s) => audit(s.repos, { userId: approver, action: 'approval_used', table: 'invoices', rowId: sold.invoice.id, details: { requested_by: user.id, actions: spent } }));
+      }
       // Each line carries its batch's cost price (for profit). Only the owner may see it.
       return user.role === 'owner' ? sold : { ...sold, items: sold.items.map(({ cost_price: _cost, ...line }) => line) };
+    },
+
+    'customers:search': async (input) => {
+      session.require();
+      return services().customers.search(input);
+    },
+
+    // The owner types their own password at the counter, so someone else can sell over the limit, at another price, or with a big discount.
+    // The answer is a token for exactly these actions and this cart that works once, for one minute. Wrong passwords lock the person asking out.
+    'approval:request': async ({ username, password, actions, sale }) => {
+      const requester = session.require();
+      const key = `approval:${requester.id}`;
+      approvalThrottle.check(key);
+      const record = findUserForLogin(db, username);
+      const passwordOk = record ? await hasher.verify(record.password_hash, password) : (await hasher.verify(await dummyHash(), password), false);
+      const usable = record !== undefined && passwordOk && record.role === 'owner' && record.is_active === 1 && record.deleted_at === null;
+      if (!usable) {
+        const lock = approvalThrottle.fail(key);
+        inTransaction((s) => {
+          audit(s.repos, { userId: requester.id, action: 'approval_failed', rowId: record?.id ?? null, details: { requested_by: requester.id, username, actions } });
+          if (lock) audit(s.repos, { userId: requester.id, action: 'approval_locked', rowId: requester.id, details: { seconds: lock.lockedForSeconds } });
+        });
+        throw new DomainError('INVALID_CREDENTIALS', 'wrong username or password, or not the owner'); // the same answer for every reason
+      }
+      approvalThrottle.succeed(key);
+      const hash = subjectHash(sale);
+      const grant = approvals.issue({ ownerId: record.id, requestedBy: requester.id, actions, hash, token: Buffer.from(random(32)).toString('hex') });
+      inTransaction((s) => audit(s.repos, { userId: record.id, action: 'approval_granted', rowId: record.id, details: { requested_by: requester.id, actions, bill: hash.slice(0, 12) } }));
+      return { ...grant, actions: [...actions].sort() };
     },
 
     'salesReturn:create': async (input) => {

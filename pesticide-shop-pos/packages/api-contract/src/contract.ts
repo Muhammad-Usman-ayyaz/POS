@@ -2,7 +2,10 @@ import { BaseUnit, Flag, IsoDate, NonNegPaisa, PaymentMethod, PriceType, Qty, Ta
 import { z } from 'zod';
 import type {
   AddSizeResult,
+  ApprovalGrant,
   AppState,
+  CustomerMatch,
+  SaleQuoteView,
   BatchView,
   CatalogueList,
   CreateGroupResult,
@@ -140,16 +143,55 @@ const SaleLine = z.strictObject({
   price_override: z.strictObject({ unit_price: NonNegPaisa }).optional(),
 });
 
-export const SaleCreateInput = z.strictObject({
+/** What a sale needs from the owner when it is not the owner who sells. */
+export const ApprovalActionSchema = z.enum(['credit_override', 'price_override', 'discount_override']);
+export type ApprovalAction = z.infer<typeof ApprovalActionSchema>;
+
+const SaleFields = {
   customer_id: Id.optional(),
   price_type: PriceType.optional(),
   due_date: IsoDate.optional(),
-  paid_amount: NonNegPaisa,
   payment_method: PaymentMethod.optional(),
   reference_no: z.string().min(1).max(60).optional(),
-  /** Ask to go over the customer's credit limit for this sale. Owner only. */
+  /** Ask to go over the customer's credit limit for this sale. Owner only (or approved by the owner with a token). */
   credit_override: z.literal(true).optional(),
   lines: z.array(SaleLine).min(1),
+};
+
+export const SaleCreateInput = z.strictObject({
+  ...SaleFields,
+  paid_amount: NonNegPaisa,
+  /**
+   * The screen's id for THIS attempt to complete the sale (a new one for each bill; kept for a retry). The same id again returns the invoice
+   * already made instead of making another, even after a restart.
+   */
+  request_id: z.string().min(8).max(100).optional(),
+  /** The owner's approval, from `approval:request`, when someone other than the owner sells over the limit, at another price, or with a big discount. */
+  approval_token: z.string().min(16).max(200).optional(),
+});
+
+/** A cart to price and check without selling it. `paid_amount` left out means paid in full. */
+export const SaleQuoteInput = z.strictObject({ ...SaleFields, paid_amount: NonNegPaisa.optional() });
+
+/** The cart and the amount an approval is for. It is worthless for any other cart or amount. */
+export const ApprovalSubjectSchema = z.strictObject({
+  customer_id: Id.optional(),
+  price_type: PriceType.optional(),
+  paid_amount: NonNegPaisa,
+  lines: z.array(SaleLine).min(1),
+});
+
+export const ApprovalRequestInput = z.strictObject({
+  /** The owner's own username and password, typed at the counter. */
+  username: Username,
+  password: CurrentPassword,
+  actions: z.array(ApprovalActionSchema).min(1).max(3),
+  sale: ApprovalSubjectSchema,
+});
+
+export const CustomerSearchInput = z.strictObject({
+  query: z.string().max(100).optional(),
+  limit: z.number().int().min(1).max(50).optional(),
 });
 
 export const SalesReturnCreateInput = z.strictObject({
@@ -179,7 +221,10 @@ export const contract = {
 
   'prefs:setLanguage': { input: z.strictObject({ language: LanguageSchema }) },
 
+  'sale:quote': { input: SaleQuoteInput },
   'sale:create': { input: SaleCreateInput },
+  'customers:search': { input: CustomerSearchInput },
+  'approval:request': { input: ApprovalRequestInput },
   'salesReturn:create': { input: SalesReturnCreateInput },
 
   'stock:batchesOf': { input: z.strictObject({ productId: Id, includeCost: z.boolean().optional() }) },
@@ -269,7 +314,10 @@ export interface Outputs {
   'auth:regenerateRecoveryCode': RecoveryCodeResult;
   'auth:resetOwnerPassword': RecoveryCodeResult;
   'prefs:setLanguage': Language;
+  'sale:quote': SaleQuoteView;
   'sale:create': SaleView;
+  'customers:search': CustomerMatch[];
+  'approval:request': ApprovalGrant;
   'salesReturn:create': SalesReturnResult;
   'stock:batchesOf': BatchView[];
   'stock:openingStock': { batch_id: string };

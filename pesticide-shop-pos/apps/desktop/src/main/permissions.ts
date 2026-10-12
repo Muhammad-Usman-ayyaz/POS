@@ -63,7 +63,10 @@ export const CHANNEL_POLICY = {
   'auth:resetOwnerPassword': 'public',
   'prefs:setLanguage': 'public',
 
+  'sale:quote': 'signed-in',
   'sale:create': 'signed-in',
+  'customers:search': 'signed-in',
+  'approval:request': 'signed-in',
   'salesReturn:create': { capability: 'returns.approve' },
 
   'stock:batchesOf': 'signed-in',
