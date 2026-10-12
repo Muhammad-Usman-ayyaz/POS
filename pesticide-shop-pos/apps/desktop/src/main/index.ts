@@ -96,7 +96,7 @@ async function start(): Promise<void> {
     }),
     migrations: parseMigrationFiles(migrationFiles),
     prefsPath: join(app.getPath('userData'), 'preferences.json'),
-    printing: createElectronPrintDriver(),
+    printing: __POS_DEV_TOOLS__ && !app.isPackaged && process.env['POS_SCREENSHOT_DIR'] ? (await import('./screenshots.js')).screenshotPrinting(createElectronPrintDriver()) : createElectronPrintDriver(),
   });
   const trusted = (event: IpcEventLike): boolean =>
     isTrustedSender(
@@ -114,7 +114,7 @@ async function start(): Promise<void> {
       window.show();
       const { runScreenshots } = await import('./screenshots.js');
       try {
-        await runScreenshots(window, shotDir, `${width}x${height}`, runtime.db);
+        await runScreenshots(window, shotDir, `${width}x${height}`, runtime.db, runtime.handlers);
       } catch (error) {
         console.error('SCREENSHOTS failed:', error);
         process.exitCode = 1;
@@ -156,9 +156,16 @@ app.on('window-all-closed', () => {
 });
 void app.whenReady().then(async () => {
   try {
+    if (__POS_DEV_TOOLS__ && !app.isPackaged && process.env['POS_PDF_CHECK_DIR']) {
+      // `npm run check:pdf`: real PDFs of the Urdu documents, read back and checked. No database or window of the app is needed.
+      const { runPdfCheck } = await import('./pdf-check.js');
+      const ok = await runPdfCheck(resolve(process.env['POS_PDF_CHECK_DIR']), resolve(process.env['POS_PDFJS_DIR'] ?? ''));
+      app.exit(ok ? 0 : 1);
+      return;
+    }
     await start();
   } catch (error) {
-    if (__POS_DEV_TOOLS__ && (process.env['POS_SCREENSHOT_DIR'] || process.env['POS_SMOKE'])) {
+    if (__POS_DEV_TOOLS__ && (process.env['POS_SCREENSHOT_DIR'] || process.env['POS_SMOKE'] || process.env['POS_PDF_CHECK_DIR'])) {
       // The screenshot and smoke tools must never sit behind a dialog: say what went wrong and stop.
       console.error('Start-up failed:', error);
       app.exit(1);

@@ -12,6 +12,7 @@
     "build": "npm run build -w @pos/desktop",
     "native": "npm run native -w @pos/desktop",
     "screenshots": "npm run screenshots -w @pos/desktop",
+    "check:pdf": "npm run check:pdf -w @pos/desktop",
     "test": "vitest run",
     "test:large": "vitest run --config vitest.large.config.ts --reporter=verbose",
     "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/db-sqlite --noEmit && tsc -p packages/api-contract --noEmit && tsc -p packages/ui --noEmit && tsc -p apps/desktop/tsconfig.node.json --noEmit && tsc -p apps/desktop/tsconfig.web.json --noEmit && tsc -p scripts --noEmit",

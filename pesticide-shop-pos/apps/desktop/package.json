@@ -11,7 +11,8 @@
     "dev": "electron-vite dev",
     "prebuild": "node scripts/check-native.mjs",
     "build": "electron-vite build",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "check:pdf": "node scripts/check-pdf.mjs"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.1",
@@ -28,6 +29,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "electron": "42.11.10",
     "electron-vite": "^5.0.0",
+    "pdfjs-dist": "^6.4.299",
     "tailwindcss": "^4.1.0",
     "tar": "^7.4.0",
     "vite": "^7.0.0"

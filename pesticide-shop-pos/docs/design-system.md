@@ -100,6 +100,7 @@ A new product is saved in one call. An edit sends only what changed, in this ord
 - **Line editor** (click a line, or F8 for the selected line with the cursor in the discount box): quantity with steps, batch (Auto = earliest expiry first, or one batch picked by hand, expired ones disabled; no cost is asked for), discount in percent or rupees, Remove line. Sealed sizes move by whole packs, loose sizes by 50 (or 10, or 1 for small packs).
 - **Held bills (F6)** are kept in this window's browser storage (`held-bills.ts`) because the shell has the `held_bills` table but no channel for it yet. They hold items, discounts, batches and the customer, plus the price last seen so Resume can say "Price changed" and "Removed" after pricing the bill again.
 - Staff never see cost: no request sends `include_cost` / `includeCost`, and a test scans every request and the page.
+- The F2 badge in the search box is wrapped in a placed `span`: `.num` forces `direction: ltr`, and an element's OWN direction decides which side `end-3` is, so on the badge itself it stayed on the right in Urdu and covered the magnifier. A test fails if any element in `pages/pos/` is both placed with `start-`/`end-` and carries `num`.
 - Right to left comes from logical classes only; a test fails if any file in `pages/pos/` uses `left`, `right`, `ml-`, `mr-`, `pl-`, `pr-`, `text-left` or `text-right`. Amounts and dates use `.num`; text with Urdu words in it is not isolated.
 
 ## Receipts, invoices and printing
@@ -125,6 +126,30 @@ Built from `docs/design/80 mm receipts, English and Urdu.png` and `A4 invoice, E
 - **Print buttons** (`print-actions.tsx`, shared with the POS sale-saved box): Print receipt, Print A4 invoice, Save receipt as PDF, Save invoice as PDF, each one `print:document` with `{ invoice_id, kind, output }` (no language: the shell uses the print settings). One print at a time. A reply with `status: 'pdf_saved'` (asked for, or `fallback` no_printer / print_failed) is a green notice ("Saved as PDF", the reason, and the file path) and never an error box; `is_copy` adds a COPY badge and a line saying the page says COPY. Only a failure of the call itself (not even a PDF could be made) is an error. After a print the list is asked again so "Printed N times" follows.
 - The POS box shows only Print receipt and Save receipt as PDF.
 
+## Settings screen
+
+`packages/ui/src/pages/settings/`, route `/settings`. **This form was NOT checked against Settings.dc.html: that file is missing.** It follows the Products and Receive stock forms (cards with a heading and hint, `Field` labels, 56px inputs and drop-downs, the same buttons, `ErrorNotice` for errors, a toast on save), so a design review is still owed.
+
+- **Owner only.** Staff see a calm "Only the owner can change settings" card with no form and no request to the shell (the shell refuses `print:setConfig` for staff as well, `print.configure`).
+- **Printing:** the printer (`printers:list`, with "System default printer" as the first option, the system's default marked, and a saved printer that is no longer on this PC shown as "not found on this PC"), and the receipt and A4 invoice language (English / اردو).
+- **Shop header:** the shop name in Urdu, the address and the phone (the placeholders print until they are filled in).
+- **Save sends only what changed** (`print:setConfig`): an emptied box goes as `null`, "System default printer" as `printer_name: null`. Nothing changed means the button is off and nothing is sent. The form is loaded from `print:getConfig` and reloaded from the reply on save.
+- Right to left from logical classes only (a test scans the folder); the Urdu name box is `dir="rtl"`, the phone box `dir="ltr"`.
+- **What cannot be set here yet:** the shop's English name (set at setup) and the time zone; the contract has no field for them.
+
+## Urdu in the PDF: checking it
+
+`npm run check:pdf` (it is NOT a Vitest test: it needs a real Electron window, so it is a script like `npm run screenshots`). It builds the app with the development tools, makes the 80 mm receipt and the A4 invoice in Urdu with Electron's real `printToPDF` (the same `electron-driver.ts` the app prints with), with an Urdu customer, three Urdu product names that end in a Latin size (`1 L`, `50 kg`, `250 ml`), `Rs 1,200` style amounts, and reads the PDFs back. It saves PDFs, text dumps and one PNG per page in `apps/desktop/.pdf-check/` and exits 1 if a check fails. Source: `apps/desktop/src/main/pdf-check.ts`.
+
+What it checks (50 checks):
+- **Fonts:** the PDF's `/FontName` entries are Noto Naskh Arabic (Chromium embeds this variable font as glyph drawings, "Type 3") and IBM Plex Sans, and nothing else (a missing font would show up as SegoeUI or Tahoma: tried).
+- **Shaping:** the text layer holds Arabic *contextual* forms (initial, medial, final), which only exist when the letters were shaped and joined.
+- **Order:** the Urdu strings read back whole in logical order with `pdftotext` (xpdf or poppler; skipped with a message if it is not installed). The Latin runs (`1 L`, `Rs 1,200`, the invoice number, the date) are whole in pdf.js's text, there is no `L 1` flip, and on each product line the Latin size stands to the LEFT of the Urdu name (right-to-left lines start at the right edge).
+- **The picture:** pdf.js (`pdfjs-dist`, a devDependency used only by this check; it is the one PDF renderer that runs inside the Electron we already have, with no system tool) draws each page to a PNG. A program cannot tell "joined" from "almost joined", so the two PNGs are LOOKED at by a person. The current ones are `docs/design/Built 80 mm receipt (Urdu PDF).png` and `docs/design/Built A4 invoice (Urdu PDF).png` (exports of what was built, not designs).
+- Proven by planting bugs: removing the `.ltr` islands in `bidi.tsx` fails the Latin-run and position checks (the runs flip); removing the Naskh `@font-face` fails the font checks (a fallback font is embedded instead).
+
+Not covered: a real thermal printer (the check stops at the PDF; the driver's `print` path uses the same page and the same fonts, but ink on paper has not been seen), and Windows' own PDF viewers (Edge, Acrobat) were not compared.
+
 ## Checking the look
 
-`npm run screenshots` builds the app and saves a picture of every screen (English and Urdu) at 1280x720, 1366x768 and 1920x1080 into `apps/desktop/.screenshots/`, with a report of anything that overflows, is clipped, is smaller than 44px, or needs scrolling. It also fails if the page logs a warning, which includes any Content-Security-Policy violation.
+`npm run screenshots` builds the app and saves a picture of every screen (English and Urdu) at 1280x720, 1366x768 and 1920x1080 into `apps/desktop/.screenshots/`, with a report of anything that overflows, is clipped, is smaller than 44px, or needs scrolling. It also fails if the page logs a warning, which includes any Content-Security-Policy violation. The walk now shows populated screens: it first makes four real invoices through the real handlers (a walk-in sale, a Khata sale to Rashid printed twice so it says COPY, a Khata sale to Sajid, a seed sale) with pretend printers (`screenshotPrinting`, nothing is sent to a printer and no PDF is opened), then captures the POS with a held bill and a three-line bill for a customer, the customer picker, the line editor, the held bills box, the sale-saved box, the over-limit and owner-approval boxes (as staff), the invoice list and an invoice's detail (English and Urdu), and Settings (owner English and Urdu, staff English).

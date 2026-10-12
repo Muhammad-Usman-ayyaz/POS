@@ -14,6 +14,7 @@ import { ProductFormPage } from '../pages/products/product-form-page.js';
 import { ProductsPage } from '../pages/products/products-page.js';
 import { PurchasesPage } from '../pages/purchases/purchases-page.js';
 import { ReceiveStockPage } from '../pages/purchases/receive-stock-page.js';
+import { SettingsPage } from '../pages/settings/settings-page.js';
 import { ResetPage } from '../pages/reset-page.js';
 import { SetupPage } from '../pages/setup-page.js';
 
@@ -103,7 +104,8 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut }: { api: Api; 
           <Route path="/products/:groupId/edit" element={<ProductFormPage api={api} user={user} />} />
           <Route path="/purchases" element={<PurchasesPage user={user} />} />
           <Route path="/purchases/receive" element={<ReceiveStockPage api={api} user={user} />} />
-          {NAV_ITEMS.filter(({ key }) => key !== 'pos' && key !== 'invoices' && key !== 'products' && key !== 'purchases').map(({ key, path }) => (
+          <Route path="/settings" element={<SettingsPage api={api} user={user} />} />
+          {NAV_ITEMS.filter(({ key }) => key !== 'pos' && key !== 'invoices' && key !== 'products' && key !== 'purchases' && key !== 'settings').map(({ key, path }) => (
             <Route key={key} path={path} element={<PlaceholderPage page={key} />} />
           ))}
           <Route path="*" element={<Navigate to="/pos" replace />} />

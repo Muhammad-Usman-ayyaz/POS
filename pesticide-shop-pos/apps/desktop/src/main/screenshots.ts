@@ -5,6 +5,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Db } from '@pos/db-sqlite';
+import type { PrintDriver } from './printing/driver.js';
+import type { Handlers } from './runtime.js';
 
 interface PageReport {
   name: string;
@@ -20,6 +22,12 @@ interface PageReport {
   scrolls: boolean;
   direction: string;
 }
+
+/** The few button texts the walk presses (the main process cannot import the screens' text files: they are for the browser). Keep in step with i18n/messages. */
+const TEXT = {
+  en: { hold: 'Hold bill', complete: 'Complete sale', newSale: 'New sale', askOwner: 'Ask owner' },
+  ur: { hold: 'بل روکیں', complete: 'بل مکمل کریں', newSale: 'نیا بل', askOwner: 'مالک سے پوچھیں' },
+} as const;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -50,8 +58,27 @@ const MEASURE = `(() => {
   };
 })()`;
 
-/** The demo shop (products, batches, customers) and a staff login, written straight into the throw-away database. */
-async function seedForScreens(db: Db): Promise<void> {
+/**
+ * The printing the screenshots use: two pretend printers, "printing" that succeeds without paper, and no PDF file opened on the desk.
+ * The real driver still makes real PDFs for `toPdf`.
+ */
+export function screenshotPrinting(real: PrintDriver): PrintDriver {
+  return {
+    ...real,
+    listPrinters: async () => [
+      { name: 'POS-80', display_name: 'POS-80 receipt printer', is_default: false },
+      { name: 'Office-Laser', display_name: 'Office laser A4', is_default: true },
+    ],
+    print: async () => undefined,
+    savePdf: async (fileName) => `C:/Users/Shop/Documents/Pesticide Club POS/Receipts/${fileName}`,
+  };
+}
+
+/**
+ * The demo shop (products, batches, customers), a staff login, the print settings, and a few real invoices made through the real handlers
+ * (the owner is signed in by then): a walk-in cash sale, a Khata sale to Rashid (printed twice, so its second print says COPY), and two more.
+ */
+async function seedForScreens(db: Db, handlers: Handlers): Promise<void> {
   const [{ hash }, { addDays, systemClock, todayUtc }, { createUser, loadDeviceInfo }, { findOwnerId, seedDemoData }] = await Promise.all([
     import('@node-rs/argon2'),
     import('@pos/core'),
@@ -62,10 +89,40 @@ async function seedForScreens(db: Db): Promise<void> {
   const ownerId = findOwnerId(db);
   if (!info || !ownerId) throw new Error('screenshots: the shop was not set up');
   createUser(db, info.scope, { name: 'Salesman', username: 'staff', passwordHash: await hash('shots-staff-secret-1'), role: 'staff' });
-  seedDemoData(db, info.scope, ownerId, addDays(todayUtc(systemClock), 0));
+  const demo = seedDemoData(db, info.scope, ownerId, addDays(todayUtc(systemClock), 0));
+  const p = (key: string): string => demo.products[key] ?? '';
+
+  await handlers['print:setConfig']({ printer_name: 'POS-80', shop_name_ur: 'پیسٹی سائیڈ کلب شاپ', shop_address: 'Main Bazaar, Chak 12', shop_phone: '0300 1234567' });
+  const walkIn = await handlers['sale:create']({
+    paid_amount: 54_000 + 35_000,
+    lines: [
+      { product_id: p('insecticide500'), qty: 1000 },
+      { product_id: p('fungicide250'), qty: 250 },
+    ],
+  });
+  const khata = await handlers['sale:create']({
+    customer_id: demo.customers['rashid'] ?? '',
+    paid_amount: 100_000,
+    due_date: addDays(todayUtc(systemClock), 30),
+    lines: [
+      { product_id: p('insecticide1l'), qty: 2000 },
+      { product_id: p('fertilizer1kg'), qty: 250 },
+      { product_id: p('fungicide250'), qty: 750, line_discount: 5000 },
+    ],
+  });
+  await handlers['sale:create']({
+    customer_id: demo.customers['sajid'] ?? '',
+    paid_amount: 20_000,
+    due_date: addDays(todayUtc(systemClock), 14),
+    lines: [{ product_id: p('weedicide1l'), qty: 1000 }],
+  });
+  await handlers['sale:create']({ paid_amount: 240_000, lines: [{ product_id: p('vegseed1kg'), qty: 1000 }] });
+  await handlers['print:document']({ invoice_id: khata.invoice.id, kind: 'receipt' });
+  await handlers['print:document']({ invoice_id: khata.invoice.id, kind: 'receipt' }); // the second print of the same document: it says COPY
+  await handlers['print:document']({ invoice_id: walkIn.invoice.id, kind: 'invoice' });
 }
 
-export async function runScreenshots(window: BrowserWindow, outDir: string, size: string, db: Db): Promise<void> {
+export async function runScreenshots(window: BrowserWindow, outDir: string, size: string, db: Db, handlers: Handlers): Promise<void> {
   const dir = join(outDir, size);
   mkdirSync(dir, { recursive: true });
   const js = <T>(code: string): Promise<T> => window.webContents.executeJavaScript(code, true) as Promise<T>;
@@ -255,6 +312,127 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await sleep(200);
   }
 
+  function key(name: string): Promise<unknown> {
+    return js(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(name)}, bubbles: true }))`);
+  }
+  function escape(): Promise<unknown> {
+    return js(`(document.querySelector('[role=dialog]') || document).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  }
+  function pause(ms: number): Promise<unknown> {
+    return js(`new Promise((r) => setTimeout(r, ${ms}))`);
+  }
+
+  /** On the POS screen: search, wait for the answer, press the size whose label starts with `label` ("" is the first one that can be sold). */
+  async function addToBill(query: string, label = ''): Promise<void> {
+    const before = await js<number>(`document.querySelectorAll('[data-line]').length`);
+    await fill('input[type=search]', query);
+    await waitFor('[data-size]');
+    await pause(700);
+    await js(`(() => { const b = [...document.querySelectorAll('[data-size]:not([disabled])')].find((x) => x.querySelector('span').textContent.trim().startsWith(${JSON.stringify(label)}));
+      if (!b) throw new Error('no size ' + ${JSON.stringify(label)} + ' for ' + ${JSON.stringify(query)}); b.click(); })()`);
+    await js(`new Promise((resolve, reject) => { const t0 = Date.now(); const tick = () => document.querySelectorAll('[data-line]').length > ${before} ? resolve(true) : Date.now() - t0 > 4000 ? reject(new Error('the line was not added')) : setTimeout(tick, 50); tick(); })`);
+  }
+
+  /** F4: the customer picker, the named customer selected, "Use ..." pressed. `pictureName` (if given) is saved while the picker is open. */
+  async function chooseCustomer(search: string, shownName: string, pictureName?: string): Promise<void> {
+    await key('F4');
+    await waitFor('[role=dialog] input[type=search]');
+    await fill('[role=dialog] input[type=search]', search);
+    await pause(500);
+    await clickText('[role=option]', shownName);
+    await sleep(200);
+    if (pictureName) await shot(pictureName);
+    await js(`document.querySelector('[role=dialog] button.bg-accent').click()`);
+    await sleep(300);
+  }
+
+  /** The POS screen, populated: a held bill, a bill of three lines for Rashid on Khata, the customer picker, the line editor, held bills, the sale-saved box. */
+  async function posScreens(language: 'en' | 'ur', prefix: number, firstPass: boolean): Promise<void> {
+    const t = TEXT[language];
+    const rashid = language === 'en' ? 'Rashid' : 'راشد';
+    await go('/invoices');
+    await go('/pos');
+    await waitFor('input[type=search]');
+    if (firstPass) {
+      // a bill set aside, so the "Held bills" box has something in it
+      await addToBill('Vegetable');
+      await clickText('button', t.hold);
+      await sleep(400);
+    }
+    await addToBill('Insecticide', '1 L');
+    await addToBill('Fungicide');
+    await addToBill('Weedicide');
+    await chooseCustomer('Rashid', rashid, `${prefix + 1}-pos-customer-picker-${language}`);
+    await fill('input[name=paid]', '1000');
+    await fill('input[type=search]', '');
+    await sleep(400);
+    await shot(`${prefix}-pos-cart-${language}`);
+    await js(`document.querySelector('[data-line] button[title]').click()`);
+    await waitFor('[role=dialog]');
+    await sleep(400);
+    await shot(`${prefix + 2}-pos-line-editor-${language}`);
+    await escape();
+    await sleep(300);
+    await key('F6');
+    await waitFor('[data-held]');
+    await shot(`${prefix + 3}-pos-held-${language}`);
+    await escape();
+    await sleep(300);
+    if (firstPass) {
+      await clickText('button', t.complete);
+      await waitFor('[data-done-total]');
+      await shot(`${prefix + 4}-pos-sale-saved-${language}`);
+      await clickText('[role=dialog] button', t.newSale);
+      await sleep(300);
+    }
+  }
+
+  /** The staff cashier puts a big bill on Imran's Khata: the over-limit box, and the owner-approval box that "Ask owner" opens. */
+  async function staffLimitScreens(prefix: number): Promise<void> {
+    const t = TEXT.en;
+    await go('/invoices');
+    await go('/pos');
+    await waitFor('input[type=search]');
+    await addToBill('DAP');
+    await chooseCustomer('Imran', 'Imran');
+    await fill('input[name=paid]', '0');
+    await fill('input[type=search]', '');
+    await sleep(500);
+    await clickText('button', t.complete);
+    await waitFor('[data-over-by]');
+    await shot(`${prefix}-staff-over-limit-en`);
+    await clickText('[role=dialog] button', t.askOwner);
+    await waitFor('[role=dialog] input');
+    await sleep(300);
+    await shot(`${prefix + 1}-staff-approval-en`);
+    await escape();
+    await sleep(300);
+  }
+
+  /** Invoices: the list is already populated; this adds the detail box of Rashid's invoice. */
+  async function invoiceDetailScreen(language: 'en' | 'ur', prefix: number): Promise<void> {
+    await go('/pos');
+    await go('/invoices');
+    await waitFor('[data-invoice-row]');
+    // Rashid's Khata sale (printed twice), not the newest walk-in sale
+    await js(`[...document.querySelectorAll('[data-invoice-row]')].find((r) => /Rashid|راشد/.test(r.textContent)).querySelector('button').click()`);
+    await waitFor('[data-invoice-detail]');
+    await sleep(500);
+    await shot(`${prefix}-invoice-detail-${language}`);
+    await escape();
+    await sleep(300);
+  }
+
+  /** Settings as the owner (a form with saved values) or staff (the calm message). */
+  async function settingsScreen(language: 'en' | 'ur', prefix: number, name: string): Promise<void> {
+    await go('/pos');
+    await go('/settings');
+    await waitFor('[data-page=settings]');
+    if (name !== 'staff') await waitFor('#printer');
+    await sleep(500);
+    await shot(`${prefix}-settings-${name}-${language}`);
+  }
+
   async function walk(): Promise<void> {
   // ---------- first launch ----------
   await waitFor('#shopName');
@@ -276,7 +454,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await js(`new Promise((r) => setTimeout(r, 150))`);
   await click('[data-testid=recovery-continue]:not([disabled])');
   await waitFor('nav');
-  await seedForScreens(db);
+  await seedForScreens(db, handlers);
 
   // ---------- the signed-in app, English ----------
   for (const [index, page] of ['pos', 'invoices', 'customers'].entries()) {
@@ -286,6 +464,9 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await productsScreens('en', '11');
   await formScreens('en', 50);
   await receiveScreens('en', 70);
+  await posScreens('en', 90, true);
+  await invoiceDetailScreen('en', 95);
+  await settingsScreen('en', 96, 'owner');
 
   // ---------- Urdu: right to left ----------
   await setLanguage('ur');
@@ -296,6 +477,9 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await productsScreens('ur', '21');
   await formScreens('ur', 60);
   await receiveScreens('ur', 80);
+  await posScreens('ur', 100, false);
+  await invoiceDetailScreen('ur', 105);
+  await settingsScreen('ur', 106, 'owner');
   await setLanguage('en');
 
   // ---------- the same screen for staff: no cost, no Receive stock, no Add, no Edit ----------
@@ -309,6 +493,8 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await go('/products/new'); // staff cannot open it: they are sent back to the list
   await waitFor('[data-group]');
   await shot('48-staff-new-product-redirect-en');
+  await settingsScreen('en', 99, 'staff'); // nor can they change settings: they see the calm message
+  await staffLimitScreens(97);
   await go('/purchases/receive'); // nor can they open Receive stock: they land on Purchases, which has no link to it
   await waitFor('[data-page=purchases]');
   await shot('49-staff-receive-redirect-en');

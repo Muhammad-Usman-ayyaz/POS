@@ -19,3 +19,5 @@ apps/desktop/.screenshots/
 
 # electron-vite temp configs
 apps/desktop/electron.vite.config.*.mjs
+apps/desktop/.pdf-check/
+apps/desktop/.screenshots-before/

@@ -55,10 +55,10 @@ describe('the production build', () => {
   });
 
   it('contains no development tooling: no screenshot tool, no smoke test, no database or settings-folder overrides', () => {
-    for (const needle of ['runScreenshots', 'POS_SCREENSHOT_DIR', 'POS_SCREENSHOT_SIZE', 'Page.captureScreenshot', 'POS_SMOKE', 'POS_DB_PATH', 'POS_USER_DATA', '__POS_DEV_TOOLS__']) {
+    for (const needle of ['runScreenshots', 'POS_SCREENSHOT_DIR', 'POS_SCREENSHOT_SIZE', 'Page.captureScreenshot', 'POS_SMOKE', 'runPdfCheck', 'POS_PDF_CHECK_DIR', 'pdf.worker.mjs', 'screenshotPrinting', 'POS_DB_PATH', 'POS_USER_DATA', '__POS_DEV_TOOLS__']) {
       expect(where(needle), needle).toEqual([]);
     }
-    expect(files.some((f) => /screenshots/i.test(f.path))).toBe(false);
+    expect(files.some((f) => /screenshots|pdf-check/i.test(f.path))).toBe(false);
   });
 
   it('keeps better-sqlite3 and argon2 as imports of installed packages, not bundled into the app (so they can load their native files)', () => {
