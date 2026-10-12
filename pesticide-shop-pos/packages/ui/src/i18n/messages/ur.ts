@@ -291,6 +291,7 @@ export const ur: Messages = {
   invoices: {
     searchLabel: 'بل تلاش کریں',
     searchPlaceholder: 'بل نمبر، گاہک کا نام یا فون',
+    anyDate: 'کوئی بھی تاریخ',
     from: 'از',
     to: 'تا',
     statusLabel: 'حالت',
@@ -344,6 +345,12 @@ export const ur: Messages = {
     print: {
       receipt: 'رسید پرنٹ کریں',
       invoice: 'A4 بل پرنٹ کریں',
+      savePdf: 'PDF محفوظ کریں',
+      failedEyebrow: 'پرنٹنگ',
+      failedTitle: 'پرنٹ نہیں ہو سکا',
+      failedLead: 'بل محفوظ ہو گیا ہے۔ پرنٹنگ نہیں ہو سکی۔',
+      skip: 'چھوڑیں',
+      tryAgain: 'دوبارہ کوشش کریں',
       receiptPdf: 'رسید PDF میں محفوظ کریں',
       invoicePdf: 'بل PDF میں محفوظ کریں',
       working: 'کام جاری ہے…',
@@ -365,8 +372,8 @@ export const ur: Messages = {
   },
 
   pos: {
-    searchLabel: 'مصنوعات تلاش کریں',
-    searchPlaceholder: 'English یا اردو میں تلاش کریں',
+    searchLabel: 'نام، کوڈ یا بارکوڈ سے تلاش کریں',
+    searchPlaceholder: 'نام، کوڈ یا بارکوڈ سے تلاش کریں',
     priceTypeLabel: 'قیمت کی قسم',
     retail: 'پرچون',
     wholesale: 'تھوک',
@@ -443,14 +450,14 @@ export const ur: Messages = {
     line: {
       eyebrow: 'لائن میں تبدیلی',
       sealedHint: (price: string) => `فی پیک ${price}۔ پیک کی تعداد لکھیں یا بٹن استعمال کریں۔`,
-      looseHint: (price: string, unit: string) => `فی ${unit} پیک ${price}۔ مقدار لکھیں یا بٹن استعمال کریں۔`,
+      looseHint: (price: string, per: string) => `فی ${per} ${price}۔ مقدار لکھیں یا بٹن استعمال کریں۔`,
+      perUnit: { ml: 'لیٹر', g: 'کلو', piece: 'عدد' },
       quantityPacks: 'مقدار (پیک)',
       quantityUnit: (unit: string) => `مقدار (${unit})`,
       batch: 'بیچ',
       auto: 'خودکار',
       autoHint: 'پہلے جس کی میعاد جلد ختم ہو',
       expired: 'میعاد ختم',
-      inStock: (n: string) => `${n} اسٹاک میں`,
       batchesLoading: 'بیچ لوڈ ہو رہے ہیں…',
       discount: 'اس لائن پر رعایت',
       percent: '%',
@@ -475,7 +482,6 @@ export const ur: Messages = {
       take: (amount: string) => `${amount} مزید لیں`,
       askOwner: 'مالک سے پوچھیں',
       allow: 'حد سے زیادہ کی اجازت دیں',
-      cancel: 'منسوخ کریں',
     },
 
     approval: {
@@ -487,6 +493,7 @@ export const ur: Messages = {
         price_override: 'مختلف قیمت',
         discount_override: 'عملے کی حد سے بڑی رعایت',
       },
+      overChip: (after: string, limit: string) => `ادھار کی حد سے زیادہ · ${limit} میں سے ${after}`,
       username: 'مالک کا صارف نام',
       password: 'پاس ورڈ',
       hint: 'یہ 60 سیکنڈ اور صرف اسی بل کے لیے کارآمد ہے۔ غلط پاس ورڈ سے اسکرین کچھ دیر کے لیے بند ہو جاتی ہے۔',
@@ -516,10 +523,12 @@ export const ur: Messages = {
       title: 'رکا ہوا بل دوبارہ کھل گیا',
       lead: 'قیمتیں اور اسٹاک دوبارہ جانچے گئے۔',
       priceChanged: 'قیمت بدل گئی',
+      batchChanged: 'بیچ بدل گیا',
       removed: 'ہٹا دیا گیا',
       gotIt: 'سمجھ گیا',
       priceLine: (name: string, from: string, to: string) => `${name}: ${from} ← ${to}`,
       removedLine: (name: string) => `${name} کا اسٹاک ختم ہے`,
+      batchLine: (name: string, from: string, to: string, expired: boolean) => `${name}: ${from} ${expired ? 'کی میعاد ختم ہو گئی' : 'ختم ہو گیا'}، اب ${to}`,
     },
 
     done: {

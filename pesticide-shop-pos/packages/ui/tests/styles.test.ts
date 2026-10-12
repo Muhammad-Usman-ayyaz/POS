@@ -124,3 +124,37 @@ describe('motion', () => {
     expect(withoutKeyframes).not.toMatch(/opacity:\s*0\s*;/);
   });
 });
+
+describe('the counter (POS) look, read off docs/design/Main.dc.html and PosDialogs.dc.html', () => {
+  const counter: Record<string, string> = {
+    'color-label': '#4a564e',
+    'color-ink-mid': '#3e4a43',
+    'color-track': '#e6e3d8',
+    'color-foot': '#faf9f5',
+    'color-warn-line': '#e3c27e',
+    'color-warn-deep': '#4a2f00',
+    'color-warn-edge': '#c9a04e',
+    'color-danger-line': '#e1a5a5',
+    'color-out-ink': '#7a847d',
+    'color-sum-line': '#c9decf',
+    'color-sidebar-line': '#3b5446',
+  };
+  it.each(Object.entries(counter))('--%s is %s', (name, value) => {
+    expect(theme).toContain(`--${name}: ${value};`);
+  });
+
+  it('a focused field gets the design look in every design file: a green border and a 4px glow of rgba(47,122,78,.18)', () => {
+    const rule = /input:focus,\s*select:focus,\s*textarea:focus,\s*\.field:focus-within\s*\{([^}]*)\}/.exec(css)?.[1];
+    expect(rule, 'the focus rule').toBeTruthy();
+    expect(rule).toMatch(/border-color:\s*var\(--color-accent\)/);
+    expect(rule).toMatch(/box-shadow:\s*0 0 0 4px rgb\(47 122 78 \/ 0\.18\)/);
+  });
+
+  it('the icon-only sidebar is 72px wide (the design), in the shell and in the `narrow` explanation', () => {
+    const shell = readFileSync(join(__dirname, '..', 'src', 'components', 'app-shell.tsx'), 'utf8');
+    expect(shell).toContain('[72px_minmax(0,1fr)]');
+    expect(shell).not.toContain('76px');
+    expect(shell).toContain('px-5 py-4'); // the POS page padding of Main.dc.html: 16px 20px
+    expect(css).toContain('`narrow:` is the 72px icon-only sidebar');
+  });
+});

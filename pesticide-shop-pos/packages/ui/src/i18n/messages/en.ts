@@ -290,6 +290,7 @@ export const en = {
   invoices: {
     searchLabel: 'Search invoices',
     searchPlaceholder: 'Invoice number, customer name or phone',
+    anyDate: 'Any date',
     from: 'From',
     to: 'To',
     statusLabel: 'Status',
@@ -343,6 +344,12 @@ export const en = {
     print: {
       receipt: 'Print receipt',
       invoice: 'Print A4 invoice',
+      savePdf: 'Save PDF',
+      failedEyebrow: 'Printing',
+      failedTitle: 'Could not print',
+      failedLead: 'The sale is saved. Printing did not work.',
+      skip: 'Skip',
+      tryAgain: 'Try again',
       receiptPdf: 'Save receipt as PDF',
       invoicePdf: 'Save invoice as PDF',
       working: 'Working…',
@@ -364,8 +371,8 @@ export const en = {
   },
 
   pos: {
-    searchLabel: 'Search products',
-    searchPlaceholder: 'Search in English or اردو',
+    searchLabel: 'Search by name, code or barcode',
+    searchPlaceholder: 'Search by name, code or barcode',
     priceTypeLabel: 'Price type',
     retail: 'Retail',
     wholesale: 'Wholesale',
@@ -417,7 +424,7 @@ export const en = {
     },
 
     bill: {
-      invoice: (lines: number) => `New bill · ${lines} lines`,
+      invoice: (lines: number) => `New bill · ${lines} ${lines === 1 ? 'line' : 'lines'}`,
       total: 'Total',
       includesTax: 'Includes tax',
       paidNow: 'Paid now',
@@ -442,14 +449,14 @@ export const en = {
     line: {
       eyebrow: 'Edit line',
       sealedHint: (price: string) => `Per pack ${price}. Type the number of packs, or use the steps.`,
-      looseHint: (price: string, unit: string) => `Per ${unit} pack ${price}. Type the quantity or use the steps.`,
+      looseHint: (price: string, per: string) => `Per ${per} ${price}. Type the quantity or use the steps.`,
+      perUnit: { ml: 'L', g: 'kg', piece: 'piece' },
       quantityPacks: 'Quantity (packs)',
       quantityUnit: (unit: string) => `Quantity (${unit})`,
       batch: 'Batch',
       auto: 'Auto',
       autoHint: 'Earliest expiry first',
       expired: 'Expired',
-      inStock: (n: string) => `${n} in stock`,
       batchesLoading: 'Loading batches…',
       discount: 'Discount on this line',
       percent: '%',
@@ -474,7 +481,6 @@ export const en = {
       take: (amount: string) => `Take ${amount} more`,
       askOwner: 'Ask owner',
       allow: 'Allow over the limit',
-      cancel: 'Cancel',
     },
 
     approval: {
@@ -486,6 +492,7 @@ export const en = {
         price_override: 'A different price',
         discount_override: 'A bigger discount than staff may give',
       },
+      overChip: (after: string, limit: string) => `Over credit limit · ${after} of ${limit}`,
       username: 'Owner username',
       password: 'Password',
       hint: 'Valid for 60 seconds and for this bill only. Wrong passwords lock the screen for a short time.',
@@ -497,7 +504,7 @@ export const en = {
     held: {
       title: 'Held bills',
       lead: 'Bills set aside. They hold the items, not the prices. Prices are checked again on resume.',
-      items: (n: number) => `${n} items`,
+      items: (n: number) => `${n} ${n === 1 ? 'item' : 'items'}`,
       heldBy: (name: string, time: string) => `held by ${name} · ${time}`,
       resume: 'Resume',
       discard: 'Discard held bill',
@@ -515,10 +522,12 @@ export const en = {
       title: 'Held bill resumed',
       lead: 'Prices and stock were checked again.',
       priceChanged: 'Price changed',
+      batchChanged: 'Batch changed',
       removed: 'Removed',
       gotIt: 'Got it',
       priceLine: (name: string, from: string, to: string) => `${name}: ${from} → ${to}`,
       removedLine: (name: string) => `${name} is out of stock`,
+      batchLine: (name: string, from: string, to: string, expired: boolean) => `${name}: ${from} ${expired ? 'expired' : 'is used up'}, now ${to}`,
     },
 
     done: {

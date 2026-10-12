@@ -4,7 +4,7 @@ import type { ButtonHTMLAttributes } from 'react';
 import { cn } from '../../lib/cn.js';
 
 /**
- * Heights: md 48, lg 56, xl 68 (the main call-to-action). Nothing is shorter than 44 (the touch target).
+ * Heights: sm 44, md 48, lg 56, xl 68 (the main call-to-action), dialog 48, cta 58 (the POS screen). Nothing is shorter than 44 (the touch target).
  * Hover lifts the button 1px, pressing scales it to .98 (the .lift class).
  */
 export const buttonVariants = cva(
@@ -21,8 +21,15 @@ export const buttonVariants = cva(
         md: 'h-12 rounded-md px-5 text-base',
         lg: 'h-14 rounded-md px-6 text-lg',
         xl: 'h-[68px] rounded-lg px-8 text-xl [@media(max-height:800px)]:h-14',
+        /** The small buttons of the counter screen (Change, Hold bill, Clear): 44px tall, 10px corners, 14px text. */
+        sm: 'h-11 rounded-sm px-3.5 text-sm',
+        /** The buttons at the foot of a counter dialog (docs/design/PosDialogs.dc.html): 48px, 15px text. */
+        dialog: 'h-12 rounded-md px-5 text-[15px]',
+        /** Complete sale on the POS screen: 58px, 19px bold, a green glow. */
+        cta: 'h-[58px] rounded-lg px-8 text-[19px] font-bold shadow-[0_6px_16px_rgba(31,93,58,0.28)]',
       },
     },
+    compoundVariants: [{ variant: 'primary', size: 'dialog', className: 'font-bold' }],
     defaultVariants: { variant: 'primary', size: 'md' },
   },
 );

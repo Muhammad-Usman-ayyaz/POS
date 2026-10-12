@@ -4,7 +4,7 @@ import { ErrorNotice } from '../../components/feedback.js';
 import { Button } from '../../components/ui/button.js';
 import { Dialog } from '../../components/ui/dialog.js';
 import { Badge, Num } from '../../components/ui/primitives.js';
-import { formatMoney, useI18n } from '../../i18n/index.js';
+import { formatDate, formatMoney, useI18n } from '../../i18n/index.js';
 import { customerText, formatDateTime, lineName, lineQuantity } from '../../print/format.js';
 import { PrintActions } from './print-actions.js';
 import { SHOP_TIME_ZONE } from './time-zone.js';
@@ -64,7 +64,7 @@ export function InvoiceDetailDialog({ api, row, onClose, onPrinted }: { api: Api
               <>
                 <dt className="text-muted">{t.dueDate}</dt>
                 <dd>
-                  <Num>{invoice.due_date}</Num>
+                  <Num>{formatDate(invoice.due_date, language)}</Num>
                 </dd>
               </>
             )}

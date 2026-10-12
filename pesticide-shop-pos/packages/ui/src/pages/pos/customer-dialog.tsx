@@ -3,10 +3,10 @@ import { useCallback, useState } from 'react';
 import { ErrorNotice } from '../../components/feedback.js';
 import { Button } from '../../components/ui/button.js';
 import { Dialog } from '../../components/ui/dialog.js';
-import { Input } from '../../components/ui/input.js';
 import { formatMoney, useI18n } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
 import { useDebouncedSearch } from '../../lib/use-debounced-search.js';
+import { Actions } from './counter-ui.js';
 import { customerFrom, pickName, type Customer } from './pos-state.js';
 
 const RESULTS = 8;
@@ -30,13 +30,21 @@ export function CustomerDialog({ api, current, onPick, onClose }: { api: Api; cu
   };
 
   return (
-    <Dialog open title={t.dialogTitle} onClose={onClose}>
-      <p className="mt-1 text-muted">{t.dialogLead}</p>
-      <Input type="search" aria-label={t.searchLabel} value={query} onChange={(e) => setQuery(e.target.value)} className="mt-4" autoFocus />
-      {search.error != null && <ErrorNotice error={search.error} className="mt-3" />}
-      <ul role="listbox" aria-label={t.dialogTitle} className="mt-3 flex max-h-72 flex-col gap-2 overflow-y-auto">
+    <Dialog counter open title={t.dialogTitle} lead={t.dialogLead} onClose={onClose}>
+      <div className="field flex h-12 items-center gap-2.5 rounded-md border border-field-line bg-card px-3.5 focus-within:border-accent">
+        <input
+          type="search"
+          aria-label={t.searchLabel}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="h-full min-w-0 flex-1 border-0 bg-transparent text-base shadow-none [&::-webkit-search-cancel-button]:hidden"
+          autoFocus
+        />
+      </div>
+      {search.error != null && <ErrorNotice error={search.error} />}
+      <ul role="listbox" aria-label={t.dialogTitle} className="flex max-h-72 flex-col gap-2 overflow-y-auto">
         <li>
-          <Row selected={chosen === 'walk-in'} onSelect={() => setChosen('walk-in')} onChoose={apply} title={t.walkIn} sub={t.walkInHint} right="—" rightSub={m.pos.retail} />
+          <Row selected={chosen === 'walk-in'} onSelect={() => setChosen('walk-in')} onChoose={apply} title={t.walkIn} sub={t.walkInHint} right="—" rightSub={t.retailPrice} />
         </li>
         {matches.map((c) => (
           <li key={c.id}>
@@ -53,12 +61,14 @@ export function CustomerDialog({ api, current, onPick, onClose }: { api: Api; cu
         ))}
         {!search.loading && search.data !== null && matches.length === 0 && query.trim() !== '' && <li className="px-2 py-2 text-muted">{t.none}</li>}
       </ul>
-      <div className="mt-5 flex justify-end gap-3">
-        <Button variant="secondary" onClick={onClose}>
+      <Actions>
+        <Button variant="secondary" size="dialog" onClick={onClose}>
           {t.cancel}
         </Button>
-        <Button onClick={apply}>{t.use(chosenName)}</Button>
-      </div>
+        <Button size="dialog" onClick={apply}>
+          {t.use(chosenName)}
+        </Button>
+      </Actions>
     </Dialog>
   );
 }
@@ -71,15 +81,15 @@ function Row({ selected, onSelect, onChoose, title, sub, right, rightSub }: { se
       aria-selected={selected}
       onClick={onSelect}
       onDoubleClick={onChoose}
-      className={cn('lift flex min-h-[64px] w-full items-center justify-between gap-3 rounded-md border px-4 py-2 text-start', selected ? 'border-2 border-accent bg-tint' : 'border-line bg-card hover:bg-row-hover')}
+      className={cn('lift flex min-h-[60px] w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-start', selected ? 'border-2 border-accent bg-tint' : 'border border-row-line bg-card hover:bg-row-hover')}
     >
       <span className="min-w-0">
         <span className="block truncate font-semibold">{title}</span>
-        <span className="block truncate text-sm text-muted">{sub}</span>
+        <span className="block truncate text-[13px] text-muted">{sub}</span>
       </span>
       <span className="shrink-0 text-end">
         <span className="block font-semibold">{right}</span>
-        <span className="block text-sm text-muted">{rightSub}</span>
+        <span className="block text-xs text-muted">{rightSub}</span>
       </span>
     </button>
   );

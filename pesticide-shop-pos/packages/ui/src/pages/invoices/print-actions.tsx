@@ -2,8 +2,9 @@ import type { Api, DocumentKind, PrintResult } from '@pos/api-contract';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ErrorNotice, Notice } from '../../components/feedback.js';
 import { Button } from '../../components/ui/button.js';
+import { Dialog } from '../../components/ui/dialog.js';
 import { Badge } from '../../components/ui/primitives.js';
-import { useI18n } from '../../i18n/index.js';
+import { describeError, useI18n } from '../../i18n/index.js';
 import { buildPrintRequest, type PrintOutput } from './invoices-requests.js';
 
 export type { PrintOutput };
@@ -16,6 +17,10 @@ export interface PrintState {
   /** Only a real failure (not even a PDF could be made). */
   error: unknown;
   run: (kind: DocumentKind, output: PrintOutput) => void;
+  /** Forgets the error (the "Skip" of the could-not-print box). */
+  clearError: () => void;
+  /** What was asked last, for "Try again". */
+  last: { kind: DocumentKind; output: PrintOutput } | null;
 }
 
 /**
@@ -28,6 +33,7 @@ export function usePrintDocument(api: Api, invoiceId: string, onDone?: () => voi
   const [error, setError] = useState<unknown>(null);
   const working = useRef(false);
   const alive = useRef(true);
+  const [last, setLast] = useState<PrintState['last']>(null);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -39,6 +45,7 @@ export function usePrintDocument(api: Api, invoiceId: string, onDone?: () => voi
     (kind: DocumentKind, output: PrintOutput) => {
       if (working.current) return;
       working.current = true;
+      setLast({ kind, output });
       setBusy({ kind, output });
       setError(null);
       api.print.document(buildPrintRequest(invoiceId, kind, output)).then(
@@ -60,7 +67,8 @@ export function usePrintDocument(api: Api, invoiceId: string, onDone?: () => voi
     },
     [api, invoiceId, onDone],
   );
-  return { busy, result, error, run };
+  const clearError = useCallback(() => setError(null), []);
+  return { busy, result, error, run, clearError, last };
 }
 
 /** What the last print did, in words: a calm notice, never an error, when a PDF was saved instead of printing. */
@@ -98,13 +106,67 @@ export function PrintOutcome({ result, error, className }: { result: PrintResult
 /**
  * The print buttons for one invoice plus what happened. Used by the sale-saved box at the counter (the receipt only) and by the invoice history
  * (the receipt and the A4 invoice). The outcome has its own full-width line so it sits above the buttons in a wrapping row.
+ *
+ * `counter` is the sale-saved box of docs/design/PosDialogs.dc.html: "Save PDF", then `children` (New sale), then the main "Print receipt";
+ * and when even a PDF could not be made, the "Could not print" box with Skip, Save PDF and Try again.
  */
-export function PrintActions({ api, invoiceId, kinds, onDone, children }: { api: Api; invoiceId: string; kinds: readonly DocumentKind[]; onDone?: () => void; children?: ReactNode }) {
-  const { m } = useI18n();
+export function PrintActions({
+  api,
+  invoiceId,
+  kinds,
+  onDone,
+  counter = false,
+  children,
+}: {
+  api: Api;
+  invoiceId: string;
+  kinds: readonly DocumentKind[];
+  onDone?: () => void;
+  counter?: boolean;
+  children?: ReactNode;
+}) {
+  const { m, language } = useI18n();
   const t = m.invoices.print;
   const print = usePrintDocument(api, invoiceId, onDone);
+  const working = (kind: DocumentKind, output: PrintOutput) => print.busy?.kind === kind && print.busy.output === output;
   const label = (kind: DocumentKind, output: PrintOutput): string =>
-    print.busy?.kind === kind && print.busy.output === output ? t.working : output === 'printer' ? (kind === 'receipt' ? t.receipt : t.invoice) : kind === 'receipt' ? t.receiptPdf : t.invoicePdf;
+    working(kind, output) ? t.working : output === 'printer' ? (kind === 'receipt' ? t.receipt : t.invoice) : kind === 'receipt' ? t.receiptPdf : t.invoicePdf;
+
+  if (counter) {
+    const kind = kinds[0] ?? 'receipt';
+    const failed = print.error != null ? describeError(print.error, language) : null;
+    return (
+      <>
+        <PrintOutcome result={print.result} error={null} className="w-full basis-full text-start" />
+        <Button variant="secondary" size="dialog" disabled={print.busy !== null} data-print={`${kind}:pdf`} onClick={() => print.run(kind, 'pdf')}>
+          {working(kind, 'pdf') ? t.working : t.savePdf}
+        </Button>
+        {children}
+        <Button size="dialog" disabled={print.busy !== null} data-print={`${kind}:printer`} onClick={() => print.run(kind, 'printer')}>
+          {label(kind, 'printer')}
+        </Button>
+        {failed && (
+          <Dialog counter open title={t.failedTitle} eyebrow={t.failedEyebrow} lead={t.failedLead} onClose={print.clearError}>
+            <div data-print-failed className="rounded-md bg-danger-bg px-4 py-3.5 text-sm text-danger-ink">
+              <b>{failed.title}</b> {failed.next}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center justify-end gap-2.5">
+              <Button variant="secondary" size="dialog" onClick={print.clearError}>
+                {t.skip}
+              </Button>
+              <Button variant="secondary" size="dialog" disabled={print.busy !== null} onClick={() => print.run(kind, 'pdf')}>
+                {t.savePdf}
+              </Button>
+              <Button size="dialog" disabled={print.busy !== null} onClick={() => print.run(print.last?.kind ?? kind, print.last?.output ?? 'printer')}>
+                {t.tryAgain}
+              </Button>
+            </div>
+          </Dialog>
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       <PrintOutcome result={print.result} error={print.error} className="w-full basis-full text-start" />

@@ -38,18 +38,18 @@ export function LanguageSwitch({ tone, className }: { tone: 'light' | 'dark'; cl
 
 /**
  * The 232px dark sidebar: shop name, the eight pages, the language switch, and who is signed in.
- * On a narrow window (under 1366px) it shrinks to a 76px icon-only bar; the names stay available to screen
+ * On a narrow window (under 1366px) it shrinks to a 72px icon-only bar; the names stay available to screen
  * readers and as tooltips.
  */
 export function Sidebar({ shopName, deviceText, user, onSignOut }: { shopName: string; deviceText: string; user: SessionUser; onSignOut: () => void }) {
   const { m, dir } = useI18n();
   return (
-    <aside className="flex h-screen flex-col bg-sidebar px-4 py-8 text-sidebar-ink narrow:items-center narrow:px-3">
-      <div className="mb-10 px-2 narrow:mb-8 narrow:px-0">
+    <aside className="flex h-screen flex-col bg-sidebar px-4 py-8 text-sidebar-ink narrow:items-center narrow:px-3 narrow:py-4">
+      <div className="mb-10 px-2 narrow:mb-4 narrow:px-0">
         <p className="text-[17px] font-bold leading-tight narrow:hidden">{shopName}</p>
         <p className="num mt-1 text-sm text-sidebar-muted narrow:hidden">{deviceText}</p>
         {/* collapsed: a monogram instead of the name */}
-        <p aria-hidden className="hidden size-11 place-items-center rounded-md bg-nav-hover text-lg font-bold narrow:grid">
+        <p aria-hidden className="hidden size-11 place-items-center rounded-md bg-nav-active text-lg font-bold text-white narrow:grid">
           {shopName.trim().charAt(0).toUpperCase()}
         </p>
       </div>
@@ -68,14 +68,14 @@ export function Sidebar({ shopName, deviceText, user, onSignOut }: { shopName: s
               )
             }
           >
-            <Icon aria-hidden className={cn('size-[22px] shrink-0', mirrorInRtl && dir === 'rtl' && '-scale-x-100')} />
+            <Icon aria-hidden strokeWidth={1.8} className={cn('size-[22px] shrink-0', mirrorInRtl && dir === 'rtl' && '-scale-x-100')} />
             <span className="narrow:sr-only">{m.nav[key]}</span>
           </NavLink>
         ))}
       </nav>
 
       <div className="flex flex-col gap-4 narrow:w-full">
-        <LanguageSwitch tone="dark" className="narrow:flex-col" />
+        <LanguageSwitch tone="dark" className="narrow:flex-col narrow:gap-1.5" />
         <div className="border-t border-white/10 px-2 pt-4 narrow:flex narrow:flex-col narrow:items-center narrow:gap-2 narrow:px-0">
           <p className="text-sm text-sidebar-muted narrow:hidden">
             {m.sidebar.signedInAs} <b className="text-sidebar-ink">{m.role[user.role]}</b>

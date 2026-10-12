@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { ErrorNotice } from '../../components/feedback.js';
 import { Button } from '../../components/ui/button.js';
+import { DateField } from '../../components/ui/date-field.js';
 import { Input } from '../../components/ui/input.js';
 import { Badge, Num } from '../../components/ui/primitives.js';
 import { cn } from '../../lib/cn.js';
@@ -14,6 +15,9 @@ import { buildListRequest, PAGE_SIZE, type StatusFilter } from './invoices-reque
 import { SHOP_TIME_ZONE } from './time-zone.js';
 
 export { PAGE_SIZE, type StatusFilter };
+
+/** The look of the From / To boxes: the same 56px box as the search field beside them (48px in a short window). */
+const DATE_BOX = 'h-14 w-44 rounded-lg border-field-line px-4 text-lg font-normal text-ink [@media(max-height:800px)]:h-12';
 
 /**
  * Invoice history: every sale, newest first, found by invoice number, customer (English or Urdu) or phone, narrowed by date and status.
@@ -85,11 +89,11 @@ export function InvoicesPage({ api }: { api: Api; user: SessionUser }) {
         </div>
         <label className="flex flex-col gap-1 text-sm font-semibold text-muted">
           {t.from}
-          <Input type="date" value={from} max={to || undefined} onChange={(e) => onFrom(e.target.value)} className="num w-44" />
+          <DateField name="from" label={t.from} value={from} max={to || undefined} onChange={onFrom} placeholder={t.anyDate} className={DATE_BOX} />
         </label>
         <label className="flex flex-col gap-1 text-sm font-semibold text-muted">
           {t.to}
-          <Input type="date" value={to} min={from || undefined} onChange={(e) => onTo(e.target.value)} className="num w-44" />
+          <DateField name="to" label={t.to} value={to} min={from || undefined} onChange={onTo} placeholder={t.anyDate} className={DATE_BOX} />
         </label>
         <div role="group" aria-label={t.statusLabel} className="flex flex-wrap gap-2">
           {statuses.map((s) => (

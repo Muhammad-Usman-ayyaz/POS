@@ -94,8 +94,8 @@ export function SearchPanel({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <div className="relative min-w-0 flex-1">
-          <Search aria-hidden className="pointer-events-none absolute inset-y-0 start-4 my-auto size-5 text-muted" />
+        <div className="field relative flex h-[52px] min-w-0 flex-1 items-center gap-3 rounded-md border-2 border-field-line bg-card px-4 focus-within:border-accent">
+          <Search aria-hidden className="pointer-events-none size-5 shrink-0 text-muted" />
           <input
             ref={inputRef}
             type="search"
@@ -104,18 +104,19 @@ export function SearchPanel({
             value={query}
             onChange={(e) => onQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            className="h-14 w-full rounded-lg border-2 border-field-line bg-card ps-12 pe-16 text-xl text-ink placeholder:text-muted/70 [@media(max-height:800px)]:h-12"
+            className="h-full min-w-0 flex-1 border-0 bg-transparent text-[17px] text-ink shadow-none placeholder:text-muted/70 [&::-webkit-search-cancel-button]:hidden"
           />
-          {/* The badge is wrapped: `.num` forces direction: ltr, and an element's OWN direction decides which side `end-3` is, so on the badge itself it stayed on the right in Urdu, on top of the icon. */}
-          <span aria-hidden className="pointer-events-none absolute inset-y-0 end-3 my-auto flex h-7 items-center">
-            <kbd className="num h-7 rounded-sm border border-line px-2 text-sm leading-7 text-muted">F2</kbd>
-          </span>
+          {/* The badge is a flex item after the input, not placed with `end-`: `.num` forces direction: ltr, and an element's OWN direction decides which side `end-3` is, so a placed badge stayed on the right in Urdu, on top of the icon. */}
+          <kbd aria-hidden className="num rounded-[6px] border border-line px-2 py-px text-xs leading-[18px] text-muted">
+            F2
+          </kbd>
         </div>
         <SegmentedToggle<PriceType>
+          tone="track"
           label={t.priceTypeLabel}
           value={priceType}
           onChange={onPriceType}
-          className="shrink-0 rounded-lg bg-thead p-1"
+          className="shrink-0 gap-1 rounded-md bg-track p-1"
           options={[
             { value: 'retail', label: t.retail },
             { value: 'wholesale', label: t.wholesale },
@@ -126,11 +127,11 @@ export function SearchPanel({
       {search.error != null && <ErrorNotice error={search.error} />}
 
       {query.trim() !== '' && (
-        <div aria-busy={!upToDate} className={cn('flex gap-3 overflow-x-auto', !upToDate && hits.length > 0 && 'opacity-70')}>
+        <div aria-busy={!upToDate} className={cn('grid max-h-[290px] grid-cols-2 gap-3 overflow-y-auto max-[1100px]:grid-cols-1', !upToDate && hits.length > 0 && 'opacity-70')}>
           {hits.map((hit) => (
-            <section key={hit.group.id} data-group={hit.group.id} className="min-w-0 flex-1 basis-[22rem] rounded-lg border border-line bg-card p-3 shadow-card">
-              <h3 className="mb-2 truncate text-base font-bold">{pickName(hit.group.name_en, hit.group.name_ur, language)}</h3>
-              <div className="flex flex-wrap gap-2">
+            <section key={hit.group.id} data-group={hit.group.id} className="flex min-w-0 flex-col gap-2 rounded-md border border-line bg-card p-3 shadow-card transition-[border-color,box-shadow] hover:border-card-hover hover:shadow-lift">
+              <h3 className="truncate text-[15px] font-semibold leading-[1.4]">{pickName(hit.group.name_en, hit.group.name_ur, language)}</h3>
+              <div className="flex flex-wrap gap-1.5">
                 {hit.sizes
                   .filter((s) => s.is_active === 1)
                   .map((size) => {
@@ -146,25 +147,25 @@ export function SearchPanel({
                         title={available ? undefined : t.outOfStockHint}
                         onClick={() => onAdd(toPick(hit, size))}
                         className={cn(
-                          'lift min-h-[64px] min-w-[96px] flex-1 rounded-md border px-3 py-1.5 text-start',
-                          !available && 'cursor-not-allowed border-dashed border-field-line bg-thead text-muted opacity-80',
-                          available && !selected && !warn && 'border-line bg-card hover:bg-row-hover',
-                          warn && !selected && 'border-warn-ink/30 bg-warn-bg text-warn-ink',
-                          selected && 'border-2 border-accent bg-tint',
+                          'lift flex min-h-[64px] min-w-0 flex-1 basis-[84px] flex-col items-start rounded-sm border px-3 py-2 text-start',
+                          !available && 'cursor-not-allowed border-dashed border-field-line bg-thead text-out-ink',
+                          available && !selected && !warn && 'border-field-line bg-card text-ink hover:border-nav-active',
+                          warn && !selected && 'border-warn-line bg-warn-bg text-warn-deep',
+                          selected && 'border-2 border-accent bg-tint px-[11px] py-[7px] text-accent-dark',
                         )}
                       >
-                        <span dir="auto" className="block text-sm font-semibold">
+                        <span dir="auto" className="text-[13px] font-semibold leading-[1.35]">
                           {size.pack_label}
                         </span>
-                        <span className="num block text-base font-bold">{formatMoney(price(size), language)}</span>
-                        <span className="block text-xs text-muted">{leftText(size)}</span>
+                        <span className="num text-sm font-bold leading-[1.3]">{formatMoney(price(size), language)}</span>
+                        <span className="text-[11.5px] leading-[1.3] opacity-80">{leftText(size)}</span>
                       </button>
                     );
                   })}
               </div>
             </section>
           ))}
-          {upToDate && hits.length === 0 && <p className="px-2 py-3 text-muted">{t.noResults}</p>}
+          {upToDate && hits.length === 0 && <p className="col-span-2 px-2 py-3 text-muted">{t.noResults}</p>}
         </div>
       )}
     </div>
