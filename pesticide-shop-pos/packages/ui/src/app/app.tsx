@@ -7,6 +7,7 @@ import { NAV_ITEMS } from '../components/sidebar.js';
 import { I18nProvider, useI18n } from '../i18n/index.js';
 import { LoginPage } from '../pages/login-page.js';
 import { PlaceholderPage } from '../pages/placeholder-page.js';
+import { PosPage } from '../pages/pos/pos-page.js';
 import { ProductFormPage } from '../pages/products/product-form-page.js';
 import { ProductsPage } from '../pages/products/products-page.js';
 import { PurchasesPage } from '../pages/purchases/purchases-page.js';
@@ -93,12 +94,13 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut }: { api: Api; 
       <Routes>
         <Route element={<AppShell shopName={shopName} deviceText={deviceText} user={user} onSignOut={signOut} />}>
           <Route index element={<Navigate to="/pos" replace />} />
+          <Route path="/pos" element={<PosPage api={api} user={user} />} />
           <Route path="/products" element={<ProductsPage api={api} user={user} />} />
           <Route path="/products/new" element={<ProductFormPage api={api} user={user} />} />
           <Route path="/products/:groupId/edit" element={<ProductFormPage api={api} user={user} />} />
           <Route path="/purchases" element={<PurchasesPage user={user} />} />
           <Route path="/purchases/receive" element={<ReceiveStockPage api={api} user={user} />} />
-          {NAV_ITEMS.filter(({ key }) => key !== 'products' && key !== 'purchases').map(({ key, path }) => (
+          {NAV_ITEMS.filter(({ key }) => key !== 'pos' && key !== 'products' && key !== 'purchases').map(({ key, path }) => (
             <Route key={key} path={path} element={<PlaceholderPage page={key} />} />
           ))}
           <Route path="*" element={<Navigate to="/pos" replace />} />

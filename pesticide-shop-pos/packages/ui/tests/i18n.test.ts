@@ -33,7 +33,7 @@ describe('English and Urdu messages', () => {
 
   it('Urdu is really Urdu: every Urdu text uses Arabic script, except the EN button and the shop name', () => {
     // Unit symbols and the SKU abbreviation are written in Latin letters in Urdu too, as in the design.
-    const allowed = new Set(['language.en', 'productForm.unitShort.ml', 'productForm.unitShort.g', 'productForm.sku']);
+    const allowed = new Set(['language.en', 'productForm.unitShort.ml', 'productForm.unitShort.g', 'productForm.sku', 'pos.bill.rs', 'pos.line.rupees', 'pos.line.percent']);
     for (const [path, text] of strings(MESSAGES.ur)) {
       if (allowed.has(path)) continue;
       expect(ARABIC_SCRIPT.test(text), `ur.${path}: ${text}`).toBe(true);
@@ -45,6 +45,7 @@ describe('English and Urdu messages', () => {
       if (path === 'language.ur') continue; // the Urdu button is always labelled in Urdu
       if (path === 'receive.searchPlaceholder') continue; // as in the design: the language name in its own script
       if (path === 'productForm.nameUr') continue; // the field's own language name, in its own script
+      if (path === 'pos.searchPlaceholder') continue; // same: the language name in its own script
       if (path === 'products.searchPlaceholder') continue; // the approved design says "Search in English or اردو": the language name in its own script
       expect(ARABIC_SCRIPT.test(text), `en.${path}`).toBe(false);
     }
