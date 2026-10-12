@@ -6,8 +6,8 @@ import { LABELS } from './labels.js';
 
 export const money = (paisa: number): string => formatPaisa(paisa);
 
-/** "– Rs 50" for a discount line. */
-export const minusMoney = (paisa: number): string => `– ${formatPaisa(paisa)}`;
+/** "− Rs 50" (a true minus sign, U+2212, as designed) for a discount line. */
+export const minusMoney = (paisa: number): string => `− ${formatPaisa(paisa)}`;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 

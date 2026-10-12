@@ -33,64 +33,61 @@ ${kind === 'receipt' ? '@page{size:80mm auto;margin:0}' : '@page{size:A4;margin:
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#fff;color:#111}
 body{font-family:'Plex','Naskh',sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-[lang="ur"]{font-family:'Plex','Naskh',sans-serif;line-height:1.7}
+[lang="ur"]{font-family:'Plex','Naskh',sans-serif}
 .ltr{direction:ltr;unicode-bidi:isolate}
 .num{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums;display:inline-block}
-.doc .row{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.doc .row{display:flex;justify-content:space-between;align-items:baseline}
 .doc .row>span:first-child{min-width:0}
 .doc .strong{font-weight:700}
-.doc .sub{color:#555}
-.doc .placeholder{font-style:italic}
+.doc .semi{font-weight:600}
 .doc .copy-mark{display:inline-block;border:1.5px solid #111;padding:1px 10px;font-weight:700;letter-spacing:.12em}
-.doc .thanks{text-align:center;color:#333}
+.doc .thanks{text-align:center}
 
-/* ---- 80 mm receipt ---- */
-.receipt{width:${PAGE.receipt.printableMm}mm;margin:0 auto;padding:4mm 0 6mm;font-size:9.5pt;line-height:1.45}
-.receipt .copy-mark{display:block;width:max-content;margin:0 auto 2mm;font-size:11pt}
+/* ---- 80 mm receipt: sizes in px as in docs/design/Receipts80.dc.html (14px text, 1.5 line height, 72 mm printable) ---- */
+.receipt{width:${PAGE.receipt.printableMm}mm;margin:0 auto;padding:18px 0 24px;font-size:14px;line-height:1.5;color:#111}
+.receipt .row{gap:8px}
+.receipt .copy-mark{display:block;width:max-content;margin:0 auto 8px;font-size:15px}
 .receipt .head{text-align:center}
-.receipt .shop{font-size:14pt;font-weight:700;line-height:1.3}
-.receipt .head .sub{font-size:8pt}
-.receipt .title{font-weight:700;letter-spacing:.12em;margin-top:1mm}
+.receipt .shop{font-size:19px;font-weight:700}
+.receipt .head .sub{font-size:12px;color:#444}
+.receipt .title{margin-top:6px;font-weight:700;letter-spacing:.08em}
 [lang="ur"].receipt .title{letter-spacing:0}
-.receipt hr{border:0;margin:2.5mm 0}
-.receipt hr.dashed{border-top:1px dashed #444}
-.receipt hr.solid{border-top:2px solid #111}
+.receipt .info{margin:10px 0;border-top:1px dashed #111;padding-top:8px}
 .receipt .row.date{justify-content:flex-end}
-.receipt .items .item{padding:1.6mm 0;border-bottom:1px dashed #999}
-.receipt .items .item:last-child{border-bottom:0}
-.receipt .line-sub{text-align:left;font-size:8.5pt}
-.receipt .row.total{font-size:15pt;font-weight:700;align-items:baseline}
-.receipt .row.small{font-size:8.5pt;color:#555}
-.receipt .thanks{margin-top:4mm;font-size:9pt}
+.receipt .items .item{padding:6px 0;border-bottom:1px dashed #9AA39D}
+.receipt .line-sub{text-align:left;font-size:12px;color:#444}
+.receipt .totals{margin-top:8px;border-top:2px solid #111;padding-top:8px}
+.receipt .row.total{font-size:22px;font-weight:700}
+.receipt .row.small{font-size:12px;color:#444}
+.receipt .pay{margin-top:8px;border-top:1px dashed #111;padding-top:8px;display:flex;flex-direction:column;gap:2px}
+.receipt .thanks{margin-top:14px;font-size:13px}
 
-/* ---- A4 invoice ---- */
-.invoice{width:${PAGE.invoice.printableMm}mm;min-height:${PAGE.invoice.heightMm - 28}mm;margin:0 auto;padding:14mm 0;font-size:10pt;display:flex;flex-direction:column}
-.invoice .a4-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8mm}
-.invoice .shop{font-size:20pt;font-weight:700;color:#1B2A22}
+/* ---- A4 invoice: px as in docs/design/InvoiceA4.dc.html (794 x 1123 page, 56px margins, 14px text, 1.6 line height, 28px between blocks) ---- */
+.invoice{width:${PAGE.invoice.printableMm}mm;height:1120px;margin:0 auto;padding:56px 0;font-size:14px;line-height:1.6;color:#1B2A22;display:flex;flex-direction:column;gap:28px}
+.invoice .a4-head{display:flex;justify-content:space-between;align-items:flex-start}
+.invoice .shop{font-size:26px;font-weight:700}
+.invoice .a4-head .sub{color:#5B675F}
 .invoice .a4-title{display:flex;flex-direction:column;align-items:flex-end}
 [dir="rtl"].invoice .a4-title{align-items:flex-start}
-.invoice .title{font-size:19pt;font-weight:700;letter-spacing:.06em;color:#1B2A22}
+.invoice .title{font-size:24px;font-weight:700;letter-spacing:.06em}
 [lang="ur"].invoice .title{letter-spacing:0}
-.invoice .meta{color:#555;font-size:9.5pt}
-.invoice .copy-mark{margin:1mm 0}
-.invoice .customer-box{border:1px solid #D9D6CC;border-radius:3mm;padding:3mm 4mm;margin-bottom:6mm}
-.invoice .customer-box .label{font-size:8pt;color:#555;font-weight:600}
-.invoice .customer-box .value{font-size:11pt;font-weight:600}
+.invoice .meta{color:#5B675F}
+.invoice .copy-mark{margin:2px 0}
+.invoice .customer-box{border:1px solid #D9D6CC;border-radius:10px;padding:14px 16px}
+.invoice .customer-box .label{font-size:12px;color:#5B675F;font-weight:700;letter-spacing:.05em}
+.invoice .customer-box .value{font-size:16px;font-weight:600}
 .invoice table.lines{width:100%;border-collapse:collapse}
-.invoice table.lines th{background:#EFEDE4;font-size:8pt;font-weight:700;padding:2.5mm 2mm;text-align:start}
-.invoice table.lines td{padding:2.6mm 2mm;border-bottom:1px solid #ECE9DF;vertical-align:top}
-.invoice .c-num{text-align:end}
-.invoice .c-no{width:9mm}
-.invoice .c-item{width:40%}
-.invoice .sums{width:50%;margin-top:6mm;margin-inline-start:auto;border-top:1.5px solid #1B2A22;padding-top:2mm}
-.invoice .sums .row{padding:1mm 0}
-.invoice .sums .row.total{font-size:15pt;font-weight:700;color:#1F5D3A}
-.invoice .sums .row.small{color:#555;font-size:9pt}
-.invoice .signatures{display:flex;justify-content:space-between;gap:14mm;margin-top:auto;padding-top:30mm}
-.invoice .signatures>div{flex:1}
-.invoice .sign-line{border-top:1px solid #444;margin-bottom:1.5mm}
-.invoice .signatures .sub{font-size:8.5pt}
-.invoice .thanks{margin-top:8mm;font-size:8.5pt;color:#555}
+.invoice table.lines th{background:#EFEDE4;border-bottom:1px solid #CFCBBE;font-size:12px;font-weight:700;letter-spacing:.04em;padding:10px 12px;text-align:start}
+.invoice table.lines td{padding:12px;border-bottom:1px solid #ECE9DF;text-align:start}
+[lang="ur"].invoice table.lines th{letter-spacing:0}
+.invoice table.lines th.c-num,.invoice table.lines td.c-num{text-align:end}
+.invoice .sums{width:340px;margin-inline-start:auto;display:flex;flex-direction:column;gap:6px}
+.invoice .sums .row{gap:20px}
+.invoice .sums .row.total{font-size:22px;font-weight:700;color:#1F5D3A;padding-top:8px;border-top:2px solid #1B2A22}
+.invoice .sums .row.small{color:#5B675F}
+.invoice .signatures{display:flex;justify-content:space-between;gap:80px;margin-top:auto}
+.invoice .signatures>div{flex:1;border-top:1px solid #1B2A22;padding-top:6px;color:#5B675F;font-size:13px}
+.invoice .thanks{font-size:13px;color:#5B675F}
 `;
 
 /** The `<body>` of a document: just the document, no page around it. */

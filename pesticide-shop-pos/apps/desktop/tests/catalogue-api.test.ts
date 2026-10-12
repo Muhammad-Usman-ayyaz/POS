@@ -245,6 +245,7 @@ describe('spoofed identity is refused on every channel', () => {
 describe('with a real shop', () => {
   let shop: Shop;
   let jobs: (() => void)[];
+  let printing: ReturnType<typeof fakePrinting>;
   const h = () => shop.runtime.handlers;
   const COST = 7_654_321; // a cost nothing else in the shop looks like
   const COST_2 = 7_654_322;
@@ -256,7 +257,8 @@ describe('with a real shop', () => {
 
   beforeEach(async () => {
     jobs = [];
-    shop = await makeShop({ schedule: (job) => void jobs.push(job), printing: fakePrinting().driver });
+    printing = fakePrinting();
+    shop = await makeShop({ schedule: (job) => void jobs.push(job), printing: printing.driver });
   });
   afterEach(() => shop.runtime.close());
 
@@ -473,6 +475,64 @@ describe('with a real shop', () => {
         expect(succeeded.has(channel), `${channel} never succeeded for staff`).toBe(true);
       }
       expect(succeeded.has('print:setConfig')).toBe(false); // owner-only: staff only ever got the refusal
+    });
+
+    // The same deep scan, extended to the PRINT OUTPUT: what a staff member sends to the printer or saves as a PDF (the 80 mm receipt and the A4
+    // invoice, English and Urdu) is scanned for the sentinel cost in every format a page could write it, and for the words cost, margin, profit.
+    // The PDF text layer is scanned by `npm run check:pdf` (Electron makes the PDF); the HTML here is exactly what that PDF is made from.
+    describe('the printed pages (HTML) a staff session produces', () => {
+      const KINDS = ['receipt', 'invoice'] as const;
+      const LANGUAGES = ['en', 'ur'] as const;
+      const ownerSellsAndStaffSignsIn = async () => {
+        const { five } = await ownerSetsUp();
+        const owners = await h()['sale:create']({ customer_id: shop.demo.customers['rashid']!, paid_amount: 10_000, lines: [{ product_id: five.id, qty: 500 }] });
+        await shop.signOut();
+        await shop.signInAs('staff');
+        return owners.invoice.id;
+      };
+
+      it('the scanner knows every format of the cost, and the words', async () => {
+        const { costFormats, findCostLeaks } = await import('@pos/ui/print');
+        expect(costFormats(COST)).toEqual(expect.arrayContaining(['7654321', '76,543.21', '76543.21', '76,543', '76543', 'Rs 76,543.21']));
+        for (const page of ['<p>7654321</p>', '<p>Rs 76,543.21</p>', '<p>76543.21</p>', '<td>76,543</td>', '<p>7 654 321</p>', '<p>Cost price</p>', '<p>Profit</p>', '<p>Margin</p>', '<p>لاگت</p>', 'Thank you. Please keep this receipt.7654321']) {
+          expect(findCostLeaks(page, COST), page).not.toEqual([]);
+        }
+        expect(findCostLeaks('<p>Rs 27,000 and 1,76,543 and 17654321</p>', COST)).toEqual([]);
+      });
+
+      it('printing as staff (printer and PDF, both papers, both languages) puts no cost, margin or profit on any page', async () => {
+        const { findCostLeaks } = await import('@pos/ui/print');
+        const invoiceId = await ownerSellsAndStaffSignsIn();
+        for (const kind of KINDS) {
+          for (const language of LANGUAGES) {
+            for (const output of ['pdf', 'printer'] as const) await h()['print:document']({ invoice_id: invoiceId, kind, language, output });
+          }
+        }
+        const pages = [...printing.state.printed, ...printing.state.pdfs].map((p) => p.html);
+        expect(pages).toHaveLength(8);
+        for (const html of pages) {
+          expect(html).toContain('data-document='); // a real document, not an empty string
+          expect(findCostLeaks(html, COST), html.slice(0, 160)).toEqual([]);
+        }
+        // Real pages: every one names the product, and the Urdu ones are right to left.
+        expect(pages.filter((html) => /Booster|بوسٹر/.test(html)).length).toBe(8);
+        expect(pages.filter((html) => html.includes('<html lang="ur" dir="rtl">')).length).toBe(4);
+      });
+
+      it('even if the document data DID carry the cost (a field added by mistake), the renderer prints none of it', async () => {
+        const { findCostLeaks, renderDocumentHtml } = await import('@pos/ui/print');
+        const invoiceId = await ownerSellsAndStaffSignsIn();
+        const fonts = { plex400: 'data:,', plex600: 'data:,', plex700: 'data:,', naskh: 'data:,' };
+        for (const kind of KINDS) {
+          const reply = await h()['invoices:receipt']({ invoice_id: invoiceId, kind });
+          const dirty = {
+            ...reply,
+            invoice: { ...reply.invoice, cost_total: COST, profit: COST, margin: COST },
+            lines: reply.lines.map((l) => ({ ...l, cost_price: COST, unit_cost: COST, margin: COST })),
+          };
+          for (const language of LANGUAGES) expect(findCostLeaks(renderDocumentHtml(dirty, language, fonts), COST), `${kind} ${language}`).toEqual([]);
+        }
+      });
     });
 
     it('the staff sale reply has no cost_price on its lines (it used to)', async () => {

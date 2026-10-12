@@ -8,7 +8,7 @@ import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BrowserWindow } from 'electron';
 import type { InvoiceDocumentData } from '@pos/core';
-import { PAGE, renderDocumentHtml } from '@pos/ui/print';
+import { findCostLeaks, PAGE, renderDocumentHtml } from '@pos/ui/print';
 import { createElectronPrintDriver } from './printing/electron-driver.js';
 import { documentFonts } from './printing/fonts.js';
 
@@ -36,6 +36,38 @@ export function urduSale(kind: 'receipt' | 'invoice'): InvoiceDocumentData {
   };
 }
 
+/**
+ * The sample sale drawn in the design files (`docs/design/Receipts80.dc.html`, `InvoiceA4.dc.html`): the same lines, amounts and wording, so the
+ * built page can be put next to the design. A loose sale of fertilizer, a discount, tax inside the price, part paid, the rest on Khata.
+ */
+export function designSale(kind: 'receipt' | 'invoice', language: 'en' | 'ur', overrides: Partial<InvoiceDocumentData> = {}): InvoiceDocumentData {
+  const ur = language === 'ur';
+  return {
+    kind,
+    invoice: {
+      id: '33333333-3333-4333-8333-333333333333', invoice_no: 'INV-A-000002', invoice_date: '2026-10-12T05:42:00.000Z', due_date: '2026-11-30', status: 'active',
+      payment_method: 'cash', price_type: 'retail', subtotal: 195_900, tax_total: 9_100, total: 205_000, paid_amount: 100_000, on_khata: 105_000,
+    },
+    customer: { name_en: 'Rashid', name_ur: 'راشد', village: ur ? 'چک 12' : 'Chak 12' },
+    customer_id: '44444444-4444-4444-8444-444444444444',
+    sold_by: 'Owner',
+    lines: [
+      { position: 1, name_en: 'Insecticide 1 L', name_ur: 'کیڑے مار دوا 1 لیٹر', batch_no: 'B-001', qty: 2, base_unit: 'piece', pack_size: 1, unit_price: 50_000, line_discount: 0, tax_rate_bp: 500, tax_amount: 4_800, line_total: 100_000 },
+      { position: 2, name_en: 'Fertilizer', name_ur: 'کھاد', batch_no: 'F-001', qty: 250, base_unit: 'g', pack_size: 1000, unit_price: 20_000, line_discount: 0, tax_rate_bp: 0, tax_amount: 0, line_total: 5_000 },
+      { position: 3, name_en: 'Fungicide 250 ml', name_ur: 'پھپھوندی کش 250 ملی لیٹر', batch_no: 'FG-014', qty: 3, base_unit: 'piece', pack_size: 1, unit_price: 35_000, line_discount: 5_000, tax_rate_bp: 500, tax_amount: 4_300, line_total: 100_000 },
+    ],
+    shop: { name: 'Pesticide Club Shop', name_ur: 'پیسٹیسائیڈ کلب شاپ', address: null, phone: null },
+    balance_as_of_sale: 305_000,
+    copies_printed: 0,
+    is_copy: false,
+    time_zone: 'Asia/Karachi',
+    ...overrides,
+  };
+}
+
+/** A cost no price in the shop looks like: 76,543.21 rupees. */
+const COST_SENTINEL = 7_654_321;
+
 /** Everything the page script reports back for one PDF. */
 export interface PdfReport {
   pages: number;
@@ -43,12 +75,12 @@ export interface PdfReport {
   items: { str: string; dir: string; x: number; y: number; width: number }[];
   /** All items joined, one line per text row. */
   text: string;
-  /** Each page drawn at 3 pixels per CSS pixel, as a PNG data address. */
+  /** Each page drawn at `scale` pixels per CSS pixel (3 unless asked), as a PNG data address. */
   pngs: string[];
 }
 
 /** Runs inside the hidden window: pdf.js reads the bytes the local server gives it, lists text and fonts, and draws each page. */
-const READ_PDF = () => `(async () => {
+const READ_PDF = (scale: number) => `(async () => {
   const pdfjs = await import('./pdf.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = './pdf.worker.mjs';
   const doc = await pdfjs.getDocument({ data: new Uint8Array(await (await fetch('./doc.pdf')).arrayBuffer()), useSystemFonts: false }).promise;
@@ -65,7 +97,7 @@ const READ_PDF = () => `(async () => {
     }
     out.text += line + '\\n';
     const canvas = document.createElement('canvas');
-    const viewport = page.getViewport({ scale: 3 * 96 / 72 });
+    const viewport = page.getViewport({ scale: ${scale} * 96 / 72 });
     canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
     await page.render({ canvasContext: canvas.getContext('2d'), viewport, background: '#ffffff' }).promise;
     out.pngs.push(canvas.toDataURL('image/png'));
@@ -73,7 +105,7 @@ const READ_PDF = () => `(async () => {
   return out;
 })()`;
 
-export async function readPdf(pdf: Uint8Array, pdfjsBuildDir: string, workDir: string): Promise<PdfReport> {
+export async function readPdf(pdf: Uint8Array, pdfjsBuildDir: string, workDir: string, scale = 3): Promise<PdfReport> {
   // pdf.js is a module script and starts a worker: both load from a file address, so the page, pdf.js and the PDF sit in one folder.
   mkdirSync(workDir, { recursive: true });
   for (const name of ['pdf.mjs', 'pdf.worker.mjs']) copyFileSync(join(pdfjsBuildDir, name), join(workDir, name));
@@ -82,7 +114,7 @@ export async function readPdf(pdf: Uint8Array, pdfjsBuildDir: string, workDir: s
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, devTools: false } });
   try {
     await win.loadFile(join(workDir, 'index.html'));
-    return (await win.webContents.executeJavaScript(READ_PDF(), true)) as PdfReport;
+    return (await win.webContents.executeJavaScript(READ_PDF(scale), true)) as PdfReport;
   } finally {
     win.destroy();
   }
@@ -191,6 +223,35 @@ export async function runPdfCheck(outDir: string, pdfjsBuildDir: string): Promis
     else {
       writeFileSync(join(outDir, paper.pdf.replace('.pdf', '.pdftotext.txt')), text);
       checks.push(...checkReadingOrder(label, text, expected));
+    }
+  }
+  // The design's own sample sale, English and Urdu, on both papers: PNGs at 2 pixels per CSS pixel to put beside the design renders (see
+  // scripts/render-design-ref.mjs), and a check that every wording and amount the design prints is in the PDF text layer.
+  for (const kind of ['receipt', 'invoice'] as const) {
+    for (const language of ['en', 'ur'] as const) {
+      const label = `design sample ${kind === 'receipt' ? '80 mm receipt' : 'A4 invoice'} (${language})`;
+      const paper = kind === 'receipt' ? PAGE.receipt : PAGE.invoice;
+      const pdf = await driver.toPdf(renderDocumentHtml(designSale(kind, language), language, documentFonts), { page: { widthMm: paper.widthMm, heightMm: paper.heightMm } });
+      const base = `design-${kind}-${language}`;
+      writeFileSync(join(outDir, `${base}.pdf`), pdf);
+      const report = await readPdf(pdf, pdfjsBuildDir, join(outDir, '.reader'), 2);
+      report.pngs.forEach((png, i) => writeFileSync(join(outDir, `${base}${i === 0 ? '' : ` page ${i + 1}`}.png`), Buffer.from(png.split(',')[1] ?? '', 'base64')));
+      checks.push({ name: `${label}: one PDF page`, ok: report.pages === 1, detail: `${report.pages} page(s)` });
+      const flat = report.text.replace(/\s+/g, ' ');
+      const common = ['INV-A-000002', '12 Oct 2026, 10:42', 'Rs 1,000', 'Rs 2,050', 'Rs 91', 'Rs 1,050', 'Rs 3,050', '30 Nov 2026'];
+      const missing = [...common, ...(kind === 'invoice' ? ['B-001', 'F-001', 'FG-014', 'Rs 500', 'Rs 200/', 'Rs 350'] : ['2 × Rs 500', '× Rs 350'])].filter((s) => !flat.includes(s));
+      // No cost in the print output: the same sale, but its data carries a cost on every line (7654321 paisa, a field that must never be printed).
+      // The PDF's text layer (pdf.js, and pdftotext when installed) is searched for the amount in every format and for the words cost, margin, profit.
+      const dirty = designSale(kind, language);
+      const withCost = { ...dirty, invoice: { ...dirty.invoice, cost_total: COST_SENTINEL, profit: COST_SENTINEL }, lines: dirty.lines.map((l) => ({ ...l, cost_price: COST_SENTINEL, unit_cost: COST_SENTINEL, margin: COST_SENTINEL })) };
+      const costPdf = await driver.toPdf(renderDocumentHtml(withCost, language, documentFonts), { page: { widthMm: paper.widthMm, heightMm: paper.heightMm } });
+      const costPath = join(outDir, `${base}-costscan.pdf`);
+      writeFileSync(costPath, costPdf);
+      const costReport = await readPdf(costPdf, pdfjsBuildDir, join(outDir, '.reader'), 1);
+      const costText = pdftotext(costPath);
+      const leaks = [...findCostLeaks(costReport.text, COST_SENTINEL), ...(costText === null ? [] : findCostLeaks(costText, COST_SENTINEL))];
+      checks.push({ name: `${label}: no cost, margin or profit in the PDF text layer (sentinel ${COST_SENTINEL} paisa in the data, every format and word searched)`, ok: leaks.length === 0, detail: leaks.length ? leaks.join(', ') : costText === null ? 'pdf.js text only; pdftotext not installed' : 'pdf.js and pdftotext text' });
+      checks.push({ name: `${label}: every amount and number of the design is in the text layer`, ok: missing.length === 0, detail: missing.length ? `missing ${missing.join(' | ')}` : undefined });
     }
   }
   for (const c of checks) console.log(`${c.ok ? 'PASS' : 'FAIL'} ${c.name}${c.detail ? ` (${c.detail})` : ''}`);

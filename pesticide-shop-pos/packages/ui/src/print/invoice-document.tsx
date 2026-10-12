@@ -13,7 +13,7 @@ const SumRow = ({ label, children, strong }: { label: string; children: string; 
 );
 
 /**
- * The A4 invoice. Built from `docs/design/A4 invoice, English and Urdu.png`, with one addition to the design: a Tax column (the tax inside each
+ * The A4 invoice. Built from `docs/design/InvoiceA4.dc.html`, with one addition to the design: a Tax column (the tax inside each
  * line, as the owner asked for tax per line). Pure rendering from data; no cost, margin or profit anywhere. The batch NUMBER is shown (it is not cost).
  * The Urdu page is right to left: the table's first column (#) is on the right and the amounts are on the left.
  */
@@ -33,7 +33,7 @@ export function InvoiceDocument({ data, language }: { data: InvoiceDocumentData;
           <div className="title">{t.invoice}</div>
           {data.is_copy && <div className="copy-mark">{t.copy}</div>}
           {invoice.status === 'voided' && <div className="copy-mark">{t.voided}</div>}
-          <Num className="meta">{invoice.invoice_no}</Num>
+          <Num>{invoice.invoice_no}</Num>
           <Num className="meta">{formatDateTime(invoice.invoice_date, data.time_zone)}</Num>
         </div>
       </header>
@@ -48,8 +48,8 @@ export function InvoiceDocument({ data, language }: { data: InvoiceDocumentData;
       <table className="lines">
         <thead>
           <tr>
-            <th className="c-no">{t.colNumber}</th>
-            <th className="c-item">{t.colItem}</th>
+            <th>{t.colNumber}</th>
+            <th>{t.colItem}</th>
             <th>{t.colBatch}</th>
             <th className="c-num">{t.colQty}</th>
             <th className="c-num">{t.colRate}</th>
@@ -64,10 +64,10 @@ export function InvoiceDocument({ data, language }: { data: InvoiceDocumentData;
             const name = lineName(line, language) + (q.loose ? ` · ${t.loose}` : '');
             return (
               <tr key={line.position}>
-                <td className="c-no">
+                <td>
                   <Num>{String(line.position)}</Num>
                 </td>
-                <td className="c-item"><Mixed text={name} language={language} /></td>
+                <td><Mixed text={name} language={language} /></td>
                 <td>
                   <Num>{line.batch_no}</Num>
                 </td>
@@ -114,14 +114,8 @@ export function InvoiceDocument({ data, language }: { data: InvoiceDocumentData;
       </section>
 
       <div className="signatures">
-        <div>
-          <div className="sign-line" />
-          <div className="sub">{t.customerSignature}</div>
-        </div>
-        <div>
-          <div className="sign-line" />
-          <div className="sub">{t.authorisedSignature}</div>
-        </div>
+        <div>{t.customerSignature}</div>
+        <div>{t.authorisedSignature}</div>
       </div>
       <footer className="thanks">{t.thanks}</footer>
     </div>
