@@ -14,7 +14,7 @@ const Row = ({ label, children, strong }: { label: string; children: string; str
 );
 
 /**
- * The 80 mm thermal receipt (printable width 72 mm). Built from `docs/design/80 mm receipts, English and Urdu.png`.
+ * The 80 mm thermal receipt (printable width 72 mm). Built from `docs/design/Receipts80.dc.html`.
  * Pure: the same data and language always give the same page. Shows no cost, no batch and no profit: only what the customer was charged.
  * `dir` is set from the language, so the Urdu receipt reads right to left with the amounts on the left.
  */
@@ -35,7 +35,7 @@ export function ReceiptDocument({ data, language }: { data: InvoiceDocumentData;
         <div className="title">{t.receipt}</div>
       </header>
 
-      <hr className="dashed" />
+      <div className="info">
       <Row label={t.invoiceNo}>{invoice.invoice_no}</Row>
       <div className="row date">
         <span />
@@ -47,6 +47,7 @@ export function ReceiptDocument({ data, language }: { data: InvoiceDocumentData;
           <span><Mixed text={customer} language={language} /></span>
         </div>
       )}
+      </div>
 
       <div className="items">
         {data.lines.map((line) => {
@@ -54,7 +55,7 @@ export function ReceiptDocument({ data, language }: { data: InvoiceDocumentData;
           const name = lineName(line, language) + (q.loose ? ` · ${t.loose}` : '');
           return (
             <div className="item" key={line.position}>
-              <div className="row strong">
+              <div className="row semi">
                 <span><Mixed text={name} language={language} /></span>
                 <Num>{money(grossOf(line))}</Num>
               </div>
@@ -66,7 +67,7 @@ export function ReceiptDocument({ data, language }: { data: InvoiceDocumentData;
         })}
         {discount > 0 && (
           <div className="item">
-            <div className="row strong">
+            <div className="row semi">
               <span>{t.discount}</span>
               <Num>{minusMoney(discount)}</Num>
             </div>
@@ -74,7 +75,7 @@ export function ReceiptDocument({ data, language }: { data: InvoiceDocumentData;
         )}
       </div>
 
-      <hr className="solid" />
+      <div className="totals">
       <div className="row total">
         <span>{t.total}</span>
         <Num>{money(invoice.total)}</Num>
@@ -85,8 +86,9 @@ export function ReceiptDocument({ data, language }: { data: InvoiceDocumentData;
           <Num>{money(invoice.tax_total)}</Num>
         </div>
       )}
+      </div>
 
-      <hr className="dashed" />
+      <div className="pay">
       {invoice.paid_amount > 0 && <Row label={`${t.paid} · ${t.methods[invoice.payment_method]}`}>{money(invoice.paid_amount)}</Row>}
       {invoice.on_khata > 0 && (
         <Row label={t.onKhata} strong>
@@ -95,6 +97,7 @@ export function ReceiptDocument({ data, language }: { data: InvoiceDocumentData;
       )}
       {data.balance_as_of_sale !== null && <Row label={t.balanceNow}>{money(data.balance_as_of_sale)}</Row>}
       {invoice.due_date && invoice.on_khata > 0 && <Row label={t.payBy}>{formatDueDate(invoice.due_date)}</Row>}
+      </div>
 
       <footer className="thanks">{t.thanks}</footer>
     </div>

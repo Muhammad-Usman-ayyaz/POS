@@ -4,3 +4,4 @@ export { ReceiptDocument } from './receipt-document.js';
 export { documentCss, PAGE, renderDocumentHtml, renderDocumentMarkup, type DocumentFonts } from './render.js';
 export { lineQuantity, quantityText } from './format.js';
 export { LABELS } from './labels.js';
+export { COST_WORDS, costFormats, findCostLeaks, withoutFontData } from './cost-scan.js';
