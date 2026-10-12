@@ -957,6 +957,25 @@ describe('Urdu, right to left', () => {
     expect(screen.getByRole('button', { name: ur.pos.bill.hold })).toBeTruthy();
   });
 
+  it('an element that is placed with start-/end- never carries .num (it forces direction: ltr, which flips what "end" means: the F2 badge sat on the icon in Urdu)', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const dir = join(__dirname, '..', 'src', 'pages', 'pos');
+    const placedAndNum = /className="[^"]*(?:\bnum\b[^"]*\b(?:absolute|fixed)\b|\b(?:absolute|fixed)\b[^"]*\bnum\b)[^"]*\b(?:start|end)-[\d[]/;
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.tsx'))) {
+      readFileSync(join(dir, file), 'utf8').split('\n').forEach((line, i) => expect(placedAndNum.test(line), `${file}:${i + 1}: ${line.trim()}`).toBe(false));
+    }
+  });
+
+  it('the F2 badge is wrapped: the placed element is a plain span, the .num badge sits inside it', async () => {
+    show(fakeShell(STAFF), STAFF, 'ur');
+    const badge = [...document.querySelectorAll('kbd')].find((k) => k.textContent === 'F2' && k.className.includes('num'))!;
+    expect(badge).toBeTruthy();
+    expect(badge.className).not.toContain('absolute');
+    expect(badge.parentElement!.className).toContain('absolute');
+    expect(badge.parentElement!.className).toContain('end-3');
+  });
+
   it('the pos screen never uses left or right (only start and end), so it flips by itself', async () => {
     const { readdirSync, readFileSync } = await import('node:fs');
     const { join } = await import('node:path');

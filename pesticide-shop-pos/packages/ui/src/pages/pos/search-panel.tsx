@@ -106,7 +106,10 @@ export function SearchPanel({
             onKeyDown={onKeyDown}
             className="h-14 w-full rounded-lg border-2 border-field-line bg-card ps-12 pe-16 text-xl text-ink placeholder:text-muted/70 [@media(max-height:800px)]:h-12"
           />
-          <kbd className="num pointer-events-none absolute inset-y-0 end-3 my-auto h-7 rounded-sm border border-line px-2 text-sm leading-7 text-muted">F2</kbd>
+          {/* The badge is wrapped: `.num` forces direction: ltr, and an element's OWN direction decides which side `end-3` is, so on the badge itself it stayed on the right in Urdu, on top of the icon. */}
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 end-3 my-auto flex h-7 items-center">
+            <kbd className="num h-7 rounded-sm border border-line px-2 text-sm leading-7 text-muted">F2</kbd>
+          </span>
         </div>
         <SegmentedToggle<PriceType>
           label={t.priceTypeLabel}
