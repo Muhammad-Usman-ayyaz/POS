@@ -19,7 +19,7 @@ const failureOf = async (promise: Promise<unknown>): Promise<DomainError> => {
 describe('the permission table', () => {
   it('has one line per capability, and by default every one is owner-only', () => {
     expect(capabilities.sort()).toEqual([
-      'catalogue.edit', 'cost.view', 'credit.override', 'directory.add', 'khata.openingBalance', 'prices.override', 'profit.view', 'returns.approve',
+      'catalogue.edit', 'cost.view', 'credit.override', 'directory.add', 'khata.openingBalance', 'prices.override', 'print.configure', 'profit.view', 'returns.approve',
       'stock.adjust', 'stock.openingStock', 'stock.receive', 'stock.writeOff',
     ]);
     for (const capability of capabilities) {
@@ -230,7 +230,7 @@ describe('enforced in the handlers', () => {
 
     it('covers every channel: each one is public, listed above, or covered by catalogue-api.test.ts (catalogue, receiving stock, quick-add, lists)', () => {
       const publicChannels: Channel[] = ['app:getState', 'setup:createShop', 'auth:login', 'auth:logout', 'auth:me', 'auth:resetOwnerPassword', 'prefs:setLanguage'];
-      const coveredElsewhere = channels.filter((c) => /^(catalogue|suppliers|categories|brands|customers|approval):/.test(c) || c === 'stock:receive' || c === 'sale:quote');
+      const coveredElsewhere = channels.filter((c) => /^(catalogue|suppliers|categories|brands|customers|approval|invoices|print|printers):/.test(c) || c === 'stock:receive' || c === 'sale:quote');
       expect([...publicChannels, ...business, ...coveredElsewhere].sort()).toEqual([...channels].sort());
     });
   });

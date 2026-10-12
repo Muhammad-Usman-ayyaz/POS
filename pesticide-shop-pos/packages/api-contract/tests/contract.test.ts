@@ -20,6 +20,13 @@ const samples: Record<Channel, () => Record<string, unknown>> = {
   'customers:search': () => ({ query: 'rashid' }),
   'approval:request': () => ({ username: 'owner', password: 'x', actions: ['credit_override'], sale: { paid_amount: 0, lines: [{ product_id: id(), qty: 1000 }] } }),
   'salesReturn:create': () => ({ invoice_id: id(), refund_method: 'khata_credit', items: [{ invoice_item_id: id(), qty: 1000, condition: 'resellable' }] }),
+  'invoices:list': () => ({ query: 'rashid', from: '2026-10-01', to: '2026-10-31', status: 'active', limit: 20, offset: 0 }),
+  'invoices:get': () => ({ invoice_id: id() }),
+  'invoices:receipt': () => ({ invoice_id: id(), kind: 'invoice' }),
+  'print:document': () => ({ invoice_id: id(), kind: 'receipt', language: 'ur', output: 'printer' }),
+  'printers:list': () => ({}),
+  'print:getConfig': () => ({}),
+  'print:setConfig': () => ({ printer_name: 'POS-80', receipt_language: 'ur', invoice_language: 'en', shop_address: 'Main road', shop_phone: '0300 1234567', shop_name_ur: null }),
   'stock:batchesOf': () => ({ productId: id() }),
   'stock:openingStock': () => ({ product_id: id(), batch_no: 'B-1', expiry_date: '2027-01-31', cost_price: 40_000, qty: 5000 }),
   'stock:adjust': () => ({ batch_id: id(), qty_delta: -100 }),
@@ -158,7 +165,7 @@ describe('field rules', () => {
 describe('buildApi', () => {
   it('turns channels into named functions: app:getState is api.app.getState', () => {
     const api = buildApi(async () => ({ ok: true, data: null }));
-    expect(Object.keys(api).sort()).toEqual(['app', 'approval', 'auth', 'brands', 'catalogue', 'categories', 'customers', 'khata', 'prefs', 'reports', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
+    expect(Object.keys(api).sort()).toEqual(['app', 'approval', 'auth', 'brands', 'catalogue', 'categories', 'customers', 'invoices', 'khata', 'prefs', 'print', 'printers', 'reports', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
     expect(Object.keys(api.auth).sort()).toEqual(['login', 'logout', 'me', 'regenerateRecoveryCode', 'resetOwnerPassword']);
     // one function per channel, nothing else
     const functions = Object.values(api).flatMap((ns) => Object.values(ns as Record<string, unknown>));

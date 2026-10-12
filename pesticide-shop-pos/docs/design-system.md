@@ -102,6 +102,20 @@ A new product is saved in one call. An edit sends only what changed, in this ord
 - Staff never see cost: no request sends `include_cost` / `includeCost`, and a test scans every request and the page.
 - Right to left comes from logical classes only; a test fails if any file in `pages/pos/` uses `left`, `right`, `ml-`, `mr-`, `pl-`, `pr-`, `text-left` or `text-right`. Amounts and dates use `.num`; text with Urdu words in it is not isolated.
 
+## Receipts, invoices and printing
+
+Built from `docs/design/80 mm receipts, English and Urdu.png` and `A4 invoice, English and Urdu.png`. The components are in `packages/ui/src/print/` (pure: the same data and language always give the same page, nothing is read from the screen's language or session); `apps/desktop/src/main/printing/` puts the page on paper or in a PDF.
+
+- **Two papers, from one invoice model** (`InvoiceDocumentData`, built by `invoices:receipt`): the 80 mm receipt (printable about 72 mm, as long as its content) and the A4 invoice. Each in English and Urdu. The Urdu page is `dir="rtl"` and `lang="ur"`: labels start on the right, amounts sit on the left, the A4 table starts with `#` on the right.
+- **Fonts are inside the page.** `renderDocumentHtml` writes the stylesheet with IBM Plex Sans 400/600/700 and Noto Naskh Arabic (Arabic-script subset) as `data:font/woff2;base64,...`. The page's own Content-Security-Policy is `default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:`, so it cannot load anything. The desktop app bundles the font files into the main process with Vite `?inline`; nothing is read from node_modules or the PC at print time. The stack in Urdu is Plex first (English shop name, numbers), then Naskh, as on screen.
+- **Numbers and Latin text stay left to right** with `.num` (amounts, dates, document numbers) and `.ltr` (a Latin run such as "1 L" inside an Urdu name: left alone, the bidi rules would show it as "L 1"). Date and time are `12 Oct 2026, 10:42` in the shop's time zone (default Asia/Karachi), English month names and Latin digits in both languages.
+- **What is on a line:** the name as sold (`invoice_items.name_en/name_ur`: group name plus pack label), then `2 × Rs 500` for whole packs or `250 g × Rs 200/kg` for a loose sale (`Fertilizer · loose`). The receipt shows each line before discount and one `Discount` line, then Total, `Includes tax`, `Paid · Cash`, `On Khata`, `Your balance now` (as of that sale) and `Pay by`. The A4 invoice has `# / Item / Batch / Qty / Rate / Disc. / Tax / Amount` (the Tax column is an addition to the design: tax per line), the totals block, two signature lines and the thank-you line. A walk-in sale has no customer, balance, Khata or Pay by lines.
+- **Header:** the shop name only is real. Address and phone are the owner's print settings and print as `[Address and phone]` (italic, grey) until entered.
+- **COPY:** a boxed `COPY` (Urdu `COPY · نقل`) at the top of a receipt, under the title on an invoice, from the second print of that kind of document for the invoice. A voided invoice prints `VOIDED` the same way.
+- **No cost, batch cost, margin or profit appears in any document** (the data type has no such field and the queries never select it). The batch NUMBER is on the A4 invoice only.
+- **PDF fallback:** when there is no printer, the chosen printer is gone, or printing fails, the same page is saved as a PDF and opened. `print:document` then replies `status: 'pdf_saved'` with `fallback`; the screen must show that as a plain notice ("Saved as PDF: no printer found", with the file's path) and not as an error. Only a failure to make even the PDF is an error.
+- To look at the pages without a printer: the HTML from `renderDocumentHtml` opens in any browser.
+
 ## Checking the look
 
 `npm run screenshots` builds the app and saves a picture of every screen (English and Urdu) at 1280x720, 1366x768 and 1920x1080 into `apps/desktop/.screenshots/`, with a report of anything that overflows, is clipped, is smaller than 44px, or needs scrolling. It also fails if the page logs a warning, which includes any Content-Security-Policy violation.

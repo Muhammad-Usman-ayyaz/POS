@@ -3,6 +3,8 @@
 import { addDays, systemClock, todayUtc, type Clock } from '@pos/core';
 import { createUser, loadDeviceInfo } from '@pos/db-sqlite';
 import { seedDemoData, type DemoIds } from '@pos/db-sqlite/demo';
+import type { PrinterInfo } from '@pos/core';
+import type { PrintDriver, PrintPage } from '../src/main/printing/driver.js';
 import { createRuntime, type Runtime } from '../src/main/runtime.js';
 import type { PasswordHasher } from '../src/main/password.js';
 
@@ -38,9 +40,9 @@ export function movableClock(startIso = new Date().toISOString()): Clock & { adv
   return { now: () => new Date(now), advance: (ms: number) => void (now += ms) };
 }
 
-export async function makeShop(options: { hasher?: PasswordHasher; prefsPath?: string | null; schedule?: (job: () => void) => void; clock?: Clock; dbPath?: string } = {}): Promise<Shop> {
+export async function makeShop(options: { hasher?: PasswordHasher; prefsPath?: string | null; schedule?: (job: () => void) => void; clock?: Clock; dbPath?: string; printing?: PrintDriver } = {}): Promise<Shop> {
   const hasher = options.hasher ?? fastHasher;
-  const runtime = await createRuntime({ dbPath: options.dbPath ?? ':memory:', prefsPath: options.prefsPath ?? null, hasher, ...(options.schedule ? { schedule: options.schedule } : {}), ...(options.clock ? { clock: options.clock } : {}) });
+  const runtime = await createRuntime({ dbPath: options.dbPath ?? ':memory:', prefsPath: options.prefsPath ?? null, hasher, ...(options.schedule ? { schedule: options.schedule } : {}), ...(options.clock ? { clock: options.clock } : {}), ...(options.printing ? { printing: options.printing } : {}) });
   const setup = await runtime.handlers['setup:createShop']({ ...OWNER });
 
   const info = loadDeviceInfo(runtime.db);
@@ -68,3 +70,35 @@ export async function makeShop(options: { hasher?: PasswordHasher; prefsPath?: s
 }
 
 export const day = (n: number): string => addDays(todayUtc(systemClock), n);
+
+/**
+ * A stand-in for the printer and the PDF maker. It records every page it is given (the complete HTML), so a test can read what would have
+ * gone to paper; `printers` is what the PC "has", and `failPrint` makes the printer refuse.
+ */
+export function fakePrinting(options: { printers?: PrinterInfo[]; failPrint?: boolean; failPdf?: boolean } = {}) {
+  const state = {
+    printers: options.printers ?? [{ name: 'POS-80', display_name: 'POS-80 thermal', is_default: true }],
+    failPrint: options.failPrint ?? false,
+    failPdf: options.failPdf ?? false,
+    printed: [] as { html: string; page: PrintPage; printerName: string | null }[],
+    pdfs: [] as { html: string; page: PrintPage }[],
+    saved: [] as { fileName: string; bytes: number }[],
+  };
+  const driver: PrintDriver = {
+    listPrinters: async () => state.printers,
+    print: async (html, { page, printerName }) => {
+      if (state.failPrint) throw new Error('paper jam');
+      state.printed.push({ html, page, printerName });
+    },
+    toPdf: async (html, { page }) => {
+      if (state.failPdf) throw new Error('no pdf');
+      state.pdfs.push({ html, page });
+      return new Uint8Array([37, 80, 68, 70]);
+    },
+    savePdf: async (fileName, pdf) => {
+      state.saved.push({ fileName, bytes: pdf.length });
+      return `C:/Documents/Receipts/${fileName}`;
+    },
+  };
+  return { driver, state };
+}

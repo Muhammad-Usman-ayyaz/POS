@@ -1,4 +1,4 @@
-import type { BatchStockView, Brand, CatalogueList, Category, CustomerMatch, ErrorParams, DomainErrorCode, NewRow, Product, ProductGroup, SaleQuote, SaleResult, SalesReturnResult, Supplier } from '@pos/core';
+import type { BatchStockView, Brand, CatalogueList, Category, CustomerMatch, DocumentKind, DocumentLanguage, ErrorParams, InvoiceDetail, InvoiceDocumentData, InvoiceList, PrintConfig, PrinterInfo, DomainErrorCode, NewRow, Product, ProductGroup, SaleQuote, SaleResult, SalesReturnResult, Supplier } from '@pos/core';
 
 // What the shell sends back. Plain data only: it crosses a process boundary (structured clone).
 
@@ -116,3 +116,22 @@ export interface ApiErrorPayload {
 
 /** Every call returns this instead of throwing, so an error keeps its code across the process boundary. */
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiErrorPayload };
+
+export type { InvoiceDetail, InvoiceDocumentData, InvoiceList, PrintConfig, PrinterInfo };
+export type { InvoiceListRow, DocumentLine, DocumentKind, DocumentLanguage } from '@pos/core';
+
+/**
+ * What printing a document did. Printing to a PDF instead is NOT an error: when there is no printer, or the printer fails, the document is saved as a PDF
+ * and the fallback field says why, so the screen can show "Saved as PDF" as a normal outcome.
+ */
+export interface PrintResult {
+  status: 'printed' | 'pdf_saved';
+  /** Where the PDF was saved (status 'pdf_saved'). */
+  pdf_path: string | null;
+  /** Why a PDF was made when a printer was asked for: no printer available, or the print failed. null: it was asked for, or it printed. */
+  fallback: 'no_printer' | 'print_failed' | null;
+  kind: DocumentKind;
+  language: DocumentLanguage;
+  /** This document said COPY (it was not the first print of this invoice). */
+  is_copy: boolean;
+}

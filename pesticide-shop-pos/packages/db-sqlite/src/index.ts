@@ -6,3 +6,4 @@ export * from './repositories/index.js';
 export * from './device.js';
 export * from './users.js';
 export * from './reports.js';
+export * from './documents.js';

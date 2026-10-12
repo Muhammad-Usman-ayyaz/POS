@@ -25,6 +25,8 @@ export const CAPABILITY_ROLES = {
   'catalogue.edit': ['owner'],
   /** Quick-add a supplier, a category or a brand inside a form. */
   'directory.add': ['owner'],
+  /** Choose the receipt printer and the languages, and give the shop's address, phone and Urdu name that are printed on every document. */
+  'print.configure': ['owner'],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Capability = keyof typeof CAPABILITY_ROLES;
@@ -68,6 +70,16 @@ export const CHANNEL_POLICY = {
   'customers:search': 'signed-in',
   'approval:request': 'signed-in',
   'salesReturn:create': { capability: 'returns.approve' },
+
+  // Invoice history and printing: anyone signed in may look up a sale and print it (the counter reprints receipts all day). The data holds no cost.
+  // Only choosing the printer and the shop's printed details is the owner's.
+  'invoices:list': 'signed-in',
+  'invoices:get': 'signed-in',
+  'invoices:receipt': 'signed-in',
+  'print:document': 'signed-in',
+  'printers:list': 'signed-in',
+  'print:getConfig': 'signed-in',
+  'print:setConfig': { capability: 'print.configure' },
 
   'stock:batchesOf': 'signed-in',
   'stock:openingStock': { capability: 'stock.openingStock' },
