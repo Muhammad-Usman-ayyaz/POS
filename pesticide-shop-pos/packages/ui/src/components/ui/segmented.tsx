@@ -15,14 +15,18 @@ const segment = cva('lift inline-flex min-h-11 flex-1 items-center justify-cente
       light: '',
       /** On the dark sidebar. */
       dark: '',
+      /** Inside a grey track (Retail / Wholesale, % / Rs): the chosen one is a white tile. */
+      track: '',
     },
     selected: { true: '', false: '' },
   },
   compoundVariants: [
+    { tone: 'track', selected: true, className: 'rounded-[9px] bg-card px-[18px] text-[15px] text-ink' },
+    { tone: 'track', selected: false, className: 'rounded-[9px] px-[18px] text-[15px] font-normal text-ink-mid hover:bg-card/50' },
     { tone: 'light', selected: true, className: 'bg-accent text-white' },
     { tone: 'light', selected: false, className: 'border border-line bg-card text-ink hover:bg-row-hover' },
-    { tone: 'dark', selected: true, className: 'bg-nav-active text-white' },
-    { tone: 'dark', selected: false, className: 'border border-white/20 text-sidebar-ink hover:bg-nav-hover' },
+    { tone: 'dark', selected: true, className: 'bg-nav-active text-sidebar-ink' },
+    { tone: 'dark', selected: false, className: 'border border-sidebar-line text-sidebar-ink hover:bg-nav-hover' },
   ],
 });
 
@@ -39,7 +43,7 @@ export function SegmentedToggle<V extends string>({
   value: V;
   options: readonly SegmentedOption<V>[];
   onChange: (value: V) => void;
-  tone?: 'light' | 'dark';
+  tone?: 'light' | 'dark' | 'track';
   className?: string;
 }) {
   return (
@@ -54,7 +58,7 @@ export function SegmentedToggle<V extends string>({
             aria-checked={selected}
             tabIndex={selected ? 0 : -1}
             lang={option.lang}
-            className={segment({ tone, selected })}
+            className={cn(segment({ tone, selected }))}
             onClick={() => onChange(option.value)}
             onKeyDown={(event) => {
               // Arrows follow what you SEE: in right-to-left text the right arrow goes to the previous button.

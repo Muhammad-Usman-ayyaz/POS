@@ -1,10 +1,13 @@
 import type { SaleQuoteView } from '@pos/api-contract';
-import { Minus, Plus, Trash2 } from 'lucide-react';
 import { Notice } from '../../components/feedback.js';
 import { describeError, formatDate, formatMoney, useI18n, type Messages } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
 import { ApiError } from '@pos/api-contract';
+import { Chip, TrashIcon } from './counter-ui.js';
 import { pickName, stepOf, type BaseUnit, type CartLine } from './pos-state.js';
+
+/** Product, Qty (132), Price (92), Total (104) and the bin: the widths of docs/design/Main.dc.html (the bin column is 44, the touch size, not 40). */
+const COLS = 'grid-cols-[minmax(0,1fr)_132px_92px_104px_44px]';
 
 type QuoteLine = SaleQuoteView['lines'][number];
 type Issue = SaleQuoteView['issues'][number];
@@ -58,7 +61,7 @@ export function CartTable({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto" role="table" aria-label={t.cols.product}>
-      <div role="row" className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_190px_96px_112px_44px] items-center gap-x-4 bg-thead px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
+      <div role="row" className={cn('sticky top-0 z-10 grid items-center gap-x-4 bg-thead px-4 py-2.5 text-xs font-bold uppercase tracking-[0.05em] text-label', COLS)}>
         <span role="columnheader">{t.cols.product}</span>
         <span role="columnheader" className="text-center">
           {t.cols.qty}
@@ -87,31 +90,30 @@ export function CartTable({
             aria-selected={selectedKey === line.key}
             onClick={() => onSelect(line.key)}
             className={cn(
-              'stagger grid grid-cols-[minmax(0,1fr)_190px_96px_112px_44px] items-center gap-x-4 border-t border-row-line px-5 py-3',
-              selectedKey === line.key && 'bg-tint-soft',
+              'stagger grid min-h-[76px] items-center gap-x-4 border-t border-row-line px-4 py-2.5 hover:bg-row-hover',
+              COLS,
+              selectedKey === line.key && 'bg-tint-soft hover:bg-tint-soft',
               problem && 'bg-danger-bg/40',
             )}
           >
             <div role="cell" className="min-w-0">
-              <button type="button" onClick={() => onEdit(line.key)} title={t.editLine} className="max-w-full rounded-sm text-start">
-                <span className="text-lg font-bold">{name}</span>
+              <button type="button" onClick={() => onEdit(line.key)} title={t.editLine} className="flex max-w-full flex-wrap items-baseline gap-2 rounded-sm text-start">
+                <span className="text-base font-semibold leading-[1.35]">{name}</span>
                 {line.label !== '' && (
-                  <span dir="auto" className="ms-2 rounded-full bg-row-line px-2 py-0.5 text-sm font-medium">
-                    {line.label}
-                  </span>
+                  <Chip dir="auto">{line.label}</Chip>
                 )}
-                {line.allowLoose && <span className="ms-2 rounded-full bg-row-line px-2 py-0.5 text-sm font-medium">{t.looseBadge(line.baseUnit)}</span>}
+                {line.allowLoose && <Chip>{t.looseBadge(line.baseUnit)}</Chip>}
               </button>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {batch && (
-                  <span>
+                  <span className="text-[12.5px] text-muted">
                     <span className="num">{batch.batch_no}</span> · {t.exp} <span className="num">{formatDate(batch.expiry_date, language)}</span>
                   </span>
                 )}
-                {line.batchId && <span className="rounded-full bg-row-line px-2 py-0.5 text-xs">{t.batchPicked}</span>}
-                {q && q.line_discount > 0 && <span className="rounded-full bg-tint px-2 py-0.5 text-xs font-semibold text-accent">{t.discBadge(formatMoney(q.line_discount, language))}</span>}
-                {q && q.discount_over_limit && staffLimit && needsOwner && <span className="rounded-full bg-warn-bg px-2 py-0.5 text-xs font-semibold text-warn-ink">{t.needsOwner}</span>}
-                {nearest && <span className="pulse-soft rounded-full bg-warn-bg px-2 py-0.5 text-xs font-semibold text-warn-ink">{t.nearExpiry(nearest.days_to_expiry)}</span>}
+                {line.batchId && <Chip>{t.batchPicked}</Chip>}
+                {q && q.line_discount > 0 && <Chip tone="ok">{t.discBadge(formatMoney(q.line_discount, language))}</Chip>}
+                {q && q.discount_over_limit && staffLimit && needsOwner && <Chip tone="warn">{t.needsOwner}</Chip>}
+                {nearest && <Chip tone="warn" className="pulse-soft">{t.nearExpiry(nearest.days_to_expiry)}</Chip>}
               </div>
               {problem && (
                 <Notice
@@ -123,28 +125,28 @@ export function CartTable({
                 />
               )}
             </div>
-            <div role="cell" className="flex items-center justify-center gap-2">
-              <button type="button" aria-label={`${t.decrease}: ${name}`} onClick={() => onStep(line.key, -1)} disabled={line.qty <= stepOf(line)} className="lift grid size-11 place-items-center rounded-md border border-field-line bg-card disabled:opacity-50">
-                <Minus aria-hidden className="size-5" />
+            <div role="cell" dir="ltr" className="flex w-[132px] items-center justify-between">
+              <button type="button" aria-label={`${t.decrease}: ${name}`} onClick={() => onStep(line.key, -1)} disabled={line.qty <= stepOf(line)} className="lift grid size-11 shrink-0 place-items-center rounded-[9px] border border-field-line bg-card text-xl disabled:opacity-50">
+                −
               </button>
-              <div className="min-w-[56px] text-center leading-tight">
-                <p data-qty className="num text-xl font-bold">
+              <div className="-mx-1 min-w-0 flex-1 whitespace-nowrap text-center">
+                <p data-qty className="num text-[17px] font-bold leading-[1.15]">
                   {value}
                 </p>
-                <p className="text-xs text-muted">{unit}</p>
+                <p className="text-[11.5px] leading-[1.2] text-muted">{unit}</p>
               </div>
-              <button type="button" aria-label={`${t.increase}: ${name}`} onClick={() => onStep(line.key, 1)} className="lift grid size-11 place-items-center rounded-md border border-field-line bg-card">
-                <Plus aria-hidden className="size-5" />
+              <button type="button" aria-label={`${t.increase}: ${name}`} onClick={() => onStep(line.key, 1)} className="lift grid size-11 shrink-0 place-items-center rounded-[9px] border border-field-line bg-card text-xl">
+                +
               </button>
             </div>
-            <p role="cell" className="num text-end text-muted">
+            <p role="cell" className="num text-end text-ink-mid">
               {q ? formatMoney(q.unit_price, language) : '—'}
             </p>
-            <p role="cell" data-line-total className="num text-end text-lg font-bold">
+            <p role="cell" data-line-total className="num text-end text-[17px] font-bold">
               {q ? formatMoney(q.line_total, language) : '—'}
             </p>
-            <button type="button" aria-label={`${t.removeLine}: ${name}`} onClick={() => onRemove(line.key)} className="lift grid size-11 place-items-center rounded-md text-danger-ink hover:bg-danger-bg/50">
-              <Trash2 aria-hidden className="size-5" />
+            <button type="button" aria-label={`${t.removeLine}: ${name}`} onClick={() => onRemove(line.key)} className="lift grid size-11 place-items-center rounded-[9px] text-danger-ink">
+              <TrashIcon />
             </button>
           </div>
         );

@@ -32,6 +32,8 @@ export interface CartLine extends SizePick {
   batchId: string | null;
   /** The price per pack the screen last saw (from a quote), kept so a held bill can say "price changed". */
   seenPrice: number | null;
+  /** The batch the bill would have taken, kept so a held bill can say "batch changed". (Bills held before this was added have none.) */
+  seenBatch?: { no: string; expiry: string } | null;
 }
 
 let counter = 0;
@@ -150,7 +152,8 @@ export function approvalSubject(cart: readonly CartLine[], bill: BillDraft, paid
 
 /** A key that changes whenever anything a quote depends on changes (so an old quote is never taken for the current one). */
 export function quoteKey(cart: readonly CartLine[], bill: BillDraft, paidText: string | null): string {
-  return JSON.stringify([saleLines(cart), bill.customerId, bill.priceType, bill.method, bill.dueDate, paidText]);
+  // The amount, not the text: "1000" and "1,000" are the same bill, so tidying the text must not ask for a new quote.
+  return JSON.stringify([saleLines(cart), bill.customerId, bill.priceType, bill.method, bill.dueDate, paidFromText(paidText)]);
 }
 
 // ---------- the amount paid ----------
@@ -160,6 +163,35 @@ export function paidFromText(text: string | null): number | null | 'invalid' {
   if (text === null || text.trim() === '') return null;
   const paisa = parseRupees(text);
   return paisa === null ? 'invalid' : paisa;
+}
+
+/** 9750 is "9,750". */
+export const groupDigits = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+/** 100000 paisa is "1,000", 105050 is "1,050.50": the way the design shows the amount in the Paid now field (no "Rs": the field has its own). */
+export function groupedRupeesText(paisa: number): string {
+  const whole = Math.floor(paisa / 100);
+  const rest = paisa % 100;
+  const grouped = groupDigits(whole);
+  return rest === 0 ? grouped : `${grouped}.${String(rest).padStart(2, '0')}`;
+}
+
+/**
+ * What is typed in "Paid now", with the thousands separators put in as it goes ("1000" becomes "1,000"). Only the whole-rupee part is
+ * touched: the paisa are left exactly as typed ("1,000.5" stays, so a half-typed amount is never rewritten under the cursor).
+ * Text that is not an amount is returned as it is.
+ */
+export function groupTyped(text: string): string {
+  const match = /^(\s*)(\d[\d,]*)(\.\d{0,2})?(\s*)$/.exec(text);
+  if (!match) return text;
+  const whole = (match[2] ?? '').replace(/,/g, '');
+  return `${match[1] ?? ''}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${match[3] ?? ''}${match[4] ?? ''}`;
+}
+
+/** A typed amount tidied up with thousands separators ("1000" to "1,000"); text that is not an amount is returned as it is. */
+export function tidyPaidText(text: string): string {
+  const paisa = parseRupees(text);
+  return paisa === null || text.trim() === '' ? text : groupedRupeesText(paisa);
 }
 
 /** `2026-10-12` plus 30 days. Done on the calendar date alone (no time zone). */

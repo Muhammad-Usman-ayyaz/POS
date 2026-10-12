@@ -3,10 +3,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ErrorNotice } from '../../components/feedback.js';
 import { Button } from '../../components/ui/button.js';
 import { Dialog } from '../../components/ui/dialog.js';
-import { Input } from '../../components/ui/input.js';
-import { formatDate, formatMoney, useI18n } from '../../i18n/index.js';
+import { SegmentedToggle } from '../../components/ui/segmented.js';
+import { formatDate, formatMoney, formatQty, ltr, useI18n } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
-import { parseRupees, pickName, stepOf, type BaseUnit, type CartLine } from './pos-state.js';
+import { Actions, Chip, DialogInput, FieldLabel } from './counter-ui.js';
+import { groupDigits, parseRupees, pickName, stepOf, type BaseUnit, type CartLine } from './pos-state.js';
 
 type QuoteLine = SaleQuoteView['lines'][number];
 type BatchRow = Awaited<ReturnType<Api['stock']['batchesOf']>>[number];
@@ -58,12 +59,14 @@ export function LineDialog({
   const unitName = t.unit[line.baseUnit as BaseUnit];
   const [qtyText, setQtyText] = useState(String(inPacks ? line.qty / line.packSize : line.qty));
   const [batchId, setBatchId] = useState<string | null>(line.batchId);
-  const [mode, setMode] = useState<'percent' | 'rupees'>('rupees');
+  // A new discount is typed as a percent (the design's default); a discount already on the line is shown in rupees, as it is stored.
+  const [mode, setMode] = useState<'percent' | 'rupees'>(line.discount > 0 ? 'rupees' : 'percent');
   const gross = quoteLine?.gross ?? 0;
   const [discountText, setDiscountText] = useState(line.discount > 0 ? String(line.discount / 100) : '');
   const [batches, setBatches] = useState<BatchRow[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const discountRef = useRef<HTMLInputElement>(null);
+  const qtyRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -76,8 +79,11 @@ export function LineDialog({
     };
   }, [api, line.productId]);
 
+  // The cursor goes where the work is: the discount for F8, otherwise the quantity ("Type the quantity or use the steps"), selected so typing replaces it.
   useEffect(() => {
-    if (focusDiscount) discountRef.current?.focus();
+    const target = focusDiscount ? discountRef.current : qtyRef.current;
+    target?.focus();
+    if (!focusDiscount) target?.select();
   }, [focusDiscount]);
 
   const qtyNumber = /^\d+$/.test(qtyText.trim()) ? Number(qtyText) : 0;
@@ -87,111 +93,102 @@ export function LineDialog({
   const overLimit = !isOwner && discount !== null && gross > 0 && discount * 100 > gross * staffMaxPercent;
 
   const bump = (delta: number) => setQtyText(String(Math.max(inPacks ? 1 : step, qtyNumber + delta * (inPacks ? 1 : step))));
-  const name = `${pickName(line.nameEn, line.nameUr, language)}${line.label ? ` · ${line.label}` : ''}`;
+  // The size label ("1 L") is a Latin run: left alone at the end of an Urdu title it would flip to "L 1".
+  const name = `${pickName(line.nameEn, line.nameUr, language)}${line.label ? ` · ${language === 'ur' ? ltr(line.label) : line.label}` : ''}`;
   const price = quoteLine ? formatMoney(quoteLine.unit_price, language) : '';
+  // "Per kg Rs 200": a 1 kg or 1 L pack is priced per kg / L; any other loose pack says its own size.
+  const per = line.packSize === 1 ? f.perUnit.piece : line.packSize === 1000 && line.baseUnit !== 'piece' ? f.perUnit[line.baseUnit as BaseUnit] : `${groupDigits(line.packSize)} ${unitName}`;
+  // The batches as the design lists them: earliest expiry first, and the first one that can still be sold is the one "Auto" takes.
+  const sorted = (batches ?? []).slice().sort((a, b) => a.expiry_date.localeCompare(b.expiry_date));
+  const autoId = sorted.find((b) => !b.expired)?.batch_id ?? null;
+  const stockText = (b: BatchRow): string => (line.allowLoose || line.packSize <= 1 ? `${groupDigits(b.stock)} ${line.packSize <= 1 && !line.allowLoose ? '' : unitName}`.trim() : formatQty(b.stock, line.packSize, language));
 
   return (
-    <Dialog open title={name} onClose={onClose} className="max-w-[560px]">
+    <Dialog counter open title={name} eyebrow={f.eyebrow} lead={inPacks || !line.allowLoose ? f.sealedHint(price) : f.looseHint(price, per)} onClose={onClose}>
       <form
-        className="mt-2"
+        className="flex flex-col gap-3.5"
         onSubmit={(e) => {
           e.preventDefault();
           if (valid && discount !== null) onApply({ qty, discount, batchId });
         }}
       >
-        <p className="text-muted">{inPacks || !line.allowLoose ? f.sealedHint(price) : f.looseHint(price, unitName)}</p>
-
-        <label htmlFor="line-qty" className="mt-4 block text-xs font-semibold uppercase tracking-wider text-muted">
-          {inPacks ? f.quantityPacks : f.quantityUnit(unitName)}
-        </label>
-        <div className="mt-1 flex items-center gap-2">
-          <Button variant="secondary" aria-label={`${t.decrease} ${step}`} onClick={() => bump(-1)}>
+        <div dir="ltr" className="grid grid-cols-[48px_1fr_48px] items-end gap-2">
+          <Button variant="secondary" aria-label={`${t.decrease} ${step}`} className="px-0 text-[13px] font-bold" onClick={() => bump(-1)}>
             <span className="num">−{inPacks ? 1 : step}</span>
           </Button>
-          <Input id="line-qty" name="qty" inputMode="numeric" value={qtyText} onChange={(e) => setQtyText(e.target.value)} className="num text-center text-xl font-bold" invalid={qty === 0} />
-          <Button variant="secondary" aria-label={`${t.increase} ${step}`} onClick={() => bump(1)}>
+          <div>
+            <FieldLabel htmlFor="line-qty">{inPacks ? f.quantityPacks : f.quantityUnit(unitName)}</FieldLabel>
+            <DialogInput id="line-qty" name="qty" ref={qtyRef} inputMode="numeric" value={qtyText} onChange={(e) => setQtyText(e.target.value)} className="num text-center text-xl font-bold" invalid={qty === 0} />
+          </div>
+          <Button variant="secondary" aria-label={`${t.increase} ${step}`} className="px-0 text-[13px] font-bold" onClick={() => bump(1)}>
             <span className="num">+{inPacks ? 1 : step}</span>
           </Button>
         </div>
 
-        <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted">{f.batch}</p>
-        {batches === null && error == null && <p className="mt-2 text-muted">{f.batchesLoading}</p>}
-        {error != null && <ErrorNotice error={error} className="mt-2" />}
-        <div role="radiogroup" aria-label={f.batch} className="mt-2 flex max-h-40 flex-col gap-2 overflow-y-auto">
-          {batches !== null && (
-            <>
-              <BatchOption selected={batchId === null} onSelect={() => setBatchId(null)} title={f.auto} detail={f.autoHint} />
-              {batches.map((b) => (
-                <BatchOption
-                  key={b.batch_id}
-                  selected={batchId === b.batch_id}
-                  disabled={b.expired}
-                  onSelect={() => setBatchId(b.batch_id)}
-                  title={b.batch_no}
-                  detail={`${t.exp} ${formatDate(b.expiry_date, language)} · ${f.inStock(String(b.stock))}${b.expired ? ` · ${f.expired}` : ''}`}
-                />
-              ))}
-            </>
-          )}
-        </div>
-
-        <label htmlFor="line-discount" className="mt-4 block text-xs font-semibold uppercase tracking-wider text-muted">
-          {f.discount}
-        </label>
-        <div className="mt-1 flex items-center gap-2">
-          <Input
-            id="line-discount"
-            name="discount"
-            ref={discountRef}
-            inputMode="decimal"
-            value={discountText}
-            onChange={(e) => setDiscountText(e.target.value)}
-            invalid={discount === null}
-            className="num"
-          />
-          <div role="radiogroup" aria-label={`${f.percent} / ${f.rupees}`} className="flex shrink-0 rounded-md bg-thead p-1">
-            {(['percent', 'rupees'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={mode === value}
-                onClick={() => setMode(value)}
-                className={cn('min-h-11 min-w-12 rounded-sm px-3 font-semibold', mode === value ? 'bg-card shadow-button' : 'text-muted')}
-              >
-                {value === 'percent' ? f.percent : f.rupees}
-              </button>
+        <div>
+          <p className="mb-1.5 text-xs font-bold uppercase tracking-[0.05em] text-label">{f.batch}</p>
+          {batches === null && error == null && <p className="text-muted">{f.batchesLoading}</p>}
+          {error != null && <ErrorNotice error={error} />}
+          <div role="radiogroup" aria-label={f.batch} className="flex max-h-44 flex-col gap-1.5 overflow-y-auto">
+            {batches !== null && sorted.length === 0 && <BatchOption selected onSelect={() => setBatchId(null)} title={f.auto} detail={f.autoHint} />}
+            {sorted.map((b) => (
+              <BatchOption
+                key={b.batch_id}
+                selected={batchId === null ? b.batch_id === autoId : batchId === b.batch_id}
+                disabled={b.expired}
+                onSelect={() => setBatchId(b.batch_id === autoId ? null : b.batch_id)}
+                title={b.batch_no}
+                detail={`${t.exp} ${language === 'ur' ? ltr(formatDate(b.expiry_date, language)) : formatDate(b.expiry_date, language)} · ${stockText(b)}${b.expired ? ` · ${f.expired}` : ''}`}
+                auto={b.batch_id === autoId ? f.auto : undefined}
+              />
             ))}
           </div>
         </div>
-        {discount === null ? (
-          <p role="alert" className="mt-2 text-sm font-medium text-danger-ink">
-            {f.discountInvalid}
-          </p>
-        ) : overLimit ? (
-          <p className="mt-2 text-sm font-medium text-warn-ink">{f.discountOver}</p>
-        ) : (
-          <p className="mt-2 text-sm text-muted">{isOwner ? f.ownerLimit : f.staffLimit(staffMaxPercent)}</p>
-        )}
 
-        <div className="mt-6 flex flex-wrap items-center gap-3">
-          <Button variant="danger" onClick={onRemove}>
+        <div>
+          <FieldLabel htmlFor="line-discount">{f.discount}</FieldLabel>
+          <div dir="ltr" className="flex gap-2">
+            <DialogInput id="line-discount" name="discount" ref={discountRef} inputMode="decimal" value={discountText} onChange={(e) => setDiscountText(e.target.value)} invalid={discount === null} className="num flex-1" />
+            <SegmentedToggle<'percent' | 'rupees'>
+              tone="track"
+              label={`${f.percent} / ${f.rupees}`}
+              value={mode}
+              onChange={setMode}
+              className="shrink-0 gap-0 rounded-md bg-track p-1"
+              options={[
+                { value: 'percent', label: f.percent },
+                { value: 'rupees', label: f.rupees },
+              ]}
+            />
+          </div>
+          {discount === null ? (
+            <p role="alert" className="mt-1.5 text-[13px] font-medium text-danger-ink">
+              {f.discountInvalid}
+            </p>
+          ) : overLimit ? (
+            <p className="mt-1.5 text-[13px] font-medium text-warn-ink">{f.discountOver}</p>
+          ) : (
+            <p className="mt-1.5 text-[13px] text-muted">{isOwner ? f.ownerLimit : f.staffLimit(staffMaxPercent)}</p>
+          )}
+        </div>
+
+        <Actions>
+          <Button variant="secondary" size="dialog" className="me-auto border-danger-line text-danger-ink" onClick={onRemove}>
             {f.remove}
           </Button>
-          <span className="flex-1" />
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" size="dialog" onClick={onClose}>
             {f.cancel}
           </Button>
-          <Button type="submit" disabled={!valid}>
+          <Button type="submit" size="dialog" disabled={!valid}>
             {f.done}
           </Button>
-        </div>
+        </Actions>
       </form>
     </Dialog>
   );
 }
 
-function BatchOption({ selected, disabled, onSelect, title, detail }: { selected: boolean; disabled?: boolean; onSelect: () => void; title: string; detail: string }) {
+function BatchOption({ selected, disabled, onSelect, title, detail, auto }: { selected: boolean; disabled?: boolean; onSelect: () => void; title: string; detail: string; auto?: string | undefined }) {
   return (
     <button
       type="button"
@@ -200,15 +197,20 @@ function BatchOption({ selected, disabled, onSelect, title, detail }: { selected
       disabled={disabled}
       onClick={onSelect}
       className={cn(
-        'flex min-h-12 items-center gap-3 rounded-md border px-4 text-start disabled:cursor-not-allowed disabled:opacity-50',
-        selected ? 'border-2 border-accent bg-tint' : 'border-line bg-card hover:bg-row-hover',
+        'flex min-h-[52px] items-center gap-2.5 rounded-md px-3 py-2.5 text-start disabled:cursor-not-allowed disabled:opacity-50',
+        selected ? 'border-2 border-accent bg-tint' : 'border border-row-line bg-card hover:bg-row-hover',
       )}
     >
       <span aria-hidden className={cn('grid size-5 shrink-0 place-items-center rounded-full border-2', selected ? 'border-accent' : 'border-field-line')}>
         {selected && <span className="size-2.5 rounded-full bg-accent" />}
       </span>
-      <span className="num font-bold">{title}</span>
-      <span className="text-sm text-muted">{detail}</span>
+      <span className="num font-semibold">{title}</span>
+      <span className="text-[13px] text-ink-mid">{detail}</span>
+      {auto && (
+        <Chip tone="ok" className="ms-auto">
+          {auto}
+        </Chip>
+      )}
     </button>
   );
 }

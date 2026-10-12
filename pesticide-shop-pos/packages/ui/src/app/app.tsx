@@ -97,7 +97,11 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut }: { api: Api; 
       <Routes>
         <Route element={<AppShell shopName={shopName} deviceText={deviceText} user={user} onSignOut={signOut} />}>
           <Route index element={<Navigate to="/pos" replace />} />
-          <Route path="/pos" element={<PosPage api={api} user={user} receiptActions={(sale) => <PrintActions api={api} invoiceId={sale.invoice.id} kinds={['receipt']} />} />} />
+          <Route path="/pos" element={<PosPage api={api} user={user} receiptActions={(sale, newSale) => (
+                  <PrintActions counter api={api} invoiceId={sale.invoice.id} kinds={['receipt']}>
+                    {newSale}
+                  </PrintActions>
+                )} />} />
           <Route path="/invoices" element={<InvoicesPage api={api} user={user} />} />
           <Route path="/products" element={<ProductsPage api={api} user={user} />} />
           <Route path="/products/new" element={<ProductFormPage api={api} user={user} />} />

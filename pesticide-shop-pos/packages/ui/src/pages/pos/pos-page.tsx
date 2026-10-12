@@ -61,7 +61,7 @@ const utcToday = (): string => new Date().toISOString().slice(0, 10);
  *
  * Keys: F2 search, F4 customer, F6 held bills, F8 discount on the selected line, F12 complete sale.
  */
-export function PosPage({ api, user, receiptActions }: { api: Api; user: SessionUser; receiptActions?: (sale: SaleView) => ReactNode }) {
+export function PosPage({ api, user, receiptActions }: { api: Api; user: SessionUser; receiptActions?: (sale: SaleView, newSale: ReactNode) => ReactNode }) {
   const { m, language } = useI18n();
   const toast = useToast();
   const t = m.pos;
@@ -238,7 +238,11 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
       return;
     }
     const seen = new Map(quoteLines.map((l) => [l.product_id, l.unit_price]));
-    const ok = holdBill({ heldByName: user.name, customer, priceType, lines: cart.map((l) => ({ ...l, seenPrice: seen.get(l.productId) ?? l.seenPrice })) }, newRequestId());
+    const seenBatch = new Map(quoteLines.map((l) => [l.product_id, l.batches[0] ? { no: l.batches[0].batch_no, expiry: l.batches[0].expiry_date } : null]));
+    const ok = holdBill(
+      { heldByName: user.name, customer, priceType, lines: cart.map((l) => ({ ...l, seenPrice: seen.get(l.productId) ?? l.seenPrice, seenBatch: seenBatch.get(l.productId) ?? l.seenBatch ?? null })) },
+      newRequestId(),
+    );
     if (!ok) {
       toast.showError(new Error('storage'));
       return;
@@ -261,6 +265,7 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
       const gone = new Set(repriced.issues.filter((i) => i.scope === 'line' && i.line_index !== undefined).map((i) => i.line_index as number));
       const notes: ResumeNote[] = [];
       const price = new Map(repriced.lines.map((l) => [l.product_id, l.unit_price]));
+      const batchNow = new Map(repriced.lines.map((l) => [l.product_id, l.batches[0] ? { no: l.batches[0].batch_no, expiry: l.batches[0].expiry_date } : null]));
       const kept: CartLine[] = [];
       held.lines.forEach((line, index) => {
         const name = `${pickName(line.nameEn, line.nameUr, language)}${line.label ? ` ${line.label}` : ''}`;
@@ -270,7 +275,12 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
         }
         const now = price.get(line.productId) ?? null;
         if (now !== null && line.seenPrice !== null && line.seenPrice !== now) notes.push({ kind: 'price', name, from: line.seenPrice, to: now });
-        kept.push({ ...line, seenPrice: now });
+        // The batch the bill would take now is not the one it was holding (it ran out or went past its date): say so. A batch picked by hand that is gone is a removed line, above.
+        const batch = batchNow.get(line.productId) ?? null;
+        if (batch && line.seenBatch && !line.batchId && line.seenBatch.no !== batch.no) {
+          notes.push({ kind: 'batch', name, fromBatch: line.seenBatch.no, toBatch: batch.no, expired: line.seenBatch.expiry < repriced.today });
+        }
+        kept.push({ ...line, seenPrice: now, seenBatch: batch });
       });
       removeHeld(held.id);
       setHeldCount(loadHeld().length);
@@ -325,7 +335,7 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
   const closeDialog = useCallback(() => setDialog(null), []);
 
   return (
-    <div data-page="pos" className="flex h-full min-h-0 gap-4 max-[1100px]:flex-col">
+    <div data-page="pos" className="flex h-full min-h-0 gap-4 text-[15px] max-[1100px]:flex-col">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
         <SearchPanel api={api} inputRef={searchRef} query={query} onQuery={setQuery} priceType={priceType} onPriceType={setPriceType} inCart={inCart} onAdd={add} />
         {quoteError != null && <ErrorNotice error={quoteError} />}
@@ -345,12 +355,13 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
             staffLimit={!isOwner}
             needsOwner={q?.requires_approval.includes('discount_override') ?? false}
           />
-          <footer className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-row-line px-5 py-2 text-sm text-muted">
+          <footer className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-row-line bg-foot px-4 py-2 text-xs text-label">
             <Shortcut k="F2" label={t.shortcuts.search} />
             <Shortcut k="F4" label={t.shortcuts.customer} />
             <Shortcut k="F8" label={t.shortcuts.discount} />
             <Shortcut k="F12" label={t.shortcuts.complete} />
-            <Button variant="ghost" className="ms-auto min-h-11 px-3 text-sm" onClick={() => setDialog({ kind: 'held' })}>
+            {/* 44px to press, drawn over the strip's own padding so the strip keeps the design's height */}
+            <Button variant="ghost" className="-my-[13px] ms-auto min-h-11 px-3 text-xs" onClick={() => setDialog({ kind: 'held' })}>
               <span className="num font-bold">F6</span> {t.shortcuts.held}
               {heldCount > 0 && <span className="num rounded-full bg-tint px-2 text-accent">{heldCount}</span>}
             </Button>
@@ -358,7 +369,7 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
         </section>
       </div>
 
-      <aside className="flex min-h-0 w-[360px] shrink-0 flex-col gap-3 max-[1100px]:w-full">
+      <aside className="flex min-h-0 w-[340px] shrink-0 flex-col gap-3 max-[1100px]:w-full">
         <CustomerCard customer={customer} priceType={priceType} quote={q} onChange={() => setDialog({ kind: 'customer' })} />
         <PaymentPanel
           quote={q}
@@ -431,6 +442,7 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
           api={api}
           actions={dialog.actions}
           subject={approvalSubject(cart, bill, effectivePaid)}
+          overLimit={q?.customer && q.requires_approval.includes('credit_override') ? { after: q.customer.after_sale, limit: q.customer.credit_limit } : undefined}
           onGranted={(token) => {
             setDialog(null);
             // The approval is for exactly this bill: send it now, with the approval, once.
@@ -459,7 +471,7 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
 function Shortcut({ k, label }: { k: string; label: string }) {
   return (
     <span>
-      <b className="num text-ink">{k}</b> {label}
+      <b className="num">{k}</b> {label}
     </span>
   );
 }
