@@ -279,7 +279,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await seedForScreens(db);
 
   // ---------- the signed-in app, English ----------
-  for (const [index, page] of ['pos', 'customers'].entries()) {
+  for (const [index, page] of ['pos', 'invoices', 'customers'].entries()) {
     await go(`/${page}`);
     await shot(`1${index * 2}-${page}-en`);
   }
@@ -289,7 +289,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
 
   // ---------- Urdu: right to left ----------
   await setLanguage('ur');
-  for (const [index, page] of ['pos', 'customers'].entries()) {
+  for (const [index, page] of ['pos', 'invoices', 'customers'].entries()) {
     await go(`/${page}`);
     await shot(`2${index * 2}-${page}-ur`);
   }
