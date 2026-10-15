@@ -136,6 +136,9 @@ describe('the owner\'s approval at the counter', () => {
     expect(audits('approval_granted')).toEqual([expect.objectContaining({ user_id: shop.ownerId })]);
     expect(JSON.parse(audits('approval_granted')[0]!.details)).toMatchObject({ requested_by: shop.staffId, actions: ['credit_override'] });
     expect(audits('approval_used')).toEqual([expect.objectContaining({ user_id: shop.ownerId, table_name: 'invoices', row_id: sold.invoice.id })]);
+    // the row says who approved (the owner, in user_id and approved_by), who asked (the staff member) and exactly which actions were spent
+    expect(JSON.parse(audits('approval_used')[0]!.details)).toEqual({ requested_by: shop.staffId, actions: ['credit_override'] });
+    expect(audits('approval_used')[0]!.user_id).not.toBe(shop.staffId);
     expect(JSON.stringify(audits('approval_granted'))).not.toContain(grant.token); // the token itself is never written down
   });
 

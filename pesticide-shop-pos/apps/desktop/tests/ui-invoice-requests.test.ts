@@ -45,6 +45,16 @@ describe('the invoice history against the real shell', () => {
     expect(page2.total).toBe(2);
   });
 
+  it('the active and voided filters really separate the invoices (the request carries status active as well as voided)', async () => {
+    await setup();
+    const { walkIn, khata } = await twoSales();
+    shop.runtime.db.prepare("UPDATE invoices SET status = 'voided', void_reason = 'test', voided_by = ? WHERE id = ?").run(shop.ownerId, khata.invoice.id);
+    const ids = async (status: I.StatusFilter) => (await call('invoices:list', I.buildListRequest(filters({ status })))).rows.map((r: any) => r.id);
+    expect(await ids('active')).toEqual([walkIn.invoice.id]);
+    expect(await ids('voided')).toEqual([khata.invoice.id]);
+    expect(await ids('all')).toHaveLength(2);
+  });
+
   it('the row has what the screen shows, and the detail has the lines as sold; staff get the same', async () => {
     await setup();
     const { khata } = await twoSales();
@@ -63,6 +73,7 @@ describe('the list request the screen builds', () => {
   it('trims the search text, and sends nothing for blank text or unset filters', () => {
     expect(I.buildListRequest(filters({ query: '  rashid ' }))).toEqual({ query: 'rashid', limit: I.PAGE_SIZE, offset: 0 });
     expect(I.buildListRequest(filters({ query: '   ' }))).toEqual({ limit: I.PAGE_SIZE, offset: 0 });
+    expect(I.buildListRequest(filters({ status: 'active' }))).toEqual({ status: 'active', limit: I.PAGE_SIZE, offset: 0 });
     expect(I.buildListRequest(filters({ status: 'voided', from: '2026-10-01', to: '2026-10-31', offset: 25 }))).toEqual({ status: 'voided', from: '2026-10-01', to: '2026-10-31', limit: I.PAGE_SIZE, offset: 25 });
   });
 });

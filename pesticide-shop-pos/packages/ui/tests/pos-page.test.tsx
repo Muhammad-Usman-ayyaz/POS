@@ -974,9 +974,22 @@ describe('Urdu, right to left', () => {
     show(fakeShell(STAFF), STAFF, 'ur');
     const badge = [...document.querySelectorAll('kbd')].find((k) => k.textContent === 'F2' && k.className.includes('num'))!;
     expect(badge).toBeTruthy();
-    expect(badge.className).not.toMatch(/(absolute|fixed)|(start|end)-[\d[]/);
+    expect(badge.className).not.toMatch(/\b(absolute|fixed)\b|\b(start|end)-[\d[]/);
     expect(badge.previousElementSibling!.tagName).toBe('INPUT'); // icon, input, badge: in a right-to-left row the icon is at the right and the badge at the left
     expect(badge.parentElement!.firstElementChild!.tagName.toLowerCase()).toBe('svg');
+    // the row is one flex line: icon, input, badge as direct children of one flex box, so the browser (not a number) keeps them apart
+    const row = badge.parentElement!;
+    expect(row.className).toMatch(/(^|\s)flex(\s|$)/);
+    expect([...row.children].map((c) => c.tagName.toLowerCase())).toEqual(['svg', 'input', 'kbd']);
+    expect(badge.nextElementSibling).toBeNull();
+    expect(row.getAttribute('dir')).toBeNull(); // the row follows the page direction; nothing forces it left to right
+    expect(badge.getAttribute('dir')).toBeNull();
+    // the icon and the badge never take the pointer or the screen reader; the input has no side classes of its own
+    expect(badge.getAttribute('aria-hidden')).toBe('true');
+    expect(row.firstElementChild!.getAttribute('aria-hidden')).toBe('true');
+    expect(row.firstElementChild!.getAttribute('class')).toContain('pointer-events-none');
+    expect(row.querySelector('input')!.className).not.toMatch(/(^|\s)(-?(ml|mr|pl|pr|ms|me|ps|pe|left|right|start|end)-|text-(left|right|start|end)b)/);
+    expect(row.querySelector('input')!.className).not.toMatch(/b(absolute|fixed)b/);
   });
 
   it('the pos screen never uses left or right (only start and end), so it flips by itself', async () => {
@@ -1363,5 +1376,91 @@ describe('design: the sizes and spacing of Main.dc.html that a test can read', (
       const small = /\b(?:h|min-h|size)-(?:[1-9]|10)\b/.test(cls) && !/\bmin-h-11\b|\bh-1[1-9]\b|\bsize-11\b/.test(cls);
       expect(small, `${el.tagName} "${el.textContent?.trim().slice(0, 30)}" has class ${cls}`).toBe(false);
     }
+  });
+});
+
+describe('gaps found by the test review', () => {
+  it('the saved-sale window calls the money "Cash received" for a cash sale (the wording of docs/design/PosDialogs.dc.html) and "Paid now" for any other method', async () => {
+    const design = readFileSync(join(__dirname, '..', '..', '..', 'docs', 'design', 'PosDialogs.dc.html'), 'utf8');
+    expect(design).toContain('Cash received');
+    expect(T.done.received).toBe('Cash received');
+    const label = (done: HTMLElement) => [...done.querySelectorAll('dt')].map((d) => d.textContent);
+
+    const cash = fakeShell(STAFF);
+    show(cash);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await userEvent.setup().click(completeButton());
+    let done = await screen.findByRole('dialog', { name: T.done.title });
+    expect(label(done)).toContain('Cash received');
+    expect(label(done)).not.toContain(T.done.paid);
+    cleanup();
+
+    const bank = fakeShell(STAFF);
+    show(bank);
+    await addSize('insect', 'p1l');
+    await priced('Rs 500');
+    await userEvent.setup().click(screen.getByRole('radio', { name: T.bill.methods.bank }));
+    await priced('Rs 500');
+    await userEvent.setup().click(completeButton());
+    done = await screen.findByRole('dialog', { name: T.done.title });
+    expect(bank.sales()[0]!.input.payment_method).toBe('bank');
+    expect(label(done)).toContain(T.done.paid);
+    expect(label(done)).not.toContain(T.done.received);
+  });
+
+  it('resuming a held bill asks for the new prices with THAT bill\'s price type and customer (the first quote after Resume, not a later one)', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell);
+    fireEvent.keyDown(window, { key: 'F4' });
+    const pickDialog = await screen.findByRole('dialog', { name: T.customer.dialogTitle });
+    await within(pickDialog).findByRole('option', { name: /Rashid/ });
+    await userEvent.setup().click(within(pickDialog).getByRole('option', { name: /Rashid/ }));
+    await userEvent.setup().click(within(pickDialog).getByRole('button', { name: T.customer.use('Rashid') }));
+    await userEvent.setup().click(screen.getByRole('radio', { name: T.wholesale })); // Rashid's usual type is retail
+    await addSize('insect', 'p1l');
+    await priced('Rs 450');
+    await userEvent.setup().click(screen.getByRole('button', { name: T.bill.hold }));
+    await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
+    await new Promise((r) => setTimeout(r, 400)); // let any quote of the empty / walk-in screen finish
+    const before = shell.of('sale:quote').length;
+    fireEvent.keyDown(window, { key: 'F6' });
+    const held = await screen.findByRole('dialog', { name: T.held.title });
+    await userEvent.setup().click(within(held).getByRole('button', { name: T.held.resume }));
+    await waitFor(() => expect(shell.of('sale:quote').length).toBeGreaterThan(before));
+    const first = shell.of('sale:quote')[before]!.input;
+    expect(first.customer_id).toBe('c1');
+    expect(first.price_type).toBe('wholesale');
+    expect(first.lines).toEqual([{ product_id: 'p1l', qty: 1000 }]);
+  });
+
+  describe('while a dialog is open the F-keys do nothing', () => {
+    it('F12 does not complete the sale', async () => {
+      const shell = fakeShell(STAFF);
+      show(shell);
+      await addSize('insect', 'p1l');
+      await priced('Rs 500');
+      fireEvent.keyDown(window, { key: 'F4' });
+      await screen.findByRole('dialog', { name: T.customer.dialogTitle });
+      expect(fireEvent.keyDown(window, { key: 'F12' })).toBe(true); // left alone
+      await new Promise((r) => setTimeout(r, 100));
+      expect(shell.sales()).toHaveLength(0);
+      expect(screen.queryByRole('dialog', { name: T.done.title })).toBeNull();
+      expect(screen.getByRole('dialog', { name: T.customer.dialogTitle })).toBeTruthy();
+    });
+
+    it('F8 does not open the line editor over (or instead of) the open dialog', async () => {
+      const shell = fakeShell(STAFF);
+      show(shell);
+      await addSize('insect', 'p1l');
+      await priced('Rs 500');
+      fireEvent.keyDown(window, { key: 'F4' });
+      await screen.findByRole('dialog', { name: T.customer.dialogTitle });
+      expect(fireEvent.keyDown(window, { key: 'F8' })).toBe(true);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      expect(screen.getByRole('dialog', { name: T.customer.dialogTitle })).toBeTruthy();
+      expect(screen.queryByLabelText(T.line.discount)).toBeNull();
+    });
   });
 });

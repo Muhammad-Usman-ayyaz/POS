@@ -233,8 +233,14 @@ describe('Invoices: the time zone of every date', () => {
     const dir = join(__dirname, '..', 'src', 'pages', 'invoices');
     for (const file of readdirSync(dir).filter((f) => /\.tsx?$/.test(f) && f !== 'time-zone.ts')) {
       const text = readFileSync(join(dir, file), 'utf8');
-      expect(/['"`][A-Z][A-Za-z_]+\/[A-Z][A-Za-z_]+['"`]/.test(text), `${file} names an IANA zone`).toBe(false);
-      expect(text, file).not.toContain('Karachi');
+      const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1'); // comments may talk about zones; code may not
+      expect(/['"`][A-Z][A-Za-z_]+\/[A-Z][A-Za-z_]+['"`]/.test(code), `${file} names an IANA zone`).toBe(false);
+      expect(code, file).not.toContain('Karachi');
+      // A zone cannot be smuggled in by building the name (['Asia','Dubai'].join('/')), by a fixed offset, or by formatting the date locally:
+      // dates are formatted only by formatDateTime(iso, SHOP_TIME_ZONE).
+      expect(code, `${file} names a region`).not.toMatch(/['"`](Asia|Europe|America|Africa|Pacific|Atlantic|Indian|Australia|Antarctica|Etc)\b/);
+      expect(code, `${file} names UTC or GMT`).not.toMatch(/\b(UTC|GMT)\b/i);
+      expect(code, `${file} formats dates itself`).not.toMatch(/\bIntl\b|\btimeZone\b|\.toLocale\w*\(|\.getTimezoneOffset\(|\bDate\.UTC\b|\.toISOString\(\)\.(slice|substring)/);
     }
     expect(readFileSync(join(dir, 'time-zone.ts'), 'utf8')).toContain("export const SHOP_TIME_ZONE = 'Asia/Karachi'");
   });

@@ -139,6 +139,79 @@ describe('saving', () => {
     expect(shell.saves()[0]!.input).toEqual({ printer_name: null, shop_address: null });
   });
 
+  it('emptying the Urdu name or the phone sends null for it, never an empty text', async () => {
+    const shell = await ready(fakeShell({ config: { shop_name_ur: 'پیسٹی سائیڈ', shop_phone: '0300 1234567' } }));
+    set(screen.getByLabelText(en.settings.shopNameUr), '');
+    set(screen.getByLabelText(en.settings.phone), '   ');
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(shell.saves()).toHaveLength(1));
+    expect(shell.saves()[0]!.input).toEqual({ shop_name_ur: null, shop_phone: null });
+    expect(shell.saves()[0]!.input.shop_name_ur).toBeNull();
+    expect(shell.saves()[0]!.input.shop_phone).toBeNull();
+  });
+
+  it('each box writes its own setting and no other: Urdu name to shop_name_ur, phone to shop_phone, address to shop_address', async () => {
+    const boxes: [string, string, string][] = [
+      [en.settings.shopNameUr, 'کسان شاپ', 'shop_name_ur'],
+      [en.settings.phone, '0301 7654321', 'shop_phone'],
+      [en.settings.address, 'Chak 12, Main Road', 'shop_address'],
+    ];
+    for (const [label, value, key] of boxes) {
+      const shell = await ready();
+      set(screen.getByLabelText(label), value);
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(shell.saves()).toHaveLength(1));
+      expect(shell.saves()[0]!.input, label).toEqual({ [key]: value });
+      cleanup();
+    }
+  });
+
+  it('the invoice-language switch changes the invoice language only, and the receipt-language switch the receipt language only', async () => {
+    const shell = await ready();
+    fireEvent.click(screen.getAllByRole('radio', { name: 'اردو' })[1]!); // invoice language
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(shell.saves()).toHaveLength(1));
+    expect(shell.saves()[0]!.input).toEqual({ invoice_language: 'ur' });
+    expect(screen.getAllByRole('radio', { name: 'اردو' })[0]!.getAttribute('aria-checked')).toBe('false'); // receipt language untouched
+    expect(screen.getAllByRole('radio', { name: 'اردو' })[1]!.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('a change that is only spaces around the saved text is no change: Save stays off, and pressing Enter sends nothing', async () => {
+    const shell = await ready(fakeShell({ config: { shop_address: 'Main Bazaar', shop_phone: '0300 1234567', shop_name_ur: 'پیسٹی' } }));
+    set(screen.getByLabelText(en.settings.address), '  Main Bazaar  ');
+    expect(saveButton().disabled).toBe(true);
+    set(screen.getByLabelText(en.settings.phone), '0300 1234567 ');
+    expect(saveButton().disabled).toBe(true);
+    set(screen.getByLabelText(en.settings.shopNameUr), ' پیسٹی');
+    expect(saveButton().disabled).toBe(true);
+    fireEvent.submit(document.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(shell.saves()).toHaveLength(0);
+  });
+
+  it('pressing Enter in a field with nothing changed sends nothing (no empty save, so no empty audit row)', async () => {
+    const shell = await ready();
+    fireEvent.submit(document.querySelector('form')!); // what Enter in a text box does, though the Save button is off
+    set(screen.getByLabelText(en.settings.phone), '0300');
+    set(screen.getByLabelText(en.settings.phone), '');
+    fireEvent.submit(document.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(shell.saves()).toHaveLength(0);
+    expect(screen.queryByText(en.settings.saved)).toBeNull();
+  });
+
+  it('an old save error is gone as soon as the next save is tried, whether that one works or not', async () => {
+    let n = 0;
+    const shell = await ready(fakeShell({ override: { 'print:setConfig': (input) => (++n === 1 ? fail('NOT_AUTHORIZED', { capability: 'print.configure' }) : { ok: true, data: { ...CONFIG, ...input } }) } }));
+    set(screen.getByLabelText(en.settings.phone), '0300');
+    fireEvent.click(saveButton());
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    fireEvent.click(saveButton());
+    expect(await screen.findByText(en.settings.saved)).toBeTruthy();
+    expect(shell.saves()).toHaveLength(2);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('with no change the Save button is off and nothing is sent', async () => {
     const shell = await ready();
     fireEvent.click(saveButton());
