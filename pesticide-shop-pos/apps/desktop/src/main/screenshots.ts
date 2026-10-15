@@ -333,6 +333,50 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await js(`new Promise((resolve, reject) => { const t0 = Date.now(); const tick = () => document.querySelectorAll('[data-line]').length > ${before} ? resolve(true) : Date.now() - t0 > 4000 ? reject(new Error('the line was not added')) : setTimeout(tick, 50); tick(); })`);
   }
 
+  /**
+   * The POS search box, with text typed in: the magnifier, the typed text (the input) and the F2 badge are three different places in a row.
+   * Measured in the real layout, in English and in Urdu (where the row runs right to left): no two boxes overlap, and each one is the
+   * topmost thing at its own centre (nothing is drawn on top of it).
+   */
+  async function checkSearchBox(language: 'en' | 'ur'): Promise<void> {
+    await fill('input[type=search]', language === 'en' ? 'Insecticide spray 1 L' : 'کیڑے مار دوا');
+    await pause(300);
+    const found = await js<{ missing?: string; overlaps: string[]; direction: string; order: string[] }>(`(() => {
+      const input = document.querySelector('input[type=search]');
+      const field = input && input.parentElement;
+      const icon = field && field.querySelector('svg');
+      const badge = field && [...field.querySelectorAll('kbd')].find((k) => k.textContent.trim() === 'F2');
+      if (!input || !icon || !badge) return { missing: 'search input, icon or F2 badge', overlaps: [], direction: '?', order: [] };
+      const parts = { icon, input, badge };
+      const rects = Object.fromEntries(Object.entries(parts).map(([k, el]) => [k, el.getBoundingClientRect()]));
+      const overlaps = [];
+      const names = Object.keys(parts);
+      for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+        const a = rects[names[i]], b = rects[names[j]];
+        if (a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) overlaps.push(names[i] + ' overlaps ' + names[j]);
+      }
+      for (const [k, el] of Object.entries(parts)) {
+        const r = rects[k];
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        if (!top || (top !== el && !el.contains(top) && !(k === 'icon' && top === field))) // the magnifier ignores the pointer, so the box itself is what is found there
+          overlaps.push(k + ' is covered by ' + (top ? top.tagName.toLowerCase() : 'nothing'));
+      }
+      const fr = field.getBoundingClientRect();
+      for (const [k, r] of Object.entries(rects)) if (r.left < fr.left - 0.5 || r.right > fr.right + 0.5) overlaps.push(k + ' sticks out of the search box');
+      const order = names.sort((x, y) => rects[x].left - rects[y].left);
+      return { overlaps, direction: getComputedStyle(field).direction, order };
+    })()`);
+    const wantDirection = language === 'en' ? 'ltr' : 'rtl';
+    const wantOrder = language === 'en' ? 'icon,input,badge' : 'badge,input,icon'; // left to right on the screen
+    if (found.missing) problems.push(`search box ${language}: ${found.missing} not found`);
+    else {
+      if (found.overlaps.length) problems.push(`search box ${language}: ${found.overlaps.join('; ')}`);
+      if (found.direction !== wantDirection) problems.push(`search box ${language}: direction is ${found.direction}, expected ${wantDirection}`);
+      if (found.order.join(',') !== wantOrder) problems.push(`search box ${language}: left to right the parts are ${found.order.join(',')}, expected ${wantOrder}`);
+    }
+    console.log(`screenshots ${size}: search box ${language}: ${found.missing ?? (found.overlaps.length ? found.overlaps.join('; ') : 'icon, text and F2 badge do not overlap')}`);
+  }
+
   /** F4: the customer picker, the named customer selected, "Use ..." pressed. `pictureName` (if given) is saved while the picker is open. */
   async function chooseCustomer(search: string, shownName: string, pictureName?: string): Promise<void> {
     await key('F4');
@@ -362,6 +406,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await addToBill('Insecticide', '1 L');
     await addToBill('Fungicide');
     await addToBill('Weedicide');
+    await checkSearchBox(language);
     await chooseCustomer('Rashid', rashid, `${prefix + 1}-pos-customer-picker-${language}`);
     await fill('input[name=paid]', '1000');
     await fill('input[type=search]', '');
