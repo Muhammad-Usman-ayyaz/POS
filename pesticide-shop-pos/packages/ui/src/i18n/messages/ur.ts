@@ -554,5 +554,12 @@ export const ur: Messages = {
     codeFormat: 'کوڈ میں 20 حروف اور اعداد ہوتے ہیں',
   },
 
+  dateField: {
+    format: (example: string) => `تاریخ اس طرح لکھیں: ${example}`,
+    impossible: (example: string) => `یہ تاریخ موجود نہیں۔ اس طرح لکھیں: ${example}`,
+    year: (min: number, max: number) => `سال ${min} اور ${max} کے درمیان ہونا چاہیے`,
+    openCalendar: 'کیلنڈر کھولیں',
+  },
+
   toast: { close: 'بند کریں' },
 };

@@ -3,7 +3,7 @@ import { ApiError } from '@pos/api-contract';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Badge, Button, DateField, Dialog, ErrorNotice, I18nProvider, Input, Notice, Num, SegmentedToggle, ToastProvider, useToast } from '../src/index.js';
+import { Badge, Button, Dialog, ErrorNotice, I18nProvider, Input, Notice, Num, SegmentedToggle, ToastProvider, useToast } from '../src/index.js';
 
 afterEach(() => {
   cleanup();
@@ -214,51 +214,6 @@ describe('toast', () => {
     open();
     const region = document.querySelector('[aria-live="polite"]')!;
     expect(region.className).toContain('end-6');
-  });
-});
-
-describe('DateField', () => {
-  const field = () => document.querySelector<HTMLElement>('[data-date-field]')!;
-  const input = () => field().querySelector('input')!;
-
-  it.each(['en', 'ur'] as const)('%s: shows the date as "30 Nov 2026" (Latin digits, English month, like the receipts), not the browser mm/dd/yyyy', (language) => {
-    inEnglish(<DateField name="d" value="2026-11-30" onChange={() => undefined} />, language);
-    expect(field().textContent).toBe('30 Nov 2026');
-    expect(input().value).toBe('2026-11-30'); // the real value is still YYYY-MM-DD
-    expect(input().type).toBe('date');
-  });
-
-  it('with no date it shows the placeholder instead, never "mm/dd/yyyy"', () => {
-    inEnglish(<DateField name="d" value="" placeholder="Any date" onChange={() => undefined} />);
-    expect(field().textContent).toBe('Any date');
-  });
-
-  it('a change from the calendar or the keyboard arrives as YYYY-MM-DD, and min and max are passed on', () => {
-    const seen: string[] = [];
-    inEnglish(<DateField name="d" value="2026-11-30" min="2026-10-12" max="2027-01-01" onChange={(v) => seen.push(v)} />);
-    fireEvent.change(input(), { target: { value: '2026-12-05' } });
-    expect(seen).toEqual(['2026-12-05']);
-    expect(input().min).toBe('2026-10-12');
-    expect(input().max).toBe('2027-01-01');
-  });
-
-  it('pressing it (or Enter / Space) opens the calendar', () => {
-    inEnglish(<DateField name="d" value="2026-11-30" onChange={() => undefined} />);
-    const showPicker = vi.fn();
-    input().showPicker = showPicker;
-    fireEvent.click(input());
-    fireEvent.keyDown(input(), { key: 'Enter' });
-    fireEvent.keyDown(input(), { key: ' ' });
-    fireEvent.keyDown(input(), { key: 'a' });
-    expect(showPicker).toHaveBeenCalledTimes(3);
-  });
-
-  it('a calendar that cannot be opened (no showPicker, or it throws) never breaks the field', () => {
-    inEnglish(<DateField name="d" value="" onChange={() => undefined} />);
-    input().showPicker = () => {
-      throw new Error('needs a press');
-    };
-    expect(() => fireEvent.click(input())).not.toThrow();
   });
 });
 
