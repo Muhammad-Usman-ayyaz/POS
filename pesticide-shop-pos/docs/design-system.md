@@ -134,7 +134,7 @@ Built from `docs/design/80 mm receipts, English and Urdu.png` and `A4 invoice, E
 
 ## Settings screen
 
-`packages/ui/src/pages/settings/`, route `/settings`. **This form was NOT checked against Settings.dc.html: that file is missing.** It follows the Products and Receive stock forms (cards with a heading and hint, `Field` labels, 56px inputs and drop-downs, the same buttons, `ErrorNotice` for errors, a toast on save), so a design review is still owed.
+`packages/ui/src/pages/settings/`, route `/settings`. The shop-details part of this form was compared with `Settings.dc.html` (see the conformance notes); Staff, Backup and About are other phases. It follows the Products and Receive stock forms (cards with a heading and hint, `Field` labels, 56px inputs and drop-downs, the same buttons, `ErrorNotice` for errors, a toast on save), The print format, footer and shop name controls follow the same design.
 
 - **Owner only.** Staff see a calm "Only the owner can change settings" card with no form and no request to the shell (the shell refuses `print:setConfig` for staff as well, `print.configure`).
 - **Printing:** the printer (`printers:list`, with "System default printer" as the first option, the system's default marked, and a saved printer that is no longer on this PC shown as "not found on this PC"), and the receipt and A4 invoice language (English / اردو).
