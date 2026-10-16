@@ -119,7 +119,8 @@ async function start(): Promise<void> {
         console.error('SCREENSHOTS failed:', error);
         process.exitCode = 1;
       }
-      app.quit();
+      // app.quit() would end with exit code 0 whatever process.exitCode says; the wrapper script must see a failure.
+      app.exit(process.exitCode === 1 ? 1 : 0);
       return;
     }
     if (process.env['POS_SMOKE']) {
