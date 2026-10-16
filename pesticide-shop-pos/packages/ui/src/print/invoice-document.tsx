@@ -19,6 +19,8 @@ const SumRow = ({ label, children, strong }: { label: string; children: string; 
  */
 export function InvoiceDocument({ data, language }: { data: InvoiceDocumentData; language: DocumentLanguage }) {
   const t = LABELS[language];
+  // The owner's footer replaces the standard thank-you line when there is one. It is plain text (React escapes it), never markup.
+  const footer = data.shop.footer?.trim() ?? '';
   const address = addressText(data);
   const customer = customerText(data, language);
   const { invoice } = data;
@@ -117,7 +119,7 @@ export function InvoiceDocument({ data, language }: { data: InvoiceDocumentData;
         <div>{t.customerSignature}</div>
         <div>{t.authorisedSignature}</div>
       </div>
-      <footer className="thanks">{t.thanks}</footer>
+      <footer className="thanks">{footer ? <Mixed text={footer} language={language} /> : t.thanks}</footer>
     </div>
   );
 }

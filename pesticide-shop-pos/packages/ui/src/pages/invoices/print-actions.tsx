@@ -71,6 +71,30 @@ export function usePrintDocument(api: Api, invoiceId: string, onDone?: () => voi
   return { busy, result, error, run, clearError, last };
 }
 
+/**
+ * The document the plain Print action prints, from the owner's print settings (`print_format`): the 80 mm receipt or the A4 invoice. Anyone signed in
+ * may read the setting. `ready` is false until it has been read (or failed to read, which means the receipt): the Print button waits for it so a
+ * click never prints the wrong paper.
+ */
+export function useDefaultKind(api: Api): { kind: DocumentKind; ready: boolean } {
+  const [kind, setKind] = useState<DocumentKind>('receipt');
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve()
+      .then(() => api.print.getConfig())
+      .then(
+        (config) => alive && setKind(config.print_format === 'a4' ? 'invoice' : 'receipt'),
+        () => undefined, // cannot read the setting: print the receipt, like before the setting existed
+      )
+      .then(() => alive && setReady(true));
+    return () => {
+      alive = false;
+    };
+  }, [api]);
+  return { kind, ready };
+}
+
 /** What the last print did, in words: a calm notice, never an error, when a PDF was saved instead of printing. */
 export function PrintOutcome({ result, error, className }: { result: PrintResult | null; error: unknown; className?: string }) {
   const { m } = useI18n();
@@ -128,12 +152,16 @@ export function PrintActions({
   const { m, language } = useI18n();
   const t = m.invoices.print;
   const print = usePrintDocument(api, invoiceId, onDone);
+  const preferred = useDefaultKind(api);
+  // The default format picks the kind when this screen offers it; the other kind stays as an explicit button.
+  const defaultKind: DocumentKind = kinds.includes(preferred.kind) ? preferred.kind : (kinds[0] ?? 'receipt');
+  const ordered = [defaultKind, ...kinds.filter((k) => k !== defaultKind)];
   const working = (kind: DocumentKind, output: PrintOutput) => print.busy?.kind === kind && print.busy.output === output;
   const label = (kind: DocumentKind, output: PrintOutput): string =>
     working(kind, output) ? t.working : output === 'printer' ? (kind === 'receipt' ? t.receipt : t.invoice) : kind === 'receipt' ? t.receiptPdf : t.invoicePdf;
 
   if (counter) {
-    const kind = kinds[0] ?? 'receipt';
+    const kind = defaultKind;
     const failed = print.error != null ? describeError(print.error, language) : null;
     return (
       <>
@@ -142,7 +170,7 @@ export function PrintActions({
           {working(kind, 'pdf') ? t.working : t.savePdf}
         </Button>
         {children}
-        <Button size="dialog" disabled={print.busy !== null} data-print={`${kind}:printer`} onClick={() => print.run(kind, 'printer')}>
+        <Button size="dialog" disabled={print.busy !== null || !preferred.ready} data-print={`${kind}:printer`} onClick={() => print.run(kind, 'printer')}>
           {label(kind, 'printer')}
         </Button>
         {failed && (
@@ -170,12 +198,12 @@ export function PrintActions({
   return (
     <>
       <PrintOutcome result={print.result} error={print.error} className="w-full basis-full text-start" />
-      {kinds.map((kind) => (
-        <Button key={`p-${kind}`} variant="secondary" disabled={print.busy !== null} data-print={`${kind}:printer`} onClick={() => print.run(kind, 'printer')}>
+      {ordered.map((kind) => (
+        <Button key={`p-${kind}`} variant="secondary" disabled={print.busy !== null || !preferred.ready} data-print-default={kind === defaultKind ? '' : undefined} data-print={`${kind}:printer`} onClick={() => print.run(kind, 'printer')}>
           {label(kind, 'printer')}
         </Button>
       ))}
-      {kinds.map((kind) => (
+      {ordered.map((kind) => (
         <Button key={`f-${kind}`} variant="secondary" disabled={print.busy !== null} data-print={`${kind}:pdf`} onClick={() => print.run(kind, 'pdf')}>
           {label(kind, 'pdf')}
         </Button>

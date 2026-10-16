@@ -87,10 +87,10 @@ function Screens({ api, state, bootError, refresh }: { api: Api; state: AppState
     );
   }
 
-  return <SignedIn api={api} user={state.user} shopName={shopName} deviceText={deviceText} onSignedOut={() => void refresh()} />;
+  return <SignedIn api={api} user={state.user} shopName={shopName} deviceText={deviceText} onSignedOut={() => void refresh()} onShopRenamed={() => void refresh()} />;
 }
 
-function SignedIn({ api, user, shopName, deviceText, onSignedOut }: { api: Api; user: SessionUser; shopName: string; deviceText: string; onSignedOut: () => void }) {
+function SignedIn({ api, user, shopName, deviceText, onSignedOut, onShopRenamed }: { api: Api; user: SessionUser; shopName: string; deviceText: string; onSignedOut: () => void; onShopRenamed: () => void }) {
   const signOut = () => void api.auth.logout().then(onSignedOut);
   return (
     <HashRouter>
@@ -98,7 +98,7 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut }: { api: Api; 
         <Route element={<AppShell shopName={shopName} deviceText={deviceText} user={user} onSignOut={signOut} />}>
           <Route index element={<Navigate to="/pos" replace />} />
           <Route path="/pos" element={<PosPage api={api} user={user} receiptActions={(sale, newSale) => (
-                  <PrintActions counter api={api} invoiceId={sale.invoice.id} kinds={['receipt']}>
+                  <PrintActions counter api={api} invoiceId={sale.invoice.id} kinds={['receipt', 'invoice']}>
                     {newSale}
                   </PrintActions>
                 )} />} />
@@ -108,7 +108,7 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut }: { api: Api; 
           <Route path="/products/:groupId/edit" element={<ProductFormPage api={api} user={user} />} />
           <Route path="/purchases" element={<PurchasesPage user={user} />} />
           <Route path="/purchases/receive" element={<ReceiveStockPage api={api} user={user} />} />
-          <Route path="/settings" element={<SettingsPage api={api} user={user} />} />
+          <Route path="/settings" element={<SettingsPage api={api} user={user} onShopRenamed={onShopRenamed} />} />
           {NAV_ITEMS.filter(({ key }) => key !== 'pos' && key !== 'invoices' && key !== 'products' && key !== 'purchases' && key !== 'settings').map(({ key, path }) => (
             <Route key={key} path={path} element={<PlaceholderPage page={key} />} />
           ))}

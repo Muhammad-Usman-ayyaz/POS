@@ -20,6 +20,8 @@ const Row = ({ label, children, strong }: { label: string; children: string; str
  */
 export function ReceiptDocument({ data, language }: { data: InvoiceDocumentData; language: DocumentLanguage }) {
   const t = LABELS[language];
+  // The owner's footer replaces the standard thank-you line when there is one. It is plain text (React escapes it), never markup.
+  const footer = data.shop.footer?.trim() ?? '';
   const address = addressText(data);
   const customer = customerText(data, language);
   const discount = totalDiscount(data);
@@ -99,7 +101,7 @@ export function ReceiptDocument({ data, language }: { data: InvoiceDocumentData;
       {invoice.due_date && invoice.on_khata > 0 && <Row label={t.payBy}>{formatDueDate(invoice.due_date)}</Row>}
       </div>
 
-      <footer className="thanks">{t.thanks}</footer>
+      <footer className="thanks">{footer ? <Mixed text={footer} language={language} /> : t.thanks}</footer>
     </div>
   );
 }

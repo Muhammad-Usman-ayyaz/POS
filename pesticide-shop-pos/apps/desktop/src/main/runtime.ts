@@ -459,10 +459,18 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       requireCapability(user, 'print.configure');
       const changes = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
       const s = services();
-      // The settings and their audit row are one transaction.
-      return setPrintConfig(db, s.scope, changes, (fields) =>
-        audit(s.repos, { userId: user.id, action: 'print_config_changed', table: 'settings', rowId: null, details: { fields } }),
-      );
+      // The settings and their audit rows are one transaction. Only a value that really changed is written and audited, one row per field
+      // (with the value before and after); a save that changes nothing writes nothing.
+      return setPrintConfig(db, s.scope, changes, (changed) => {
+        for (const c of changed)
+          audit(s.repos, {
+            userId: user.id,
+            action: 'print_config_changed',
+            table: c.field === 'shop_name' ? 'shops' : 'settings',
+            rowId: c.field === 'shop_name' ? s.scope.shop_id : null,
+            details: { field: c.field, from: c.from, to: c.to },
+          });
+      });
     },
 
     // Prints the document, or, when there is no printer or it fails, saves a PDF instead. That is a normal outcome (`fallback` says why), not an error.

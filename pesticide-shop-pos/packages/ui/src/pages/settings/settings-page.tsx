@@ -9,14 +9,14 @@ import { Select } from '../../components/ui/select.js';
 import { useI18n } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
 import { Seg } from './seg.js';
-import { buildSettingsRequest, draftFrom, type SettingsDraft } from './settings-state.js';
+import { buildSettingsRequest, draftFrom, FOOTER_MAX, SHOP_NAME_MAX, shopNameMissing, type SettingsDraft } from './settings-state.js';
 
 /**
  * Settings: the printer, the language of receipts and A4 invoices, and the shop header that is printed on them (`print:getConfig`,
  * `print:setConfig`). Owner only: staff get a calm message and no form, and nothing is asked of the shell for them.
  * Built from `docs/design/Settings.dc.html` (header, section list, the Shop details panels). Backup, staff and About are other phases and are not drawn.
  */
-export function SettingsPage({ api, user }: { api: Api; user: SessionUser }) {
+export function SettingsPage({ api, user, onShopRenamed }: { api: Api; user: SessionUser; onShopRenamed?: () => void }) {
   const { m } = useI18n();
   if (user.role !== 'owner') {
     return (
@@ -32,7 +32,7 @@ export function SettingsPage({ api, user }: { api: Api; user: SessionUser }) {
       </div>
     );
   }
-  return <OwnerSettings api={api} />;
+  return <OwnerSettings api={api} onShopRenamed={onShopRenamed} />;
 }
 
 function Header() {
@@ -53,7 +53,7 @@ const LABEL = 'mb-1.5 block text-xs font-bold uppercase tracking-[.05em] text-[#
 const PANEL = 'rounded-lg border border-[#E1DED3] bg-card px-5 py-[18px]';
 const INPUT = 'h-12 rounded-sm text-[15px]';
 
-function OwnerSettings({ api }: { api: Api }) {
+function OwnerSettings({ api, onShopRenamed }: { api: Api; onShopRenamed?: () => void }) {
   const { m } = useI18n();
   const s = m.settings;
   const toast = useToast();
@@ -79,9 +79,10 @@ function OwnerSettings({ api }: { api: Api }) {
 
   const request = useMemo(() => (saved && draft ? buildSettingsRequest(saved, draft) : {}), [saved, draft]);
   const changed = Object.keys(request).length > 0;
+  const nameMissing = draft !== null && shopNameMissing(draft);
 
   const submit = async () => {
-    if (!saved || !changed || saving) return;
+    if (!saved || !changed || saving || nameMissing) return;
     setSaving(true);
     setSaveError(null);
     try {
@@ -89,6 +90,8 @@ function OwnerSettings({ api }: { api: Api }) {
       setSaved(draftFrom(reply));
       setDraft(draftFrom(reply));
       toast.show({ tone: 'success', title: s.saved });
+      // the sidebar shows the shop name: ask the app for its state again right away
+      if ('shop_name' in request) onShopRenamed?.();
     } catch (error) {
       setSaveError(error);
     } finally {
@@ -97,6 +100,10 @@ function OwnerSettings({ api }: { api: Api }) {
   };
 
   const update = (patch: Partial<SettingsDraft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
+  const formatOptions = [
+    { value: '80mm' as const, label: s.format80 },
+    { value: 'a4' as const, label: s.formatA4 },
+  ];
   const langOptions = [
     { value: 'en' as const, label: s.english, lang: 'en' },
     { value: 'ur' as const, label: s.urdu, lang: 'ur' },
@@ -132,6 +139,13 @@ function OwnerSettings({ api }: { api: Api }) {
 
               <section className={cn(PANEL, 'grid grid-cols-1 gap-4 sm:grid-cols-2')}>
                 <div>
+                  <label htmlFor="shop-name" className={LABEL}>
+                    {s.shopName}
+                  </label>
+                  <Input id="shop-name" name="shopName" dir="auto" maxLength={SHOP_NAME_MAX} required invalid={nameMissing} value={draft.shopName} onChange={(e) => update({ shopName: e.target.value })} className={INPUT} />
+                  <p className="mt-1.5 text-sm text-muted">{s.shopNameHint}</p>
+                </div>
+                <div>
                   <label htmlFor="shop-name-ur" className={LABEL}>
                     {s.shopNameUr}
                   </label>
@@ -151,6 +165,16 @@ function OwnerSettings({ api }: { api: Api }) {
                   <Input id="address" name="address" dir="auto" maxLength={200} value={draft.address} onChange={(e) => update({ address: e.target.value })} className={INPUT} />
                   <p className="mt-1.5 text-sm text-muted">{s.addressHint}</p>
                 </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="receipt-footer" className={LABEL}>
+                    {s.receiptFooter}
+                  </label>
+                  <Input id="receipt-footer" name="receiptFooter" dir="auto" maxLength={FOOTER_MAX} placeholder={s.receiptFooterPlaceholder} value={draft.receiptFooter} onChange={(e) => update({ receiptFooter: e.target.value })} className={INPUT} aria-describedby="receipt-footer-hint" />
+                  <p id="receipt-footer-hint" className="mt-1.5 flex justify-between gap-4 text-sm text-muted">
+                    <span>{s.receiptFooterHint}</span>
+                    <span data-footer-count dir="ltr" className="num shrink-0">{s.receiptFooterCount(draft.receiptFooter.length, FOOTER_MAX)}</span>
+                  </p>
+                </div>
               </section>
 
               <section className={cn(PANEL, 'grid grid-cols-1 items-end gap-4 sm:grid-cols-2')}>
@@ -162,7 +186,12 @@ function OwnerSettings({ api }: { api: Api }) {
                   <span className={LABEL}>{s.invoiceLanguage}</span>
                   <Seg label={s.invoiceLanguage} value={draft.invoiceLanguage} options={langOptions} onChange={(v) => update({ invoiceLanguage: v })} />
                 </div>
-                <div className="sm:col-span-2">
+                <div>
+                  <span className={LABEL}>{s.printFormat}</span>
+                  <Seg label={s.printFormat} value={draft.printFormat} options={formatOptions} onChange={(v) => update({ printFormat: v })} />
+                  <p className="mt-1.5 text-sm text-muted">{s.printFormatHint}</p>
+                </div>
+                <div>
                   <label htmlFor="printer" className={LABEL}>
                     {s.printer}
                   </label>
@@ -181,7 +210,7 @@ function OwnerSettings({ api }: { api: Api }) {
 
               <div className="flex items-center justify-end gap-4">
                 {!changed && <p className="text-sm text-muted">{s.nothingChanged}</p>}
-                <Button type="submit" className="rounded-md px-[18px] text-[15px] font-bold shadow-none" disabled={!changed || saving}>
+                <Button type="submit" className="rounded-md px-[18px] text-[15px] font-bold shadow-none" disabled={!changed || saving || nameMissing}>
                   {saving ? s.saving : s.save}
                 </Button>
               </div>

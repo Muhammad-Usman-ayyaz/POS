@@ -159,13 +159,15 @@ export function copiesPrinted(db: Db, invoiceId: string, kind: DocumentKind): nu
 }
 
 const SETTING_KEYS = {
+  print_format: 'print.format',
+  receipt_footer: 'print.receipt_footer',
   printer_name: 'print.printer',
   receipt_language: 'print.receipt_language',
   invoice_language: 'print.invoice_language',
   shop_name_ur: 'shop.name_ur',
   shop_address: 'shop.address',
   shop_phone: 'shop.phone',
-} as const satisfies Record<keyof PrintConfig, string>;
+} as const satisfies Record<Exclude<keyof PrintConfig, 'shop_name'>, string>;
 const TIME_ZONE_KEY = 'shop.time_zone';
 
 function readSetting(db: Db, key: string): string | null {
@@ -187,9 +189,18 @@ function writeSetting(db: Db, scope: DeviceScope, key: string, value: string | n
 
 const asLanguage = (value: string | null, fallback: DocumentLanguage): DocumentLanguage => (value === 'en' || value === 'ur' ? value : fallback);
 
+/** The shop's English name: the `shops` row that first-launch setup made (the same name the sidebar shows). */
+function readShopName(db: Db): string {
+  const row = db.prepare('SELECT name FROM shops WHERE deleted_at IS NULL ORDER BY created_at, rowid LIMIT 1').get() as { name: string } | undefined;
+  return row?.name ?? '';
+}
+
 /** The print settings. Receipts and invoices are in English until the owner chooses; address and phone stay null (a marked placeholder) until given. */
 export function getPrintConfig(db: Db): PrintConfig {
   return {
+    shop_name: readShopName(db),
+    print_format: readSetting(db, SETTING_KEYS.print_format) === 'a4' ? 'a4' : '80mm',
+    receipt_footer: readSetting(db, SETTING_KEYS.receipt_footer) ?? '',
     printer_name: readSetting(db, SETTING_KEYS.printer_name),
     receipt_language: asLanguage(readSetting(db, SETTING_KEYS.receipt_language), 'en'),
     invoice_language: asLanguage(readSetting(db, SETTING_KEYS.invoice_language), 'en'),
@@ -199,19 +210,38 @@ export function getPrintConfig(db: Db): PrintConfig {
   };
 }
 
+/** One setting that really changed in a save, with the value before and after (null: not set). */
+export interface PrintConfigChange {
+  field: keyof PrintConfig;
+  from: string | null;
+  to: string | null;
+}
+
+const asValue = (v: string | null | undefined): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+
 /**
- * Changes only the fields given. null (or an empty text) clears a field. Returns the settings as they are now.
- * `audit` runs inside the same transaction, after the settings are written, with the fields changed: if it throws, the settings roll back too.
+ * Changes only the fields given AND different from what is saved: a field sent with its current value is not written and not audited.
+ * null (or an empty text) clears a field (the shop name cannot be cleared). Returns the settings as they are now.
+ * `audit` runs inside the same transaction, after the settings are written, with the fields that changed: if it throws, the settings roll back too.
+ * It is not called at all when nothing changed.
  */
-export function setPrintConfig(db: Db, scope: DeviceScope, changes: Partial<PrintConfig>, audit?: (fields: string[]) => void): PrintConfig {
+export function setPrintConfig(db: Db, scope: DeviceScope, changes: Partial<PrintConfig>, audit?: (changed: PrintConfigChange[]) => void): PrintConfig {
   db.transaction(() => {
-    for (const key of Object.keys(SETTING_KEYS) as (keyof PrintConfig)[]) {
-      if (!(key in changes)) continue;
-      const raw = changes[key];
-      const value = typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : null;
-      writeSetting(db, scope, SETTING_KEYS[key], value);
+    const before = getPrintConfig(db);
+    const changed: PrintConfigChange[] = [];
+    for (const key of Object.keys(changes) as (keyof PrintConfig)[]) {
+      const value = asValue(changes[key]);
+      const current = asValue(before[key]);
+      if (value === current) continue;
+      if (key === 'shop_name') {
+        if (value === null) throw new Error('the shop name cannot be empty');
+        db.prepare('UPDATE shops SET name = ? WHERE id = ?').run(value, scope.shop_id);
+      } else {
+        writeSetting(db, scope, SETTING_KEYS[key], value);
+      }
+      changed.push({ field: key, from: current, to: value });
     }
-    audit?.(Object.keys(changes));
+    if (changed.length > 0) audit?.(changed);
   }).immediate();
   return getPrintConfig(db);
 }
@@ -220,13 +250,12 @@ export function setPrintConfig(db: Db, scope: DeviceScope, changes: Partial<Prin
 export function invoiceDocumentData(db: Db, invoiceId: string, kind: DocumentKind): InvoiceDocumentData | undefined {
   const detail = getInvoiceDetail(db, invoiceId);
   if (!detail) return undefined;
-  const shopRow = db.prepare('SELECT name FROM shops WHERE deleted_at IS NULL ORDER BY created_at, rowid LIMIT 1').get() as { name: string } | undefined;
   const config = getPrintConfig(db);
   const copies = copiesPrinted(db, invoiceId, kind);
   return {
     ...detail,
     kind,
-    shop: { name: shopRow?.name ?? '', name_ur: config.shop_name_ur, address: config.shop_address, phone: config.shop_phone },
+    shop: { name: config.shop_name, name_ur: config.shop_name_ur, address: config.shop_address, phone: config.shop_phone, footer: config.receipt_footer || null },
     balance_as_of_sale: balanceAsOfSale(db, invoiceId),
     copies_printed: copies,
     is_copy: copies > 0,
