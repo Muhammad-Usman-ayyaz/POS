@@ -199,7 +199,7 @@ export function PaymentPanel({
           </div>
           <label className="flex items-center justify-between gap-2 text-[13px]">
             <span>{t.payBy}</span>
-            <DateField name="due_date" min={today} value={dueDate} onChange={onDueDate} className="h-11 w-[136px] rounded-[8px] border-warn-line text-sm text-ink" />
+            <DateField name="due_date" min={today} value={dueDate} onChange={onDueDate} className="h-11 w-[160px] rounded-[8px] border-warn-line text-sm text-ink" />
           </label>
         </div>
       )}
