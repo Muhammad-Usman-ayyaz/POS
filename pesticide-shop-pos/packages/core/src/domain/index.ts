@@ -4,3 +4,4 @@ export * from './returns.js';
 export * from './khata.js';
 export * from './catalogue.js';
 export * from './documents.js';
+export * from './held-bills.js';

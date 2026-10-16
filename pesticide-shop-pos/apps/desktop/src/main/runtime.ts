@@ -25,9 +25,13 @@ import {
   findUserForLogin,
   firstLaunchSetup,
   hasInvoiceForRequest,
+  holdBill,
   invoiceDocumentData,
   isSetupDone,
+  listHeldBills,
   listInvoices,
+  resumeHeldBill,
+  discardHeldBill,
   loadDeviceInfo,
   migrate,
   openDatabase,
@@ -627,6 +631,35 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       const user = session.require();
       requireCapability(user, 'profit.view');
       return profitByDay(db, from, to);
+    },
+
+    // ---------- held bills: any signed-in user; the holder is the session user, never something the request says ----------
+    'bills:hold': async (input) => {
+      const user = session.require();
+      const s = services();
+      const id = ids.newId();
+      holdBill(db, s.scope, { id, heldBy: user.id, cart: input }, () =>
+        audit(s.repos, { userId: user.id, action: 'bill_held', table: 'held_bills', rowId: id, details: { lines: input.lines.length } }),
+      );
+      return { id };
+    },
+
+    'bills:list': async () => {
+      session.require();
+      return listHeldBills(db);
+    },
+
+    'bills:resume': async ({ id }) => {
+      const user = session.require();
+      const s = services();
+      return resumeHeldBill(db, id, user.id, () => audit(s.repos, { userId: user.id, action: 'bill_resumed', table: 'held_bills', rowId: id, details: {} }));
+    },
+
+    'bills:discard': async ({ id }) => {
+      const user = session.require();
+      const s = services();
+      discardHeldBill(db, id, user.id, () => audit(s.repos, { userId: user.id, action: 'bill_discarded', table: 'held_bills', rowId: id, details: {} }));
+      return null;
     },
   };
 

@@ -105,6 +105,13 @@ export const CHANNEL_POLICY = {
 
   'khata:setOpeningBalance': { capability: 'khata.openingBalance' },
   'reports:profitByDay': { capability: 'profit.view' },
+
+  // Held bills: a draft of a cart, with no price and no cost in it. Staff and owner share one counter, so either may hold, list, resume or
+  // discard any held bill; the list says who held each one.
+  'bills:hold': 'signed-in',
+  'bills:list': 'signed-in',
+  'bills:resume': 'signed-in',
+  'bills:discard': 'signed-in',
 } as const satisfies Record<Channel, ChannelPolicy>;
 
 /** Throws NOT_SIGNED_IN or NOT_AUTHORIZED unless this user may call the channel. */

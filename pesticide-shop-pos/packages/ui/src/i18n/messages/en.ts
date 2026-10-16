@@ -515,7 +515,7 @@ export const en = {
       walkIn: 'Walk-in',
       replaceTitle: 'Replace the current bill?',
       replaceBody: 'The bill on the screen has items. Hold it first, or clear it, then resume.',
-      localNote: 'Held bills are kept on this computer only.',
+      localNote: 'Held bills are saved in the shop database, so they are still here after the app is closed. Anyone signed in can resume them.',
     },
 
     resumed: {

@@ -21,9 +21,9 @@ export function HeldBillsDialog({ bills, onResume, onDiscard, onClose }: { bills
         {bills.map((b) => (
           <li key={b.id} data-held={b.id} className="flex min-h-16 items-center justify-between gap-2.5 rounded-md border border-row-line px-3 py-2.5">
             <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">{b.customer ? pickName(b.customer.nameEn, b.customer.nameUr, language) : t.walkIn}</p>
+              <p className="truncate font-semibold">{b.customer ? pickName(b.customer.name_en, b.customer.name_ur, language) : t.walkIn}</p>
               <p className="truncate text-[13px] text-muted">
-                {t.items(b.lines.length)} · {t.heldBy(b.heldByName, isolate(time(b.heldAt), language))}
+                {t.items(b.line_count)} · {t.heldBy(b.held_by_name, isolate(time(b.held_at), language))}
               </p>
             </div>
             <div className="flex gap-2">

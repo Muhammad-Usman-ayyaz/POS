@@ -10,6 +10,7 @@ export * from './setup.js';
 export * from './catalog.js';
 export * from './purchasing.js';
 export * from './sales.js';
+export * from './held-cart.js';
 export * from './ledger.js';
 export * from './system.js';
 
