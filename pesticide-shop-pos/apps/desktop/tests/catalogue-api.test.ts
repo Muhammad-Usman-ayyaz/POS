@@ -56,6 +56,11 @@ const EXPECTED: Record<Channel, Who> = {
   'brands:create': 'owner',
   'khata:setOpeningBalance': 'owner',
   'reports:profitByDay': 'owner',
+  // held bills: owner AND staff share the counter, so any signed-in user
+  'bills:hold': 'signed-in',
+  'bills:list': 'signed-in',
+  'bills:resume': 'signed-in',
+  'bills:discard': 'signed-in',
 };
 
 const OWNER_USER: SessionUser = { id: randomUUID(), name: 'Owner', username: 'owner', role: 'owner' };
@@ -105,6 +110,10 @@ const SAMPLES: Record<Channel, () => Record<string, unknown>> = {
   'brands:create': () => ({ name_en: 'Brand' }),
   'khata:setOpeningBalance': () => ({ customer_id: randomUUID(), amount: 100 }),
   'reports:profitByDay': () => ({ from: '2026-10-01', to: '2026-10-31' }),
+  'bills:hold': () => ({ lines: [{ product_id: randomUUID(), qty: 1000 }] }),
+  'bills:list': () => ({}),
+  'bills:resume': () => ({ id: randomUUID() }),
+  'bills:discard': () => ({ id: randomUUID() }),
 };
 
 /** A stand-in for Electron's ipcMain: calls arrive the way the renderer's would. */
@@ -430,8 +439,15 @@ describe('with a real shop', () => {
       await shop.signInAs('staff');
       const ipc = fakeIpc();
       registerIpc(ipc.ipcMain, shop.runtime.handlers, () => true, () => undefined);
+      // Two bills held by staff, for the held-bills channels to list, resume and discard (the owner's cost is in the database all the same).
+      const toResume = await h()['bills:hold']({ customer_id: shop.demo.customers['rashid']!, lines: [{ product_id: five.id, qty: 500, discount: { kind: 'amount', value: 100 } }] });
+      const toDiscard = await h()['bills:hold']({ lines: [{ product_id: one.id, qty: 1000 }] });
 
       const real: Partial<Record<Channel, object[]>> = {
+        'bills:hold': [{ lines: [{ product_id: five.id, qty: 500 }] }, { price_type: 'wholesale', note: 'x', lines: [{ product_id: one.id, qty: 1000 }] }],
+        'bills:list': [{}],
+        'bills:resume': [{ id: toResume.id }, { id: toResume.id }], // the second one is HELD_BILL_GONE: errors are scanned too
+        'bills:discard': [{ id: toDiscard.id }],
         'catalogue:list': [{}, { query: 'booster' }, { filter: 'low' }, { include_inactive: true, limit: 5 }],
         'invoices:list': [{}, { query: 'rashid' }, { query: 'INV' }, { status: 'active', limit: 5 }, { customer_id: shop.demo.customers['rashid']! }],
         'invoices:get': [{ invoice_id: invoiceId }],
@@ -471,7 +487,7 @@ describe('with a real shop', () => {
       const found = replies.flatMap((r, i) => leaks(r).map((l) => `reply #${i} ${JSON.stringify(r).slice(0, 120)} -> ${l}`));
       expect(found).toEqual([]);
       // The calls were real, as STAFF: these channels really answered with data (not NOT_SIGNED_IN, not INVALID_INPUT), so a clean scan means something.
-      for (const channel of ['catalogue:list', 'stock:batchesOf', 'sale:create', 'invoices:list', 'invoices:get', 'invoices:receipt', 'print:document', 'printers:list', 'print:getConfig'] as const) {
+      for (const channel of ['catalogue:list', 'stock:batchesOf', 'sale:create', 'invoices:list', 'invoices:get', 'invoices:receipt', 'print:document', 'printers:list', 'print:getConfig', 'bills:hold', 'bills:list', 'bills:resume', 'bills:discard'] as const) {
         expect(succeeded.has(channel), `${channel} never succeeded for staff`).toBe(true);
       }
       expect(succeeded.has('print:setConfig')).toBe(false); // owner-only: staff only ever got the refusal
