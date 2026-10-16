@@ -37,7 +37,7 @@ For each rule below, search the changed code and report violations as `file:line
    If a service decides something the docs do not specify (a new business rule), it is not a violation, but list it under "Assumptions to confirm with the owner" so it is not forgotten. CLAUDE.md says to ask before inventing a business rule.
 
 ## Step 3: run the tests
-From the repository root, run `npm test`, `npm run typecheck` and `npm run test:schema` (the last needs Python 3 and checks the 39 schema rules). Report each result with the pass and fail counts. If anything fails, quote the failing test names and the first useful lines of the error. Do not fix anything. If a command cannot run, say why instead of guessing.
+From the repository root, run `npm test`, `npm run typecheck` and `npm run test:schema` (the last needs Python 3 and runs the schema checks: 95 checks at the end of Phase 5, so read the count from the output instead of trusting a number written here). Report each result with the pass and fail counts. If anything fails, quote the failing test names and the first useful lines of the error. Do not fix anything. If a command cannot run, say why instead of guessing.
 
 ## Report format
 Start with one line: `PASS` (no violations) or `FAIL (n violations)`. Then:
@@ -46,3 +46,9 @@ Start with one line: `PASS` (no violations) or `FAIL (n violations)`. Then:
 3. **Tests**: the three commands, each with result and counts.
 4. **Checked and clean**: one line per rule with no findings, so the reader knows it was checked.
 Be specific and short. Do not praise. Do not list a finding you cannot point to a line for.
+
+## Earlier findings (all fixed in Phase 5; check that they stay fixed)
+1. `packages/db-sqlite/src/documents.ts` `writeSetting`: app code set `deleted_at = NULL` to revive a soft-deleted setting (rule 5). It now only updates `value` and throws if the row is soft-deleted.
+2. `setPrintConfig` and the `print_config_changed` audit row were two transactions (rule 7). The audit row is now written by a callback inside the same `.immediate()` transaction as the settings.
+3. `sale:create` in `apps/desktop/src/main/runtime.ts` wrote the `approval_used` audit row after `sale.create` had committed (rule 7). `SaleInput.approval_used` now carries it and `sale.create` writes it inside its own unit of work.
+Audit actions written by app code: `invoice_printed`, `print_config_changed`, `approval_used` (see `docs/database-rules.md`).
