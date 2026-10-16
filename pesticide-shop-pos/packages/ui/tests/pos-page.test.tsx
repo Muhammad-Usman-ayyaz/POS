@@ -1098,11 +1098,11 @@ describe('design: the pay-by date reads "30 Nov 2026", in both languages, never 
 
   it.each(['en', 'ur'] as const)('%s: the box shows the date 30 days from today as "11 Nov 2026" and a chosen date as "30 Nov 2026"', async (language) => {
     const shell = await khataBill(language);
-    const box = document.querySelector('[data-khata] [data-date-field]')!;
-    expect(box.textContent).toBe('11 Nov 2026'); // today (2026-10-12 in the quote) + 30 days
-    expect(box.textContent).not.toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
-    fireEvent.change(document.querySelector('[name=due_date]')!, { target: { value: '2026-11-30' } });
-    await waitFor(() => expect(box.textContent).toBe('30 Nov 2026'));
+    const box = document.querySelector<HTMLInputElement>('[data-khata] [name=due_date]')!;
+    expect(box.value).toBe('11 Nov 2026'); // today (2026-10-12 in the quote) + 30 days
+    expect(box.value).not.toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
+    fireEvent.change(box, { target: { value: '30 Nov 2026' } });
+    await waitFor(() => expect(box.value).toBe('30 Nov 2026'));
     await waitFor(() => expect(shell.of('sale:quote').at(-1)!.input.due_date).toBe('2026-11-30')); // the request still carries YYYY-MM-DD
   });
 });

@@ -499,11 +499,11 @@ describe('Invoices: dates that read the same in English and Urdu (docs/design: "
       show(shell, STAFF, language);
       await loaded();
       const from = screen.getByLabelText(T2.from) as HTMLInputElement;
-      const box = from.closest('[data-date-field]')!;
-      expect(box.textContent).toBe(T2.anyDate);
-      fireEvent.change(from, { target: { value: '2026-12-05' } });
-      await waitFor(() => expect(box.textContent).toBe('5 Dec 2026'));
-      expect(box.textContent).not.toMatch(/\d{1,2}\/\d{1,2}\/\d{4}|mm|yyyy/i);
+      expect(from.placeholder).toBe(T2.anyDate);
+      expect(from.value).toBe('');
+      fireEvent.change(from, { target: { value: '5 Dec 2026' } });
+      await waitFor(() => expect(from.value).toBe('5 Dec 2026'));
+      expect(from.value).not.toMatch(/\d{1,2}\/\d{1,2}\/\d{4}|mm|yyyy/i);
       await waitFor(() => expect(shell.lists().at(-1)!.input).toMatchObject({ from: expect.stringContaining('2026-12-05') }));
       cleanup();
     }

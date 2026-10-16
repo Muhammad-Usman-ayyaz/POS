@@ -2,9 +2,11 @@
 // Receive stock, driven the way the owner drives it, against a fake API built with the real client code.
 import { buildApi, type Channel, type Language, type SessionUser } from '@pos/api-contract';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider, ToastProvider } from '../src/index.js';
+import { formatDate } from '../src/i18n/format.js';
 import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
 import { PurchasesPage } from '../src/pages/purchases/purchases-page.js';
@@ -150,7 +152,7 @@ describe('the header', () => {
     await ready();
     expect(screen.getByLabelText(f.supplier)).toBeTruthy();
     expect(screen.getByLabelText(f.invoiceNo)).toBeTruthy();
-    expect((screen.getByLabelText(f.dateReceived) as HTMLInputElement).value).toBe(today);
+    expect((screen.getByLabelText(f.dateReceived) as HTMLInputElement).value).toBe(formatDate(today)); // "16 Oct 2026", never mm/dd/yyyy
   });
 
   it('adds a supplier inside the form and selects it (owner only screen)', async () => {
@@ -423,7 +425,7 @@ describe('a batch number that already exists for the size', () => {
   it('"Use existing expiry" puts the EXISTING date in the field (not what was typed), and that is what is sent', async () => {
     const shell = await clashOn500({ expiry: '2027-06-30', cost: '215' });
     fireEvent.click(within(await waitFor(() => panel())).getByRole('button', { name: 'Use expiry 12 Mar 2027' }));
-    expect(lineField(1, 'expiry').value).toBe('2027-03-12');
+    expect(lineField(1, 'expiry').value).toBe('12 Mar 2027');
     expect(screen.queryByRole('group')).toBeNull();
     await waitFor(() => expect(receiveButton().disabled).toBe(false));
     fireEvent.click(receiveButton());
@@ -618,7 +620,7 @@ describe('Urdu and right to left', () => {
     await ready(fakeShell(), OWNER, 'ur');
     const received = screen.getByLabelText(ur.receive.dateReceived) as HTMLInputElement;
     expect(received.getAttribute('dir')).toBe('ltr');
-    expect(received.max).toBe(today);
+    expect(received.closest('[data-date-field]')!.querySelector<HTMLInputElement>('input[type=date]')!.max).toBe(today); // the calendar stops at today
     fireEvent.click(screen.getByRole('button', { name: ur.receive.addLine }));
     set(screen.getByRole('searchbox', { name: ur.receive.searchLabel }), 'insect');
     fireEvent.click(await within(await screen.findByRole('list')).findByRole('button', { name: /1 L$/ }));
@@ -690,5 +692,115 @@ describe('touch size and motion', () => {
     for (const style of styled) expect(style).not.toMatch(/animation|transition/);
     const classes = [...document.querySelectorAll('[class]')].map((e) => e.getAttribute('class') ?? '').join(' ');
     expect(classes).not.toMatch(/\banimate-|\bduration-|\btransition\b/);
+  });
+});
+
+// ---------- typed dates (no ambiguous date: "12 Oct 2026", never mm/dd/yyyy) ----------
+
+describe('dates are written "12 Oct 2026" and read strictly', () => {
+  const typeDate = async (el: HTMLElement, text: string) => {
+    const user = userEvent.setup();
+    await user.clear(el);
+    await user.type(el, text);
+  };
+
+  it('typing "30-jun-2027" as the expiry and a written received date sends YYYY-MM-DD', async () => {
+    const shell = await ready();
+    const received = formatDate(daysAgo(3));
+    set(screen.getByLabelText(f.supplier), 's1');
+    await fillLine(1, 'insect', '1 L', { batch: 'B-020', expiry: '', packs: '2', cost: '400' });
+    await typeDate(lineField(1, 'expiry'), '30-jun-2027');
+    await typeDate(screen.getByLabelText(f.dateReceived), received);
+    await waitFor(() => expect(receiveButton().disabled).toBe(false));
+    fireEvent.click(receiveButton());
+    await screen.findByText('the product list');
+    expect(shell.receives()[0]!.input).toMatchObject({ purchase_date: daysAgo(3), items: [{ expiry_date: '2027-06-30' }] });
+  });
+
+  it('the ISO form is accepted as well, and tidied to "12 Mar 2027" when the box is left', async () => {
+    await ready();
+    set(screen.getByLabelText(f.supplier), 's1');
+    await fillLine(1, 'insect', '1 L', { batch: 'B-020', expiry: '', packs: '2', cost: '400' });
+    await typeDate(lineField(1, 'expiry'), '2027-03-12');
+    await userEvent.setup().tab();
+    expect(lineField(1, 'expiry').value).toBe('12 Mar 2027');
+  });
+
+  it.each(['en', 'ur'] as const)('%s: "05/10/2026" as the expiry shows the format message on the line, keeps Receive off and sends nothing', async (language) => {
+    const shell = await ready(fakeShell(), OWNER, language);
+    const t = language === 'ur' ? ur : en;
+    set(screen.getByLabelText(t.receive.supplier), 's1');
+    fireEvent.click(screen.getByRole('button', { name: t.receive.addLine }));
+    set(screen.getByRole('searchbox', { name: t.receive.searchLabel }), 'insect');
+    fireEvent.click(await within(await screen.findByRole('list')).findByRole('button', { name: /1 L$/ }));
+    await waitFor(() => expect(document.querySelectorAll('[data-line]')).toHaveLength(1));
+    set(lineField(1, 'batchNo'), 'B-020');
+    set(lineField(1, 'packs'), '2');
+    set(lineField(1, 'cost'), '400');
+    await typeDate(lineField(1, 'expiry'), '05/10/2026');
+    await userEvent.setup().tab();
+    const alert = within(lineOf(1)).getByRole('alert');
+    expect(alert.textContent).toBe(t.dateField.format(language === 'ur' ? '⁦12 Oct 2026⁩' : '12 Oct 2026'));
+    if (language === 'en') expect(alert.textContent).toBe('Write the date like 12 Oct 2026');
+    expect(within(lineOf(1)).queryByText(t.receive.problems.expiryInvalid)).toBeNull(); // one message, not two
+    expect(lineField(1, 'expiry').getAttribute('aria-invalid')).toBe('true');
+    expect((screen.getByRole('button', { name: t.receive.receive }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.submit(document.querySelector('form')!);
+    expect(shell.receives()).toHaveLength(0);
+    // writing it properly lets the form go
+    await typeDate(lineField(1, 'expiry'), '5 Oct 2027');
+    await waitFor(() => expect((screen.getByRole('button', { name: t.receive.receive }) as HTMLButtonElement).disabled).toBe(false));
+    expect(within(lineOf(1)).queryByRole('alert')).toBeNull();
+  });
+
+  it('"05/10/2026" as the date received is refused the same way, and the old date is NOT kept and sent', async () => {
+    const shell = await ready();
+    set(screen.getByLabelText(f.supplier), 's1');
+    await fillLine(1, 'insect', '1 L', { batch: 'B-020', expiry: '2027-05-01', packs: '2', cost: '400' });
+    await waitFor(() => expect(receiveButton().disabled).toBe(false));
+    await typeDate(screen.getByLabelText(f.dateReceived), '05/10/2026');
+    await userEvent.setup().tab();
+    expect(screen.getByText('Write the date like 12 Oct 2026')).toBeTruthy();
+    expect(screen.queryByText(f.problems.dateInvalid)).toBeNull();
+    expect(receiveButton().disabled).toBe(true);
+    fireEvent.submit(document.querySelector('form')!);
+    expect(shell.receives()).toHaveLength(0);
+  });
+
+  it('31 Feb as the date received is refused with its own message and does not roll over to March', async () => {
+    const shell = await ready();
+    set(screen.getByLabelText(f.supplier), 's1');
+    await fillLine(1, 'insect', '1 L', { batch: 'B-020', expiry: '2027-05-01', packs: '2', cost: '400' });
+    await typeDate(screen.getByLabelText(f.dateReceived), '31 Feb 2026');
+    await userEvent.setup().tab();
+    expect(screen.getByText(en.dateField.impossible('12 Oct 2026'))).toBeTruthy();
+    fireEvent.submit(document.querySelector('form')!);
+    expect(shell.receives()).toHaveLength(0);
+  });
+
+  it('a typed date more than 30 days ago still asks "Save anyway?" and then sends the confirmation with the ISO date', async () => {
+    let first = true;
+    const shell = fakeShell({ override: { 'stock:receive': () => (first ? ((first = false), fail('RECEIPT_DATE_OLD', { date: daysAgo(45), today, days: 45 })) : { ok: true, data: { purchase_id: 'p', total: 80_000, batch_ids: [] } }) } });
+    await ready(shell);
+    set(screen.getByLabelText(f.supplier), 's1');
+    await typeDate(screen.getByLabelText(f.dateReceived), formatDate(daysAgo(45)));
+    await fillLine(1, 'insect', '1 L', { batch: 'B-050', expiry: '2027-05-01', packs: '2', cost: '400' });
+    await waitFor(() => expect(receiveButton().disabled).toBe(false));
+    fireEvent.click(receiveButton());
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'This receipt is dated 45 days ago' })).getByRole('button', { name: 'Save anyway' }));
+    await screen.findByText('the product list');
+    expect(shell.receives()[1]!.input).toMatchObject({ purchase_date: daysAgo(45), confirm_old_date: true });
+  });
+
+  it('the calendar still works: a day picked there fills the box as "12 Mar 2027" and is sent as 2027-03-12', async () => {
+    const shell = await ready();
+    set(screen.getByLabelText(f.supplier), 's1');
+    await fillLine(1, 'insect', '1 L', { batch: 'B-020', expiry: '', packs: '2', cost: '400' });
+    fireEvent.change(lineOf(1).querySelector<HTMLInputElement>('input[type=date]')!, { target: { value: '2027-03-12' } });
+    expect(lineField(1, 'expiry').value).toBe('12 Mar 2027');
+    await waitFor(() => expect(receiveButton().disabled).toBe(false));
+    fireEvent.click(receiveButton());
+    await screen.findByText('the product list');
+    expect(shell.receives()[0]!.input).toMatchObject({ items: [{ expiry_date: '2027-03-12' }] });
   });
 });
