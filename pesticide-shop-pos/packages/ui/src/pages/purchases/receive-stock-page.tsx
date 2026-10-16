@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { ErrorNotice, useToast } from '../../components/feedback.js';
 import { Button } from '../../components/ui/button.js';
+import { DateField } from '../../components/ui/date-field.js';
 import { Dialog } from '../../components/ui/dialog.js';
 import { Input } from '../../components/ui/input.js';
 import { formatMoney, useI18n } from '../../i18n/index.js';
@@ -47,6 +48,7 @@ function OwnerReceive({ api }: { api: Api }) {
   const [supplierId, setSupplierId] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [date, setDate] = useState(today);
+  const [dateNotADate, setDateNotADate] = useState(false); // the box holds text that is not a date: DateField says so itself
   const [lines, setLines] = useState<LineDraft[]>([]);
   const [batches, setBatches] = useState<Record<string, ExistingBatch[]>>({});
   const [batchError, setBatchError] = useState<unknown>(null);
@@ -195,8 +197,20 @@ function OwnerReceive({ api }: { api: Api }) {
             <label htmlFor="date-received" className="block text-xs font-bold uppercase tracking-wider text-muted">
               {f.dateReceived}
             </label>
-            <Input id="date-received" ref={dateRef} type="date" dir="ltr" max={today} value={date} invalid={dateProblem !== null} aria-describedby={dateProblem ? 'date-received-error' : undefined} onChange={(e) => setDate(e.target.value)} className="num" />
-            {dateProblem && (
+            <DateField
+              id="date-received"
+              name="date_received"
+              ref={dateRef}
+              max={today}
+              value={date}
+              onChange={setDate}
+              onTextInvalid={setDateNotADate}
+              invalid={dateProblem !== null}
+              aria-describedby={dateProblem && !dateNotADate ? 'date-received-error' : undefined}
+              wrapperClassName="w-full"
+              className="h-14 w-full rounded-lg border-field-line px-4 text-lg font-normal text-ink [@media(max-height:800px)]:h-12"
+            />
+            {dateProblem && !dateNotADate && (
               <p id="date-received-error" role="alert" className="text-sm font-medium text-danger-ink">
                 {f.problems[dateProblem]}
               </p>

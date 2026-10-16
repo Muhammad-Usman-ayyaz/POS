@@ -553,6 +553,14 @@ export const en = {
     codeFormat: 'The code has 20 letters and numbers',
   },
 
+  /** Typed dates (components/ui/date-field.tsx). The example is always written the same way in both languages. */
+  dateField: {
+    format: (example: string) => `Write the date like ${example}`,
+    impossible: (example: string) => `That date does not exist. Write it like ${example}`,
+    year: (min: number, max: number) => `The year must be between ${min} and ${max}`,
+    openCalendar: 'Open the calendar',
+  },
+
   toast: { close: 'Close' },
 };
 

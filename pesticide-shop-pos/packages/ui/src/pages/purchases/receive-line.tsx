@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../components/ui/button.js';
+import { DateField } from '../../components/ui/date-field.js';
 import { Input } from '../../components/ui/input.js';
 import { Badge } from '../../components/ui/primitives.js';
 import { errorText, formatDate, formatMoney, ltr, useI18n } from '../../i18n/index.js';
@@ -34,6 +35,7 @@ export function ReceiveLine({ line, clash, touched, hinted, onChange, onTouch, o
   const shown = (field: LineField) => (touched.has(`${line.key}.${field}`) ? problems[field] : undefined);
   const name = (language === 'ur' ? (line.nameUr ?? line.nameEn) : (line.nameEn ?? line.nameUr)) ?? '';
   const flagged = clash !== null;
+  const [expiryNotADate, setExpiryNotADate] = useState(false); // the box holds text that is not a date: DateField says so itself
   // When a clash appears, bring it into view: the totals bar at the bottom of the screen can cover it.
   const panel = useRef<HTMLDivElement>(null);
   const hasClash = clash !== null;
@@ -48,7 +50,7 @@ export function ReceiveLine({ line, clash, touched, hinted, onChange, onTouch, o
         {`${label} · ${name} ${line.label}`.trim()}
       </label>
       {input}
-      {shown(key) ? (
+      {shown(key) && !(key === 'expiry' && expiryNotADate) ? (
         <p id={`${id(key)}-error`} role="alert" className="text-sm font-medium text-danger-ink">
           {f.problems[shown(key)!]}
         </p>
@@ -79,7 +81,18 @@ export function ReceiveLine({ line, clash, touched, hinted, onChange, onTouch, o
         {field(
           'expiry',
           f.columns.expiry,
-          <Input id={id('expiry')} name="expiry" type="date" dir="ltr" value={line.expiry} invalid={!!shown('expiry')} onBlur={() => onTouch('expiry')} onChange={(e) => onChange({ expiry: e.target.value })} className={cn('num', inputClass(!!shown('expiry')))} />,
+          <DateField
+            id={id('expiry')}
+            name="expiry"
+            value={line.expiry}
+            invalid={!!shown('expiry')}
+            aria-describedby={shown('expiry') && !expiryNotADate ? `${id('expiry')}-error` : undefined}
+            onBlur={() => onTouch('expiry')}
+            onChange={(expiry) => onChange({ expiry })}
+            onTextInvalid={setExpiryNotADate}
+            wrapperClassName="w-full"
+            className={cn('h-14 w-full rounded-lg border-field-line px-4 text-lg font-normal text-ink [@media(max-height:800px)]:h-12', flagged && 'border-warn-ink/50 bg-warn-bg/40')}
+          />,
         )}
 
         {field(

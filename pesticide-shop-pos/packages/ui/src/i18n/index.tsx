@@ -5,6 +5,7 @@ import { ur } from './messages/ur.js';
 
 export { describeError, errorCodes, errorText, type ErrorText } from './errors.js';
 export { formatDate, formatMoney, formatQty, ltr } from './format.js';
+export { MAX_YEAR, MIN_YEAR, parseDateText, type DateParse } from './parse-date.js';
 export type { Messages } from './messages/en.js';
 
 export const MESSAGES: Record<Language, Messages> = { en, ur };
