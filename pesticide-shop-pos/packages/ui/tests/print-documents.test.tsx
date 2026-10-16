@@ -178,6 +178,114 @@ describe('Latin words inside Urdu text', () => {
   });
 });
 
+describe('the COPY and VOIDED marks (both papers, both languages)', () => {
+  const papers = [
+    ['receipt', (d: InvoiceDocumentData) => d],
+    ['A4 invoice', asInvoice],
+  ] as const;
+
+  it.each(papers)('%s: the English mark is exactly "COPY"; the Urdu one is "COPY · نقل" in full, in its own mark', (_paper, make) => {
+    const en = renderDocumentMarkup(make(sale({ is_copy: true, copies_printed: 1 })), 'en');
+    expect(en).toContain('<div class="copy-mark">COPY</div>');
+    expect(en).not.toContain('نقل');
+    const ur = renderDocumentMarkup(make(sale({ is_copy: true, copies_printed: 1 })), 'ur');
+    expect(ur).toContain('<div class="copy-mark">COPY · نقل</div>');
+    expect(text(ur)).toContain('COPY · نقل');
+    expect(renderDocumentMarkup(make(sale({ is_copy: false })), 'ur')).not.toContain('نقل');
+  });
+
+  it.each(papers)('%s: a voided invoice says VOIDED (English) or منسوخ (Urdu) in a mark, and an active one never does', (_paper, make) => {
+    const voided = (over: Partial<InvoiceDocumentData['invoice']> = {}) => sale({ invoice: { ...sale().invoice, status: 'voided', ...over } });
+    expect(renderDocumentMarkup(make(voided()), 'en')).toContain('<div class="copy-mark">VOIDED</div>');
+    expect(renderDocumentMarkup(make(voided()), 'ur')).toContain('<div class="copy-mark">منسوخ</div>');
+    expect(renderDocumentMarkup(make(sale()), 'en')).not.toContain('VOIDED');
+    expect(renderDocumentMarkup(make(sale()), 'ur')).not.toContain('منسوخ');
+    // a voided COPY carries both marks
+    const both = renderDocumentMarkup(make({ ...voided(), is_copy: true }), 'en');
+    expect(both).toContain('COPY');
+    expect(both).toContain('VOIDED');
+  });
+});
+
+describe('rows that appear only when they apply', () => {
+  const papers = [
+    ['receipt', (d: InvoiceDocumentData) => d],
+    ['A4 invoice', asInvoice],
+  ] as const;
+  const noTax = (): InvoiceDocumentData => sale({ invoice: { ...sale().invoice, tax_total: 0 }, lines: sale().lines.map((l) => ({ ...l, tax_amount: 0 })) });
+
+  // docs/design/Receipts80.dc.html only shows "Includes tax" on a sale that has tax (Rs 91). With no tax in the sale a row saying "Includes tax Rs 0" would be noise,
+  // so the row is left out (as on the A4 page).
+  it.each(papers)('%s: "Includes tax" shows with tax in the sale and is left out at zero tax (English and Urdu)', (_paper, make) => {
+    expect(text(renderDocumentMarkup(make(sale()), 'en'))).toContain('Includes tax Rs 91');
+    expect(text(renderDocumentMarkup(make(sale()), 'ur'))).toContain('ٹیکس سمیت Rs 91');
+    expect(text(renderDocumentMarkup(make(noTax()), 'en'))).not.toContain('Includes tax');
+    expect(text(renderDocumentMarkup(make(noTax()), 'ur'))).not.toContain('ٹیکس سمیت');
+  });
+
+  it.each(papers)('%s: "Pay by" shows only when something is on Khata, even if a due date is stored', (_paper, make) => {
+    expect(text(renderDocumentMarkup(make(sale()), 'en'))).toContain('Pay by 30 Nov 2026');
+    expect(text(renderDocumentMarkup(make(sale()), 'ur'))).toContain('ادائیگی کی تاریخ 30 Nov 2026');
+    const paidInFull = sale({ invoice: { ...sale().invoice, paid_amount: 205_000, on_khata: 0, due_date: '2026-11-30' } });
+    expect(text(renderDocumentMarkup(make(paidInFull), 'en'))).not.toContain('Pay by');
+    expect(text(renderDocumentMarkup(make(paidInFull), 'en'))).not.toContain('30 Nov 2026');
+    expect(text(renderDocumentMarkup(make(paidInFull), 'ur'))).not.toContain('ادائیگی کی تاریخ');
+    expect(text(renderDocumentMarkup(make(paidInFull), 'en'))).not.toContain('On Khata');
+    const noDate = sale({ invoice: { ...sale().invoice, due_date: null } });
+    expect(text(renderDocumentMarkup(make(noDate), 'en'))).not.toContain('Pay by');
+  });
+});
+
+describe('left-to-right isolation inside Urdu documents', () => {
+  const urdu = (over: Partial<InvoiceDocumentData> = {}): InvoiceDocumentData =>
+    sale({ shop: { name: 'Pesticide Club Shop', name_ur: 'پیسٹیسائیڈ Club 7', address: null, phone: null }, ...over });
+
+  it('the stylesheet really isolates: .ltr and .num are direction:ltr with unicode-bidi:isolate (without it the wrapper does nothing)', () => {
+    for (const kind of ['receipt', 'invoice'] as const) {
+      const css = /<style>([\s\S]*?)<\/style>/.exec(renderDocumentHtml({ ...urdu(), kind }, 'ur', FONTS))![1]!.replace(/\s+/g, '');
+      expect(css).toContain('.ltr{direction:ltr;unicode-bidi:isolate}');
+      expect(css).toMatch(/\.num\{direction:ltr;unicode-bidi:isolate;/);
+    }
+  });
+
+  it('A4: the shop name and the customer keep their Latin words as left-to-right islands in Urdu, and English text is left alone', () => {
+    const ur = renderDocumentMarkup(asInvoice(urdu()), 'ur');
+    expect(ur).toContain('<div class="shop">پیسٹیسائیڈ <span class="ltr">Club 7</span></div>');
+    expect(ur).toContain('<div class="value">راشد · <span class="ltr">Chak 12</span></div>');
+    const en = renderDocumentMarkup(asInvoice(urdu()), 'en');
+    expect(en).toContain('<div class="shop">Pesticide Club Shop</div>');
+    expect(en).not.toContain('class="ltr"');
+  });
+
+  it('receipt: the shop name and the customer line keep their Latin words as left-to-right islands in Urdu', () => {
+    const ur = renderDocumentMarkup(urdu(), 'ur');
+    expect(ur).toContain('<div class="shop">پیسٹیسائیڈ <span class="ltr">Club 7</span></div>');
+    expect(ur).toContain('<span>راشد · <span class="ltr">Chak 12</span></span>');
+    expect(renderDocumentMarkup(urdu(), 'en')).not.toContain('class="ltr"');
+  });
+
+  it('A4: the position and the batch number cells are numbers (isolated), in both languages', () => {
+    for (const language of ['en', 'ur'] as const) {
+      const html = renderDocumentMarkup(asInvoice(sale()), language);
+      expect(html, language).toContain('<td><span class="num">1</span></td>');
+      expect(html, language).toContain('<td><span class="num">3</span></td>');
+      expect(html, language).toContain('<td><span class="num">B-001</span></td>');
+      expect(html, language).toContain('<td><span class="num">FG-014</span></td>');
+      expect(html, language).toContain('<td class="c-num"><span class="num">Rs 500</span></td>');
+    }
+  });
+
+  it('receipt: the invoice number, the date and every "quantity × rate" line are numbers (isolated), in both languages', () => {
+    for (const language of ['en', 'ur'] as const) {
+      const html = renderDocumentMarkup(sale(), language);
+      expect(html, language).toContain('<span class="num">INV-A-000002</span>');
+      expect(html, language).toContain('<span class="num">12 Oct 2026, 10:42</span>');
+      expect(html, language).toContain('<span class="num">2 × Rs 500</span>');
+      expect(html, language).toContain('<span class="num">3 × Rs 350</span>');
+    }
+  });
+});
+
 describe('quantities', () => {
   const line = sale().lines;
   it('a whole-pack line is "packs x price"; a loose line is "amount x price per pack unit"', () => {
