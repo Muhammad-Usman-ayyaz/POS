@@ -238,6 +238,7 @@ Written by the developer, not by a native speaker: please check. `{seconds}` is 
 | Code | English: what went wrong | English: what to do next | Urdu: what went wrong | Urdu: what to do next | Reviewer's correction |
 |---|---|---|---|---|---|
 | `REQUEST_ID_REUSED` | This bill was already used for a different sale | Start the bill again. | یہ بل پہلے ہی ایک اور فروخت کے لیے استعمال ہو چکا ہے | بل دوبارہ شروع کریں۔ | |
+| `HELD_BILL_GONE` | This held bill is not there any more | Someone else may have resumed or discarded it. Open the held bills again to see what is left. | یہ رکا ہوا بل اب موجود نہیں | ہو سکتا ہے کسی اور نے اسے کھول لیا ہو یا ختم کر دیا ہو۔ رکے ہوئے بل دوبارہ کھول کر دیکھیں۔ | |
 | `APPROVAL_REQUIRED` | The owner has to approve this | Ask the owner to approve it with their password. | اس کے لیے مالک کی منظوری چاہیے | مالک سے ان کے پاس ورڈ کے ساتھ منظوری لیں۔ | |
 | `APPROVAL_INVALID` | The owner's approval does not work for this bill | It may have run out (it lasts one minute), been used already, or been given for a different bill. Ask the owner to approve again. | مالک کی منظوری اس بل کے لیے کام نہیں کر رہی | ہو سکتا ہے اس کا وقت ختم ہو گیا ہو (یہ ایک منٹ چلتی ہے)، یہ پہلے استعمال ہو چکی ہو، یا کسی اور بل کے لیے دی گئی ہو۔ مالک سے دوبارہ منظوری لیں۔ | |
 | `TOO_MANY_ATTEMPTS` | Too many wrong passwords | Wait {seconds} seconds and try again. | غلط پاس ورڈ بہت بار لکھا گیا | {seconds} سیکنڈ انتظار کریں اور دوبارہ کوشش کریں۔ | |
