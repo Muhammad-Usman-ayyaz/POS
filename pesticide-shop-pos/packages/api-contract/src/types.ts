@@ -120,6 +120,9 @@ export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiErrorP
 export type { InvoiceDetail, InvoiceDocumentData, InvoiceList, PrintConfig, PrinterInfo };
 export type { InvoiceListRow, DocumentLine, DocumentKind, DocumentLanguage } from '@pos/core';
 
+// ---------- held bills (bills:*) ----------
+export type { HeldBillCustomer, HeldBillLine, HeldBillSummary, ResumedHeldBill } from '@pos/core';
+
 /**
  * What printing a document did. Printing to a PDF instead is NOT an error: when there is no printer, or the printer fails, the document is saved as a PDF
  * and the fallback field says why, so the screen can show "Saved as PDF" as a normal outcome.

@@ -1,4 +1,4 @@
-import { BaseUnit, Flag, IsoDate, NonNegPaisa, PaymentMethod, PriceType, Qty, TaxRateBp } from '@pos/core';
+import { BaseUnit, Flag, HeldCartSchema, IsoDate, NonNegPaisa, PaymentMethod, PriceType, Qty, TaxRateBp } from '@pos/core';
 import { z } from 'zod';
 import type {
   AddSizeResult,
@@ -19,6 +19,8 @@ import type {
   CreatedCategory,
   CreatedSupplier,
   GroupResult,
+  HeldBillSummary,
+  ResumedHeldBill,
   ListedBrand,
   ListedCategory,
   ListedSupplier,
@@ -244,6 +246,12 @@ export const PrintConfigInput = z.strictObject({
   shop_phone: z.string().trim().max(40).nullable().optional(),
 });
 
+// ---------- held bills ----------
+// A bill set aside at the counter, kept in the database. The input is only what the cashier chose (HeldCartSchema, strict): no price, total or
+// cost, and no user id: the shell takes the holder from the session. Any signed-in user may use these; the list says who held each bill.
+export const HoldBillInput = HeldCartSchema;
+export const HeldBillIdInput = z.strictObject({ id: Id });
+
 /** channel -> input schema. Add a channel here first, then implement it in the shell. */
 export const contract = {
   'app:getState': { input: nothing },
@@ -343,6 +351,12 @@ export const contract = {
   },
 
   'reports:profitByDay': { input: z.strictObject({ from: IsoDate, to: IsoDate }) },
+
+  // held bills
+  'bills:hold': { input: HoldBillInput },
+  'bills:list': { input: nothing },
+  'bills:resume': { input: HeldBillIdInput },
+  'bills:discard': { input: HeldBillIdInput },
 } as const;
 
 export type Channel = keyof typeof contract;
@@ -396,6 +410,10 @@ export interface Outputs {
   'brands:create': CreatedBrand;
   'khata:setOpeningBalance': null;
   'reports:profitByDay': ProfitDay[];
+  'bills:hold': { id: string };
+  'bills:list': HeldBillSummary[];
+  'bills:resume': ResumedHeldBill;
+  'bills:discard': null;
 }
 
 export type Output<C extends Channel> = Outputs[C];

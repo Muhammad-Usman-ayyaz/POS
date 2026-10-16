@@ -8,7 +8,7 @@ import { CustomerCard, PaymentPanel } from './bill-panel.js';
 import { HeldBillsDialog, ResumedDialog, SaleDoneDialog, type ResumeNote } from './bill-dialogs.js';
 import { CartTable } from './cart-table.js';
 import { CustomerDialog } from './customer-dialog.js';
-import { holdBill, loadHeld, removeHeld, type HeldBill } from './held-bills.js';
+import { cartFromResumed, customerOf, forgetSeen, holdRequest, rememberSeen, takeSeen, type HeldBill } from './held-bills.js';
 import { LineDialog, type LineChanges } from './line-dialog.js';
 import {
   actionsFromParams,
@@ -80,7 +80,8 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
   const [quote, setQuote] = useState<QuoteState | null>(null);
   const [quoteError, setQuoteError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const [heldCount, setHeldCount] = useState(() => loadHeld().length);
+  const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
+  const heldCount = heldBills.length;
 
   const searchRef = useRef<HTMLInputElement>(null);
   const requestId = useRef(newRequestId());
@@ -231,25 +232,42 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
     void send(undefined, false);
   };
 
-  // ---- held bills ----
-  const hold = () => {
+  // ---- held bills (kept in the database; every call is a channel) ----
+  const refreshHeld = useCallback(async (): Promise<void> => {
+    try {
+      setHeldBills(await api.bills.list());
+    } catch {
+      // the F6 count stays as it was; opening the dialog tries again
+    }
+  }, [api]);
+  useEffect(() => {
+    void refreshHeld();
+  }, [refreshHeld]);
+  const openHeld = () => {
+    setDialog({ kind: 'held' });
+    void refreshHeld();
+  };
+
+  const holding = useRef(false);
+  const hold = async () => {
     if (cart.length === 0) {
       toast.show({ tone: 'warning', title: t.held.holdFirst });
       return;
     }
-    const seen = new Map(quoteLines.map((l) => [l.product_id, l.unit_price]));
-    const seenBatch = new Map(quoteLines.map((l) => [l.product_id, l.batches[0] ? { no: l.batches[0].batch_no, expiry: l.batches[0].expiry_date } : null]));
-    const ok = holdBill(
-      { heldByName: user.name, customer, priceType, lines: cart.map((l) => ({ ...l, seenPrice: seen.get(l.productId) ?? l.seenPrice, seenBatch: seenBatch.get(l.productId) ?? l.seenBatch ?? null })) },
-      newRequestId(),
-    );
-    if (!ok) {
-      toast.showError(new Error('storage'));
-      return;
+    if (holding.current) return;
+    holding.current = true;
+    try {
+      const saved = await api.bills.hold(holdRequest(cart, customer, priceType));
+      // The price the cashier saw is not stored: it is kept in memory for this run, so resuming can say "price changed".
+      rememberSeen(saved.id, cart, q);
+      resetBill();
+      toast.show({ tone: 'success', title: t.held.held });
+      void refreshHeld();
+    } catch (e) {
+      toast.showError(e); // the bill stays on the screen
+    } finally {
+      holding.current = false;
     }
-    setHeldCount(loadHeld().length);
-    resetBill();
-    toast.show({ tone: 'success', title: t.held.held });
   };
 
   const resume = async (held: HeldBill) => {
@@ -257,23 +275,43 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
       toast.show({ tone: 'warning', title: t.held.replaceTitle, next: t.held.replaceBody });
       return;
     }
+    let bill;
     try {
-      // Prices and stock are checked again: the held bill keeps the items, not the prices.
+      // Takes the bill off hold, once: if someone else got there first this says HELD_BILL_GONE and nothing comes to the screen.
+      bill = await api.bills.resume({ id: held.id });
+    } catch (e) {
+      toast.showError(e);
+      void refreshHeld();
+      return;
+    }
+    // From here the bill is on the screen, whatever happens next: it has left the list, so it must not be lost.
+    const lines = cartFromResumed(bill, takeSeen(bill.id));
+    const resumedCustomer = customerOf(bill.customer);
+    setCart(lines);
+    setCustomer(resumedCustomer);
+    setPriceType(bill.price_type);
+    setSelectedKey(lines.at(-1)?.key ?? null);
+    newBillIds();
+    setDialog(null);
+    void refreshHeld();
+    try {
+      // Prices and stock are checked again: the held bill keeps the choices, not the prices.
       const repriced = await api.sale.quote(
-        quoteRequest(held.lines, { customerId: held.customer?.id ?? null, priceType: held.priceType, method: 'cash', reference: '', dueDate: '' }, null),
+        quoteRequest(lines, { customerId: resumedCustomer?.id ?? null, priceType: bill.price_type, method: 'cash', reference: '', dueDate: '' }, null),
       );
       const gone = new Set(repriced.issues.filter((i) => i.scope === 'line' && i.line_index !== undefined).map((i) => i.line_index as number));
       const notes: ResumeNote[] = [];
       const price = new Map(repriced.lines.map((l) => [l.product_id, l.unit_price]));
       const batchNow = new Map(repriced.lines.map((l) => [l.product_id, l.batches[0] ? { no: l.batches[0].batch_no, expiry: l.batches[0].expiry_date } : null]));
       const kept: CartLine[] = [];
-      held.lines.forEach((line, index) => {
+      lines.forEach((line, index) => {
         const name = `${pickName(line.nameEn, line.nameUr, language)}${line.label ? ` ${line.label}` : ''}`;
         if (gone.has(index)) {
           notes.push({ kind: 'removed', name });
           return;
         }
         const now = price.get(line.productId) ?? null;
+        // Only when this run remembers what the cashier saw (a bill held before a restart has no remembered price, and says nothing about it).
         if (now !== null && line.seenPrice !== null && line.seenPrice !== now) notes.push({ kind: 'price', name, from: line.seenPrice, to: now });
         // The batch the bill would take now is not the one it was holding (it ran out or went past its date): say so. A batch picked by hand that is gone is a removed line, above.
         const batch = batchNow.get(line.productId) ?? null;
@@ -282,22 +320,29 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
         }
         kept.push({ ...line, seenPrice: now, seenBatch: batch });
       });
-      removeHeld(held.id);
-      setHeldCount(loadHeld().length);
       setCart(kept);
-      setCustomer(held.customer);
-      setPriceType(held.priceType);
       setSelectedKey(kept.at(-1)?.key ?? null);
-      newBillIds();
-      setDialog(notes.length > 0 ? { kind: 'resumed', notes } : null);
+      if (notes.length > 0) setDialog({ kind: 'resumed', notes });
+    } catch {
+      // The quote is not available right now. The bill is on the screen, and the screen's own quote shows the problem and blocks the sale.
+    }
+  };
+
+  const discardHeld = async (held: HeldBill) => {
+    try {
+      await api.bills.discard({ id: held.id });
+      forgetSeen(held.id);
     } catch (e) {
       toast.showError(e);
     }
+    void refreshHeld();
   };
 
   // ---- the keyboard ----
   const completeRef = useRef(complete);
   completeRef.current = complete;
+  const openHeldRef = useRef(openHeld);
+  openHeldRef.current = openHeld;
   const selected = cart.find((l) => l.key === selectedKey) ?? cart.at(-1);
   const keyState = useRef({ selected, open: dialog !== null });
   keyState.current = { selected, open: dialog !== null };
@@ -314,7 +359,7 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
         case 'F4':
           return run(() => setDialog({ kind: 'customer' }));
         case 'F6':
-          return run(() => setDialog({ kind: 'held' }));
+          return run(() => openHeldRef.current());
         case 'F8':
           return run(() => {
             const line = keyState.current.selected;
@@ -333,6 +378,7 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
   const inCart = useMemo(() => new Set(cart.map((l) => l.productId)), [cart]);
   const otherIssues = issues.filter((i) => i.scope === 'customer' || i.scope === 'due_date');
   const closeDialog = useCallback(() => setDialog(null), []);
+  const heldTitle = heldCount > 0 ? [...new Set(heldBills.map((b) => b.held_by_name))].join(', ') : undefined;
 
   return (
     <div data-page="pos" className="flex h-full min-h-0 gap-4 text-[15px] max-[1100px]:flex-col">
@@ -361,7 +407,7 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
             <Shortcut k="F8" label={t.shortcuts.discount} />
             <Shortcut k="F12" label={t.shortcuts.complete} />
             {/* 44px to press, drawn over the strip's own padding so the strip keeps the design's height */}
-            <Button variant="ghost" className="-my-[13px] ms-auto min-h-11 px-3 text-xs" onClick={() => setDialog({ kind: 'held' })}>
+            <Button variant="ghost" className="-my-[13px] ms-auto min-h-11 px-3 text-xs" onClick={openHeld} title={heldTitle}>
               <span className="num font-bold">F6</span> {t.shortcuts.held}
               {heldCount > 0 && <span className="num rounded-full bg-tint px-2 text-accent">{heldCount}</span>}
             </Button>
@@ -390,7 +436,7 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
           blocker={blocker}
           busy={busy}
           onComplete={complete}
-          onHold={hold}
+          onHold={() => void hold()}
           onClear={resetBill}
         />
       </aside>
@@ -411,13 +457,9 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
       {dialog?.kind === 'customer' && <CustomerDialog api={api} current={customer} onPick={pickCustomer} onClose={closeDialog} />}
       {dialog?.kind === 'held' && (
         <HeldBillsDialog
-          bills={loadHeld()}
+          bills={heldBills}
           onResume={(b) => void resume(b)}
-          onDiscard={(b) => {
-            removeHeld(b.id);
-            setHeldCount(loadHeld().length);
-            setDialog({ kind: 'held' });
-          }}
+          onDiscard={(b) => void discardHeld(b)}
           onClose={closeDialog}
         />
       )}

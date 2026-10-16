@@ -48,6 +48,10 @@ const samples: Record<Channel, () => Record<string, unknown>> = {
   'brands:create': () => ({ name_en: 'Sample brand' }),
   'khata:setOpeningBalance': () => ({ customer_id: id(), amount: 100_000 }),
   'reports:profitByDay': () => ({ from: '2026-10-01', to: '2026-10-31' }),
+  'bills:hold': () => ({ customer_id: id(), price_type: 'wholesale', note: 'back in ten minutes', lines: [{ product_id: id(), qty: 1000, discount: { kind: 'amount', value: 500 }, batch_id: id() }, { product_id: id(), qty: 250 }] }),
+  'bills:list': () => ({}),
+  'bills:resume': () => ({ id: id() }),
+  'bills:discard': () => ({ id: id() }),
 };
 
 describe('the contract', () => {
@@ -103,6 +107,42 @@ describe('the contract', () => {
     expect(sale.safeParse({ paid_amount: 0, credit_override: { approved_by: id() }, lines: [line] }).success).toBe(false);
     // the cashier cannot type a price: there is no unit_price on a line
     expect(sale.safeParse({ paid_amount: 0, lines: [{ product_id: id(), qty: 1000, unit_price: 1 }] }).success).toBe(false);
+  });
+});
+
+describe('held bills hold what the cashier chose, and no price', () => {
+  const hold = contract['bills:hold'].input;
+  const line = () => ({ product_id: id(), qty: 1000 });
+
+  it('accepts a cart of choices only: product, quantity, discount as entered, batch, customer, price type, note', () => {
+    expect(hold.safeParse(samples['bills:hold']()).success).toBe(true);
+    expect(hold.safeParse({ lines: [line()] }).success).toBe(true);
+  });
+
+  it('refuses a price, a tax, a total or a cost anywhere in the cart (a price sent by the renderer is an error, not stored)', () => {
+    for (const key of ['unit_price', 'price', 'retail_price', 'total', 'subtotal', 'tax_amount', 'cost_price', 'line_total', 'seen_price', 'price_override']) {
+      expect(hold.safeParse({ lines: [{ ...line(), [key]: 100 }] }).success, `line.${key}`).toBe(false);
+      expect(hold.safeParse({ lines: [line()], [key]: 100 }).success, `cart.${key}`).toBe(false);
+    }
+  });
+
+  it('refuses an actor (held_by is the session, not the request) and a status', () => {
+    for (const key of ['held_by', 'resolved_by', 'status', 'actor_id', 'created_by']) expect(hold.safeParse({ lines: [line()], [key]: id() }).success, key).toBe(false);
+  });
+
+  it('needs at least one line, whole positive quantities, and a discount that is an amount of whole paisa', () => {
+    expect(hold.safeParse({ lines: [] }).success).toBe(false);
+    expect(hold.safeParse({ lines: [{ ...line(), qty: 0 }] }).success).toBe(false);
+    expect(hold.safeParse({ lines: [{ ...line(), discount: { kind: 'amount', value: -1 } }] }).success).toBe(false);
+    expect(hold.safeParse({ lines: [{ ...line(), discount: { kind: 'amount', value: 1.5 } }] }).success).toBe(false);
+    expect(hold.safeParse({ lines: [{ ...line(), discount: { kind: 'amount', value: 5, unit_price: 1 } }] }).success).toBe(false);
+  });
+
+  it('resume and discard take only the bill id', () => {
+    for (const channel of ['bills:resume', 'bills:discard'] as const) {
+      expect(contract[channel].input.safeParse({}).success).toBe(false);
+      expect(contract[channel].input.safeParse({ id: 'not-an-id' }).success).toBe(false);
+    }
   });
 });
 
@@ -165,7 +205,7 @@ describe('field rules', () => {
 describe('buildApi', () => {
   it('turns channels into named functions: app:getState is api.app.getState', () => {
     const api = buildApi(async () => ({ ok: true, data: null }));
-    expect(Object.keys(api).sort()).toEqual(['app', 'approval', 'auth', 'brands', 'catalogue', 'categories', 'customers', 'invoices', 'khata', 'prefs', 'print', 'printers', 'reports', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
+    expect(Object.keys(api).sort()).toEqual(['app', 'approval', 'auth', 'bills', 'brands', 'catalogue', 'categories', 'customers', 'invoices', 'khata', 'prefs', 'print', 'printers', 'reports', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
     expect(Object.keys(api.auth).sort()).toEqual(['login', 'logout', 'me', 'regenerateRecoveryCode', 'resetOwnerPassword']);
     // one function per channel, nothing else
     const functions = Object.values(api).flatMap((ns) => Object.values(ns as Record<string, unknown>));

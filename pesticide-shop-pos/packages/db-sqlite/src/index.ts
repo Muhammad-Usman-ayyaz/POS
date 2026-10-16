@@ -7,3 +7,4 @@ export * from './device.js';
 export * from './users.js';
 export * from './reports.js';
 export * from './documents.js';
+export * from './held-bills.js';
