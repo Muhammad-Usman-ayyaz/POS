@@ -91,6 +91,9 @@ The app must create the `shops`, `branches` and `devices` rows, the owner user, 
 | `invoice_printed` | an invoice was printed or saved as a PDF (`table_name` `invoices`, `row_id` the invoice; `details`: `kind` receipt or A4 invoice, and how it came out). The count of these rows is what makes the next print say COPY | the user who printed |
 | `print_config_changed` | the owner changed a print or shop-document setting. ONE row per setting whose value really changed (a value sent unchanged writes nothing, and a save that changes nothing writes no row); `table_name` `settings` (`shops`, `row_id` the shop, for the shop name); `details`: `field`, `from`, `to` (null: not set). Written in the same transaction as the settings | the owner |
 | `approval_used` | a one-use owner approval was spent on a sale (`table_name` `invoices`, `row_id` the invoice; `details`: `requested_by`, `actions`). Written by the sale service inside the sale's own transaction, so the invoice and this row exist together or not at all | the approving owner |
+| `bill_held` | a cashier put a bill on hold (`table_name` `held_bills`, `row_id` the held bill; `details`: line count, customer). Written in the same transaction as the held row. The cart holds product ids, quantities, batch, discount as entered and the customer: never a price | the user who held it |
+| `bill_resumed` | a held bill was taken back to the counter (one use: the same UPDATE that marks it resumed; a second try gets HELD_BILL_GONE). Same transaction | the user who resumed it |
+| `bill_discarded` | a held bill was thrown away (one use, as above). Same transaction | the user who discarded it |
 | `stock_adjustment` / `stock_write_off` | a stock count correction or a write-off | who did it |
 | `owner_password_reset` / `owner_password_reset_failed` / `recovery_code_regenerated` | owner recovery | the owner, or NULL |
 
