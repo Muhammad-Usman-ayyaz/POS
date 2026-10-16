@@ -104,11 +104,12 @@ describe('invoice history, receipts and printing', () => {
 
     it('the owner changes the settings, which are written to the audit log; staff then see them', async () => {
       const config = await h()['print:setConfig']({ printer_name: 'POS-80', receipt_language: 'ur', shop_address: 'Main Road, Chak 12', shop_phone: '0300 1234567', shop_name_ur: 'پیسٹیسائیڈ کلب شاپ' });
-      expect(config).toEqual({ printer_name: 'POS-80', receipt_language: 'ur', invoice_language: 'en', shop_name_ur: 'پیسٹیسائیڈ کلب شاپ', shop_address: 'Main Road, Chak 12', shop_phone: '0300 1234567' });
+      expect(config).toEqual({ shop_name: expect.any(String), print_format: '80mm', receipt_footer: '', printer_name: 'POS-80', receipt_language: 'ur', invoice_language: 'en', shop_name_ur: 'پیسٹیسائیڈ کلب شاپ', shop_address: 'Main Road, Chak 12', shop_phone: '0300 1234567' });
       const rows = shop.runtime.db.prepare("SELECT user_id, table_name, details FROM audit_log WHERE action = 'print_config_changed'").all() as { user_id: string; table_name: string; details: string }[];
-      expect(rows.map((r) => r.user_id)).toEqual([shop.ownerId]);
-      expect(rows[0]!.table_name).toBe('settings');
-      expect(JSON.parse(rows[0]!.details)).toEqual({ fields: ['printer_name', 'receipt_language', 'shop_address', 'shop_phone', 'shop_name_ur'] });
+      // one audit row per field that really changed, each with the value before and after
+      expect(rows.map((r) => r.user_id)).toEqual(Array(5).fill(shop.ownerId));
+      expect(rows.every((r) => r.table_name === 'settings')).toBe(true);
+      expect(rows.map((r) => (JSON.parse(r.details) as { field: string }).field).sort()).toEqual(['printer_name', 'receipt_language', 'shop_address', 'shop_name_ur', 'shop_phone']);
       // a partial change leaves the rest; null clears
       expect(await h()['print:setConfig']({ shop_phone: null })).toMatchObject({ shop_phone: null, shop_address: 'Main Road, Chak 12', receipt_language: 'ur' });
       await shop.signOut();

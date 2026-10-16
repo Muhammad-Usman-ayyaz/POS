@@ -42,6 +42,8 @@ export interface DocumentShop {
   /** null: the owner has not given it yet, so the document shows a clearly marked placeholder. Never invented. */
   address: string | null;
   phone: string | null;
+  /** The owner's footer text (setting `print.receipt_footer`). Left out or empty: the standard thank-you line is printed. */
+  footer?: string | null;
 }
 
 export type DocumentPaymentMethod = 'cash' | 'bank' | 'easypaisa' | 'jazzcash';
@@ -126,7 +128,15 @@ export interface InvoiceListFilter {
 }
 
 /** What the owner sets once for printing and the document header. Staff may read it (they print), only the owner changes it. */
+export type PrintFormat = '80mm' | 'a4';
+
 export interface PrintConfig {
+  /** The shop's English name (the `shops` row made by setup). Never empty. Printed on both documents and shown in the sidebar. */
+  shop_name: string;
+  /** Which document the plain "Print" action prints: the 80 mm receipt (default) or the A4 invoice. */
+  print_format: PrintFormat;
+  /** Printed at the bottom of both documents in place of the standard thank-you line. '' (default): the standard line stays. */
+  receipt_footer: string;
   /** The OS name of the receipt printer, or null: use the system default printer. */
   printer_name: string | null;
   receipt_language: DocumentLanguage;

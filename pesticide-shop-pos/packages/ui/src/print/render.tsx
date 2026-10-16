@@ -41,7 +41,7 @@ body{font-family:'Plex','Naskh',sans-serif;-webkit-print-color-adjust:exact;prin
 .doc .strong{font-weight:700}
 .doc .semi{font-weight:600}
 .doc .copy-mark{display:inline-block;border:1.5px solid #111;padding:1px 10px;font-weight:700;letter-spacing:.12em}
-.doc .thanks{text-align:center}
+.doc .thanks{text-align:center;overflow-wrap:anywhere}
 
 /* ---- 80 mm receipt: sizes in px as in docs/design/Receipts80.dc.html (14px text, 1.5 line height, 72 mm printable) ---- */
 .receipt{width:${PAGE.receipt.printableMm}mm;margin:0 auto;padding:18px 0 24px;font-size:14px;line-height:1.5;color:#111}

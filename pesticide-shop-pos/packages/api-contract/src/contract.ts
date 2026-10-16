@@ -238,6 +238,12 @@ export const PrintDocumentInput = z.strictObject({
 });
 
 export const PrintConfigInput = z.strictObject({
+  /** The shop's English name (the owner edits it here; there is no other channel). Never empty. */
+  shop_name: z.string().trim().min(1).max(80).optional(),
+  /** Which document the plain Print action prints. */
+  print_format: z.enum(['80mm', 'a4']).optional(),
+  /** Printed at the bottom of both documents. '' clears it (the standard thank-you line comes back). */
+  receipt_footer: z.string().trim().max(200).optional(),
   printer_name: z.string().trim().max(200).nullable().optional(),
   receipt_language: Language2.optional(),
   invoice_language: Language2.optional(),

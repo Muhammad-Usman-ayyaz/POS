@@ -26,7 +26,7 @@ const samples: Record<Channel, () => Record<string, unknown>> = {
   'print:document': () => ({ invoice_id: id(), kind: 'receipt', language: 'ur', output: 'printer' }),
   'printers:list': () => ({}),
   'print:getConfig': () => ({}),
-  'print:setConfig': () => ({ printer_name: 'POS-80', receipt_language: 'ur', invoice_language: 'en', shop_address: 'Main road', shop_phone: '0300 1234567', shop_name_ur: null }),
+  'print:setConfig': () => ({ shop_name: 'Club Shop', print_format: 'a4', receipt_footer: 'Thank you', printer_name: 'POS-80', receipt_language: 'ur', invoice_language: 'en', shop_address: 'Main road', shop_phone: '0300 1234567', shop_name_ur: null }),
   'stock:batchesOf': () => ({ productId: id() }),
   'stock:openingStock': () => ({ product_id: id(), batch_no: 'B-1', expiry_date: '2027-01-31', cost_price: 40_000, qty: 5000 }),
   'stock:adjust': () => ({ batch_id: id(), qty_delta: -100 }),
@@ -260,5 +260,44 @@ describe('buildApi', () => {
 
     const invalid = buildApi(async () => ({ ok: false, error: { code: 'INVALID_INPUT', message: 'bad', params: {}, issues: [{ path: 'username', message: 'required' }] } }));
     expect(await invalid.auth.login({ username: '', password: '' }).catch((e: ApiError) => e.issues)).toEqual([{ path: 'username', message: 'required' }]);
+  });
+});
+
+describe('print:setConfig input: print format, receipt footer and shop name', () => {
+  const parse = (input: unknown) => contract['print:setConfig'].input.safeParse(input);
+
+  it('accepts each new field alone and trims the text', () => {
+    expect(parse({ print_format: 'a4' })).toMatchObject({ success: true, data: { print_format: 'a4' } });
+    expect(parse({ print_format: '80mm' }).success).toBe(true);
+    expect(parse({ receipt_footer: '  Thank you, come again  ' })).toMatchObject({ success: true, data: { receipt_footer: 'Thank you, come again' } });
+    expect(parse({ shop_name: '  Club Shop  ' })).toMatchObject({ success: true, data: { shop_name: 'Club Shop' } });
+  });
+
+  it('an empty footer is allowed (it clears it) but an empty or blank shop name is not, and neither is null', () => {
+    expect(parse({ receipt_footer: '' }).success).toBe(true);
+    expect(parse({ receipt_footer: '   ' })).toMatchObject({ success: true, data: { receipt_footer: '' } });
+    expect(parse({ shop_name: '' }).success).toBe(false);
+    expect(parse({ shop_name: '    ' }).success).toBe(false);
+    expect(parse({ shop_name: null }).success).toBe(false);
+    expect(parse({ receipt_footer: null }).success).toBe(false);
+    expect(parse({ print_format: null }).success).toBe(false);
+  });
+
+  it('refuses a format that is not one of the two, wrong types and over-long text, at the exact bounds', () => {
+    expect(parse({ print_format: 'a5' }).success).toBe(false);
+    expect(parse({ print_format: 'A4' }).success).toBe(false);
+    expect(parse({ print_format: 80 }).success).toBe(false);
+    expect(parse({ receipt_footer: 'x'.repeat(200) }).success).toBe(true);
+    expect(parse({ receipt_footer: 'x'.repeat(201) }).success).toBe(false);
+    expect(parse({ shop_name: 'x'.repeat(80) }).success).toBe(true);
+    expect(parse({ shop_name: 'x'.repeat(81) }).success).toBe(false);
+    expect(parse({ shop_name: 5 }).success).toBe(false);
+  });
+
+  it('stays strict: no unknown field, and nothing that names a user or a shop id', () => {
+    expect(parse({ print_format: 'a4', colour: 'red' }).success).toBe(false);
+    expect(parse({ shop_id: id() }).success).toBe(false);
+    expect(parse({ actor_id: id() }).success).toBe(false);
+    expect(parse({ shop_name_en: 'x' }).success).toBe(false);
   });
 });

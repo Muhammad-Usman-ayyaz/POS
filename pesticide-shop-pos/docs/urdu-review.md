@@ -268,3 +268,19 @@ Written by the developer, not by a native speaker: please check. Numbers, dates,
 | A4 table headings | # / Item / Batch / Qty / Rate / Disc. / Tax / Amount | نمبر / آئٹم / بیچ / مقدار / ریٹ / رعایت / ٹیکس / رقم | |
 | A4 signatures | Customer signature / Authorised signature | گاہک کے دستخط / مجاز دستخط | |
 | Units in a loose quantity and its rate ("250 گرام × Rs 200/کلو") | g, kg, ml, L, pc | گرام، کلو، ملی لیٹر، لیٹر، عدد | |
+
+## New Urdu text on the Settings screen: print format, footer, shop name (NEEDS REVIEW)
+
+Written by the developer, not yet checked by a native speaker. The keys are `settings.*` in `packages/ui/src/i18n/messages/ur.ts`.
+
+| Where | English | Urdu in the app | Correction |
+|---|---|---|---|
+| `settings.shopName` (label) | Shop name | دکان کا نام | |
+| `settings.shopNameHint` | Printed on every receipt and invoice and shown in the sidebar. | ہر رسید اور بل پر چھپتا ہے اور سائیڈ بار میں نظر آتا ہے۔ | |
+| `settings.printFormat` (label) | Default print format | چھپائی کا ڈیفالٹ انداز | |
+| `settings.format80` | 80 mm receipt | 80 ملی میٹر رسید | |
+| `settings.formatA4` | A4 invoice | A4 بل | |
+| `settings.printFormatHint` | What the Print button prints. The other paper stays one tap away. | چھاپنے کا بٹن یہی کاغذ چھاپتا ہے۔ دوسرا کاغذ ایک ٹیپ کی دوری پر رہتا ہے۔ | |
+| `settings.receiptFooter` (label) | Receipt footer text | رسید کے نیچے کی عبارت | |
+| `settings.receiptFooterPlaceholder` (also the standard printed line) | Thank you. Please keep this receipt. | شکریہ۔ رسید سنبھال کر رکھیں۔ | |
+| `settings.receiptFooterHint` | Printed at the bottom of receipts and invoices instead of the standard thank-you line. Left empty, the standard line is printed. | رسید اور بل کے نیچے عام شکریے کی سطر کی جگہ چھپتی ہے۔ خالی ہو تو عام سطر چھپتی ہے۔ | |
