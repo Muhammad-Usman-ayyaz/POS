@@ -144,6 +144,27 @@ describe('the Paid now text: thousands separators, as in the design ("1,000")', 
     expect(groupTyped('Rs 1000')).toBe('Rs 1000');
   });
 
+  it('groupedRupeesText keeps a two-digit paisa part when the paisa are below 10 (Rs 1,050.05 is not 1,050.5)', () => {
+    expect(groupedRupeesText(105_005)).toBe('1,050.05');
+    expect(groupedRupeesText(5)).toBe('0.05');
+    expect(groupedRupeesText(100_005)).toBe('1,000.05');
+    expect(groupedRupeesText(100_010)).toBe('1,000.10');
+    expect(groupedRupeesText(105_099)).toBe('1,050.99');
+  });
+
+  it('groupTyped keeps the whitespace around an amount exactly as typed, and refuses (returns unchanged) a 3-digit paisa part or a space inside', () => {
+    expect(groupTyped(' 1000')).toBe(' 1,000'); // leading space is kept, not dropped
+    expect(groupTyped('1000 ')).toBe('1,000 '); // trailing space is kept
+    expect(groupTyped('  12345.5  ')).toBe('  12,345.5  ');
+    expect(groupTyped('1000.123')).toBe('1000.123'); // a third paisa digit: not an amount, no separators are put in
+    expect(groupTyped('1,0 5')).toBe('1,0 5'); // a space inside the number: not rewritten
+    expect(groupTyped('1 000')).toBe('1 000');
+    expect(groupTyped('.5')).toBe('.5');
+    expect(groupTyped('1.2.3')).toBe('1.2.3');
+    expect(groupTyped('1000.05')).toBe('1,000.05');
+    expect(groupTyped('1,2,3,4')).toBe('1,234');
+  });
+
   it('tidyPaidText completes the paisa when the field is left, and leaves non-amounts and empty text alone', () => {
     expect(tidyPaidText('1000.5')).toBe('1,000.50');
     expect(tidyPaidText('1,000')).toBe('1,000');

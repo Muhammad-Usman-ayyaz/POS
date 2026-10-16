@@ -1499,6 +1499,146 @@ describe('design: the exact wording of docs/design/Main.dc.html and PosUrdu.dc.h
   });
 });
 
+// The tests above only prove that the design FILE holds the build's strings. These read the strings out of the design file and look for them in the
+// page the cashier actually sees, in both languages, in the design's order, with the real values of the bill filled in.
+describe('design: the RENDERED page says what Main.dc.html and PosUrdu.dc.html say', () => {
+  const designPath = (name: string) => join(__dirname, '..', '..', '..', 'docs', 'design', name);
+  /** Every text piece of the design's markup (styles, scripts and the logic block dropped), one per element. */
+  const pieces = (file: string): string[] => {
+    const html = readFileSync(designPath(file), 'utf8').replace(/<style[\s\S]*?<\/style>/g, '').replace(/<script[\s\S]*?<\/script>/g, '');
+    return [...html.matchAll(/>([^<>]+)</g)].map((m) => m[1]!.replace(/\s+/g, ' ').trim()).filter((t) => t !== '' && !t.startsWith('class Component'));
+  };
+  /** The cart rows the design's logic block holds as JSON (`cart: [...]`). */
+  const designCart = (file: string): { name: string; pack: string; disc: string; nearText: string }[] => {
+    const html = readFileSync(designPath(file), 'utf8');
+    const start = html.indexOf('cart: [') + 'cart: '.length;
+    let depth = 0;
+    let end = start;
+    for (; end < html.length; end++) {
+      if (html[end] === '[') depth++;
+      if (html[end] === ']' && --depth === 0) break;
+    }
+    return JSON.parse(html.slice(start, end + 1));
+  };
+  const spec = (language: Language) => {
+    const file = language === 'ur' ? 'PosUrdu.dc.html' : 'Main.dc.html';
+    const p = pieces(file);
+    const at = (text: string, from = 0) => {
+      const i = p.indexOf(text, from);
+      expect(i, `"${text}" is in ${file}`).toBeGreaterThanOrEqual(0);
+      return i;
+    };
+    const shortcutsAt = p.findIndex((t, i) => t === 'F2' && p[i + 2] === 'F4' && p[i + 4] === 'F8' && p[i + 6] === 'F12');
+    expect(shortcutsAt, `the shortcut strip is in ${file}`).toBeGreaterThanOrEqual(0);
+    const shortcuts = [0, 2, 4, 6].map((o) => ({ key: p[shortcutsAt + o]!, label: p[shortcutsAt + o + 1]! }));
+    const paidNow = at(language === 'ur' ? 'ابھی ادا' : 'Paid now');
+    const methods = p.slice(paidNow + 2, paidNow + 6); // after "Paid now" and the "Rs" prefix of the box
+    const completeAt = p.lastIndexOf('F12');
+    const owes = at(language === 'ur' ? 'ابھی بقایا' : 'Owes now');
+    const after = at(language === 'ur' ? 'اس بل کے بعد' : 'After this sale');
+    const khata = at(language === 'ur' ? 'کھاتے میں جائے گا' : 'Goes on Khata');
+    const cart = designCart(file);
+    return {
+      placeholder: /placeholder="([^"]+)"/.exec(readFileSync(designPath(file), 'utf8'))![1]!,
+      shortcuts,
+      methods,
+      complete: { text: p[completeAt - 1]!.replace(/\s*·$/, ''), sep: p[completeAt - 1]!.endsWith('·') ? '·' : '' },
+      owes: p[owes]!,
+      after: p[after]!,
+      khata: p[khata]!,
+      payBy: p[khata + 2]!,
+      loose: cart[1]!.pack,
+      disc: cart[2]!.disc,
+      near: cart[2]!.nearText,
+    };
+  };
+  const plain = (s: string | null) => (s ?? '').replace(/[⁦⁧⁨⁩‎‏]/g, '').replace(/\s+/g, ' ').trim();
+
+  /** The design's bill: Rashid (owes Rs 2,000), a sealed Insecticide, loose Fertilizer, a discount, a batch about to expire; Rs 100 paid so the rest goes on Khata. */
+  async function designBill(language: Language) {
+    const shell = fakeShell(OWNER, {
+      'sale:quote': (input) => {
+        const q = quoteOf(input, 'owner');
+        for (const l of q.lines) Object.assign(l.batches[0], { days_to_expiry: 9, near_expiry: true });
+        return ok(q);
+      },
+    });
+    show(shell, OWNER, language);
+    const customerName = language === 'ur' ? 'راشد' : 'Rashid';
+    fireEvent.keyDown(window, { key: 'F4' });
+    const dialog = await screen.findByRole('dialog', { name: T.customer.dialogTitle });
+    await within(dialog).findByRole('option', { name: new RegExp(customerName) });
+    await userEvent.setup().click(within(dialog).getByRole('option', { name: new RegExp(customerName) }));
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: T.customer.use(customerName) }));
+    await addSize('insect', 'p1l');
+    await userEvent.setup().clear(searchBox());
+    await addSize('fert', 'f1');
+    await priced('Rs 700');
+    fireEvent.keyDown(window, { key: 'F8' });
+    const editor = await screen.findByRole('dialog');
+    const box = within(editor).getByLabelText(T.line.discount) as HTMLInputElement;
+    await userEvent.setup().type(box, '15'); // 15 % of the Rs 200 loose line is Rs 30
+    await userEvent.setup().click(within(editor).getByRole('button', { name: T.line.done }));
+    await waitFor(() => expect(totalText()).toBe('Rs 670'));
+    const paid = screen.getByLabelText(T.bill.paidNow);
+    await userEvent.setup().clear(paid);
+    await userEvent.setup().type(paid, '100');
+    await waitFor(() => expect(document.querySelector('[data-khata]')!.textContent).toContain('570'));
+    await priced('Rs 670');
+    return shell;
+  }
+
+  it.each(['en', 'ur'] as const)('%s: the search box shows the design placeholder', async (language) => {
+    show(fakeShell(STAFF), STAFF, language);
+    expect(searchBox().getAttribute('placeholder')).toBe(spec(language).placeholder);
+  });
+
+  it.each(['en', 'ur'] as const)('%s: the strip under the cart reads F2 Search, F4 Customer, F8 Discount, F12 Complete sale, in the design order and wording', async (language) => {
+    show(fakeShell(STAFF), STAFF, language);
+    const { shortcuts } = spec(language);
+    const strip = document.querySelector('section footer')!;
+    const spans = [...strip.querySelectorAll(':scope > span')].map((s) => plain(s.textContent));
+    expect(spans).toEqual(shortcuts.map((s) => `${s.key} ${s.label}`));
+    // the labels the design names, spelled out for the English page
+    if (language === 'en') expect(spans).toEqual(['F2 Search', 'F4 Customer', 'F8 Discount', 'F12 Complete sale']);
+  });
+
+  it.each(['en', 'ur'] as const)('%s: the bill panel shows the design wording with the real values: Owes now / After this sale, the discount, loose and near-expiry badges, the Khata box', async (language) => {
+    await designBill(language);
+    const s = spec(language);
+    const card = plain(document.querySelector('[data-customer-name]')!.closest('section')!.textContent);
+    // "Owes now" carries today's balance and "After this sale" the balance after the bill, never the other way round
+    expect(card).toContain(`${s.owes} Rs 2,000`);
+    expect(card).toContain(`${s.after} Rs 2,570`);
+    expect(card.indexOf(s.owes)).toBeLessThan(card.indexOf(s.after));
+    // the badges, with the real value in them
+    const badges = [...document.querySelectorAll('[data-line] span, [data-line] div')].map((e) => plain(e.textContent));
+    expect(badges).toContain(s.disc.replace('Rs 50', 'Rs 30'));
+    expect(badges).toContain(s.near.replace('24', '9'));
+    const loose = badges.filter((b) => b === s.loose);
+    expect(loose.length, `one badge says exactly "${s.loose}"`).toBe(1);
+    expect(s.loose).not.toMatch(/ml|ملی/);
+    expect(document.querySelector('[data-line=f1]')!.textContent).toContain(s.loose);
+    expect(document.querySelector('[data-line=p1l]')!.textContent).not.toContain(s.loose);
+    // the Khata box: its title, the amount on Khata and the pay-by label
+    const khata = plain(document.querySelector('[data-khata]')!.textContent);
+    expect(khata.startsWith(`${s.khata}Rs 570`), khata).toBe(true); // title, then the amount (separate blocks, so no space between the texts)
+    expect(plain(document.querySelector('[data-khata] p')!.textContent)).toBe(s.khata);
+    expect(khata).toContain(s.payBy);
+    expect(khata.indexOf(s.khata)).toBeLessThan(khata.indexOf(s.payBy));
+  });
+
+  it.each(['en', 'ur'] as const)('%s: the payment buttons are Cash, Bank, Easypaisa, JazzCash in the design order, and the big button reads "<Complete> · F12"', async (language) => {
+    await designBill(language);
+    const s = spec(language);
+    const group = screen.getByRole('radiogroup', { name: T.bill.method });
+    expect(within(group).getAllByRole('radio').map((r) => plain(r.textContent))).toEqual(s.methods);
+    if (language === 'en') expect(s.methods).toEqual(['Cash', 'Bank', 'Easypaisa', 'JazzCash']);
+    expect(plain(completeButton().textContent)).toBe(`${s.complete.text} ${s.complete.sep} F12`);
+    if (language === 'en') expect(plain(completeButton().textContent)).toBe('Complete sale · F12');
+  });
+});
+
 describe('design: the sizes and spacing of Main.dc.html that a test can read', () => {
   it('the cart columns are 132 / 92 / 104 px, the aside is 340px, the page has the design padding, the Complete sale button is 58px', async () => {
     const shell = fakeShell(STAFF);
