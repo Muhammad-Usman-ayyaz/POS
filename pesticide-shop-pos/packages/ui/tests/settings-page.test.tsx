@@ -13,7 +13,7 @@ import { buildSettingsRequest, draftFrom } from '../src/pages/settings/settings-
 const OWNER: SessionUser = { id: 'u1', name: 'Owner', username: 'owner', role: 'owner' };
 const STAFF: SessionUser = { id: 'u2', name: 'Salesman', username: 'staff', role: 'staff' };
 
-const CONFIG = { printer_name: null, receipt_language: 'en', invoice_language: 'en', shop_name_ur: null, shop_address: null, shop_phone: null };
+const CONFIG = { shop_name: 'Pesticide Club Shop', print_format: '80mm', receipt_footer: '', printer_name: null, receipt_language: 'en', invoice_language: 'en', shop_name_ur: null, shop_address: null, shop_phone: null };
 const PRINTERS = [
   { name: 'POS-80', display_name: 'Receipt printer 80', is_default: false },
   { name: 'Office-A4', display_name: 'Office laser', is_default: true },
