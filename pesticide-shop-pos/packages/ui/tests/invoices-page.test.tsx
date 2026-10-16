@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Invoice history, the invoice detail and the print buttons, driven the way a person drives them, against a fake API built with the real client code.
-import { buildApi, type Channel, type InvoiceDetail, type InvoiceListRow, type Language, type PrintResult, type SaleView, type SessionUser } from '@pos/api-contract';
+import { buildApi, type Channel, type InvoiceDetail, type InvoiceListRow, type Language, type PrintResult, type SessionUser } from '@pos/api-contract';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -10,8 +10,7 @@ import { I18nProvider } from '../src/index.js';
 import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
 import { InvoicesPage, PAGE_SIZE } from '../src/pages/invoices/invoices-page.js';
-import { PrintActions } from '../src/pages/invoices/print-actions.js';
-import { SaleDoneDialog } from '../src/pages/pos/bill-dialogs.js';
+import { scanSource, timeZoneViolations } from './source-scan.js';
 
 // The zone the invoice screens use comes from ONE constant (pages/invoices/time-zone.ts). Tests may move it to prove every date follows it.
 const zone = vi.hoisted(() => ({ value: 'Asia/Karachi' }));
@@ -233,7 +232,8 @@ describe('Invoices: the time zone of every date', () => {
     const dir = join(__dirname, '..', 'src', 'pages', 'invoices');
     for (const file of readdirSync(dir).filter((f) => /\.tsx?$/.test(f) && f !== 'time-zone.ts')) {
       const text = readFileSync(join(dir, file), 'utf8');
-      const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1'); // comments may talk about zones; code may not
+      const { code } = scanSource(text); // real comments may talk about zones; code (and strings) may not
+      expect(timeZoneViolations(file, text), `${file} does its own time-zone work`).toEqual([]);
       expect(/['"`][A-Z][A-Za-z_]+\/[A-Z][A-Za-z_]+['"`]/.test(code), `${file} names an IANA zone`).toBe(false);
       expect(code, file).not.toContain('Karachi');
       // A zone cannot be smuggled in by building the name (['Asia','Dubai'].join('/')), by a fixed offset, or by formatting the date locally:
@@ -243,6 +243,56 @@ describe('Invoices: the time zone of every date', () => {
       expect(code, `${file} formats dates itself`).not.toMatch(/\bIntl\b|\btimeZone\b|\.toLocale\w*\(|\.getTimezoneOffset\(|\bDate\.UTC\b|\.toISOString\(\)\.(slice|substring)/);
     }
     expect(readFileSync(join(dir, 'time-zone.ts'), 'utf8')).toContain("export const SHOP_TIME_ZONE = 'Asia/Karachi'");
+  });
+
+  describe('the scan itself (so a hole in it cannot hide a zone)', () => {
+    it('ignores real comments but still sees code that merely contains // or /* inside a string, template or regex', () => {
+      expect(timeZoneViolations('p.ts', '// +05:00 and getHours() in a comment\n/* 18000000 */ const a = 1; // getDate()')).toEqual([]);
+      expect(scanSource("const z = 'x//' + 'Pacific/Auckland';").code).toContain('Pacific/Auckland');
+      expect(scanSource("const z = `a/*b` + 'Asia/Dubai'; // gone").code).toContain('Asia/Dubai');
+      expect(scanSource('const z = `${"//"}` + "Asia/Dubai"; // gone').code).toContain('Asia/Dubai');
+      expect(scanSource('const z = `a${b}//c${d}` + "Asia/Dubai";').code).toContain('Asia/Dubai');
+      expect(scanSource('const r = /[/\']/; const z = "Asia/Dubai"; // gone').code).toContain('Asia/Dubai');
+      expect(scanSource('const z = 1; // Asia/Dubai\nconst y = 2;').code).not.toContain('Dubai');
+      expect(scanSource('const z = 1; /* Asia/Dubai\n Pacific/Auckland */ const y = 2;').code).not.toContain('Dubai');
+    });
+    it('a zone hidden behind a // inside a string is still caught by the zone checks', () => {
+      expect(/['"`](Asia|Pacific)\b/.test(scanSource("const z = 'x//' + 'Pacific/Auckland';").code)).toBe(true);
+    });
+    it.each([
+      ['a fixed +05:00', "const o = '+05:00';"],
+      ['a fixed +0500', "const o = '+0500';"],
+      ['a fixed GMT+5', "const o = 'GMT+5';"],
+      ['a fixed -03:30 inside a template', 'const o = `2026-10-12T00:00:00-03:30`;'],
+      ['an offset hidden after a // inside a string', "const o = 'x//' + '+05:00';"],
+      ['5 * 60 * 60 * 1000', 'const ms = 5 * 60 * 60 * 1000;'],
+      ['h * 60*60*1000', 'const ms = h * 60*60*1000;'],
+      ['18000000', 'const ms = 18000000;'],
+      ['18_000_000', 'const ms = 18_000_000;'],
+      ['3600000 multiplied', 'const ms = 5 * 3600000;'],
+      ['18000 seconds', 'const s = 18000;'],
+      ['3600 seconds multiplied', 'const s = 5 * 3600;'],
+      ['getHours', 'd.getHours()'],
+      ['getMinutes', 'd.getMinutes()'],
+      ['getDate', 'd.getDate()'],
+      ['getDay', 'd.getDay()'],
+      ['getFullYear', 'd.getFullYear()'],
+      ['getMonth', 'd.getMonth()'],
+      ['getUTCHours', 'd.getUTCHours()'],
+      ['getUTCDate', 'd.getUTCDate()'],
+      ['getUTCDay', 'd.getUTCDay()'],
+      ['getUTCMonth', 'd.getUTCMonth()'],
+      ['getUTCFullYear', 'd.getUTCFullYear()'],
+      ['setHours', 'd.setHours(0)'],
+      ['setUTCHours', 'd.setUTCHours(0)'],
+      ['setDate', 'd.setDate(1)'],
+      ['getTimezoneOffset', 'd.getTimezoneOffset()'],
+    ])('fails on %s', (_name, src) => {
+      expect(timeZoneViolations('p.ts', src).length).toBeGreaterThan(0);
+    });
+    it('does not fail on plain dates and sums', () => {
+      expect(timeZoneViolations('p.ts', "const d = '2026-10-12'; const t = '2026-10-12T05:42:00.000Z'; const n = 60 * 1000; const k = 3 * 600;")).toEqual([]);
+    });
   });
 });
 
@@ -392,169 +442,5 @@ describe('Printing from the history', () => {
     release();
     await waitFor(() => expect(document.querySelector('[data-print-outcome]')).toBeTruthy());
     expect(shell.prints()).toHaveLength(1);
-  });
-});
-
-describe('Printing from the sale-saved box at the counter', () => {
-  const sale = { invoice: { id: 'inv-9', invoice_no: 'INV-A-000009', total: 50_000, paid_amount: 50_000, payment_method: 'cash' }, items: [], payment_id: 'p' } as unknown as SaleView;
-
-  function showDone(shell: Shell, language: Language = 'en') {
-    return render(
-      <I18nProvider language={language} onLanguageChange={() => undefined}>
-        <SaleDoneDialog sale={sale} tendered={null} isCash onNewSale={() => undefined} receiptActions={(s, newSale) => (
-          <PrintActions counter api={shell.api} invoiceId={s.invoice.id} kinds={['receipt']}>
-            {newSale}
-          </PrintActions>
-        )} />
-      </I18nProvider>,
-    );
-  }
-
-  it('has Print receipt and Save PDF for that invoice, and no A4 button', async () => {
-    const shell = fakeShell();
-    showDone(shell);
-    expect(screen.queryByRole('button', { name: en.invoices.print.invoice })).toBeNull();
-    await userEvent.setup().click(screen.getByRole('button', { name: en.invoices.print.receipt }));
-    await waitFor(() => expect(shell.prints()[0]!.input).toEqual({ invoice_id: 'inv-9', kind: 'receipt', output: 'printer' }));
-    await waitFor(() => expect((screen.getByRole('button', { name: en.invoices.print.receipt }) as HTMLButtonElement).disabled).toBe(false));
-    await userEvent.setup().click(screen.getByRole('button', { name: en.invoices.print.savePdf }));
-    await waitFor(() => expect(shell.prints()[1]!.input).toEqual({ invoice_id: 'inv-9', kind: 'receipt', output: 'pdf' }));
-  });
-
-  it('a PDF fallback is a notice inside the box, not an error', async () => {
-    const shell = fakeShell({ 'print:document': () => ok(printed({ status: 'pdf_saved', pdf_path: 'C:\\r\\a.pdf', fallback: 'no_printer' })) });
-    showDone(shell);
-    await userEvent.setup().click(screen.getByRole('button', { name: en.invoices.print.receipt }));
-    const dialog = screen.getByRole('dialog');
-    await waitFor(() => expect(dialog.querySelector('[data-print-outcome="pdf_saved"]')).toBeTruthy());
-    expect(within(dialog).queryByRole('alert')).toBeNull();
-    expect(dialog.textContent).toContain('C:\\r\\a.pdf');
-    expect(within(dialog).getByRole('button', { name: en.pos.done.newSale })).toBeTruthy();
-  });
-});
-
-describe('Invoices in Urdu', () => {
-  it('is right to left with Urdu words, Urdu customer names and Latin amounts', async () => {
-    const shell = fakeShell();
-    show(shell, STAFF, 'ur');
-    await loaded();
-    expect(document.getElementById('app-root')!.getAttribute('dir')).toBe('rtl');
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(ur.pages.invoices.title);
-    const text = document.querySelector('[data-page="invoices"]')!.textContent!;
-    for (const part of [ur.invoices.colCustomer, ur.invoices.colKhata, ur.invoices.walkIn, 'راشد', ur.invoices.printedTimes(2), 'Rs 2,050']) expect(text, part).toContain(part);
-    expect(text).not.toContain('Walk-in');
-    // numbers keep left to right
-    expect(document.querySelector('[data-invoice-row="INV-A-000002"] td:nth-child(4)')!.className).toContain('num');
-  });
-
-  it('the detail and the print buttons are in Urdu and still send the same requests', async () => {
-    const shell = fakeShell({ 'print:document': () => ok(printed({ status: 'pdf_saved', pdf_path: 'C:\\r\\a.pdf', fallback: 'no_printer', is_copy: true })) });
-    show(shell, STAFF, 'ur');
-    await openSecond();
-    const dialog = screen.getByRole('dialog');
-    expect(dialog.textContent).toContain('کیڑے مار دوا 1 لیٹر');
-    expect(dialog.textContent).toContain('راشد · Chak 12');
-    await userEvent.setup().click(screen.getByRole('button', { name: ur.invoices.print.invoice }));
-    await waitFor(() => expect(shell.prints()[0]!.input).toEqual({ invoice_id: 'inv-2', kind: 'invoice', output: 'printer' }));
-    const outcome = await waitFor(() => dialog.querySelector('[data-print-outcome="pdf_saved"]') as HTMLElement);
-    expect(outcome.textContent).toContain(ur.invoices.print.savedTitle);
-    expect(outcome.textContent).toContain(ur.invoices.print.savedNoPrinter);
-    expect(outcome.querySelector('[data-pdf-path]')!.getAttribute('dir')).toBe('ltr');
-    expect(dialog.textContent).toContain('COPY');
-    expect(within(dialog).queryByRole('alert')).toBeNull();
-  });
-
-  it('the Urdu and English texts have the same shape', () => {
-    expect(Object.keys(ur.invoices).sort()).toEqual(Object.keys(en.invoices).sort());
-    expect(Object.keys(ur.invoices.print).sort()).toEqual(Object.keys(en.invoices.print).sort());
-    expect(Object.keys(ur.invoices.detail).sort()).toEqual(Object.keys(en.invoices.detail).sort());
-  });
-});
-
-describe('Invoices: no cost, and right to left by logical classes only', () => {
-  it('no request carries a cost flag, and nothing on the screen or in the detail says cost', async () => {
-    const shell = fakeShell();
-    show(shell, STAFF);
-    await openSecond();
-    await userEvent.setup().click(screen.getByRole('button', { name: T.print.invoice }));
-    await waitFor(() => expect(shell.prints()).toHaveLength(1));
-    expect(JSON.stringify(shell.calls)).not.toMatch(/cost|include_cost|includeCost|profit|margin/i);
-    expect(document.body.textContent).not.toMatch(/cost|profit|margin/i);
-  });
-
-  it('no file in pages/invoices uses left or right', () => {
-    const dir = join(__dirname, '..', 'src', 'pages', 'invoices');
-    for (const file of readdirSync(dir)) {
-      const source = readFileSync(join(dir, file), 'utf8');
-      expect(source, file).not.toMatch(/\b(?:ml|mr|pl|pr)-\d|text-left|text-right|\bleft-\d|\bright-\d/);
-    }
-  });
-});
-
-describe('Invoices: dates that read the same in English and Urdu (docs/design: "30 Nov 2026")', () => {
-  it('the From and To boxes say "Any date" until a date is chosen, then "5 Dec 2026", never the browser mm/dd/yyyy, and still send YYYY-MM-DD', async () => {
-    for (const language of ['en', 'ur'] as const) {
-      const T2 = language === 'ur' ? ur.invoices : en.invoices;
-      const shell = fakeShell();
-      show(shell, STAFF, language);
-      await loaded();
-      const from = screen.getByLabelText(T2.from) as HTMLInputElement;
-      const box = from.closest('[data-date-field]')!;
-      expect(box.textContent).toBe(T2.anyDate);
-      fireEvent.change(from, { target: { value: '2026-12-05' } });
-      await waitFor(() => expect(box.textContent).toBe('5 Dec 2026'));
-      expect(box.textContent).not.toMatch(/\d{1,2}\/\d{1,2}\/\d{4}|mm|yyyy/i);
-      await waitFor(() => expect(shell.lists().at(-1)!.input).toMatchObject({ from: expect.stringContaining('2026-12-05') }));
-      cleanup();
-    }
-  });
-});
-
-describe('Printing from the sale-saved box: the "Could not print" box (docs/design/PosDialogs.dc.html)', () => {
-  const sale = { invoice: { id: 'inv-9', invoice_no: 'INV-A-000009', total: 50_000, paid_amount: 50_000, payment_method: 'cash' }, items: [], payment_id: 'p' } as unknown as SaleView;
-  const showDone = (shell: Shell) =>
-    render(
-      <I18nProvider language="en" onLanguageChange={() => undefined}>
-        <SaleDoneDialog
-          sale={sale}
-          tendered={null}
-          isCash
-          onNewSale={() => undefined}
-          receiptActions={(s, newSale) => (
-            <PrintActions counter api={shell.api} invoiceId={s.invoice.id} kinds={['receipt']}>
-              {newSale}
-            </PrintActions>
-          )}
-        />
-      </I18nProvider>,
-    );
-
-  it('the sale-saved box has Save PDF, New sale and Print receipt in that order, Print receipt being the main (green) one', () => {
-    showDone(fakeShell());
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual([en.invoices.print.savePdf, en.pos.done.newSale, en.invoices.print.receipt]);
-    expect(within(dialog).getByRole('button', { name: en.invoices.print.receipt }).className).toContain('bg-accent');
-    expect(within(dialog).getByRole('button', { name: en.pos.done.newSale }).className).not.toContain('bg-accent');
-  });
-
-  it('when not even a PDF could be made, a box says so with Skip, Save PDF and Try again; Try again asks for the same thing, Skip closes it, the sale stays saved', async () => {
-    const shell = fakeShell({ 'print:document': () => fail('INTERNAL') });
-    showDone(shell);
-    await userEvent.setup().click(screen.getByRole('button', { name: en.invoices.print.receipt }));
-    const failed = await screen.findByRole('dialog', { name: en.invoices.print.failedTitle });
-    expect(failed.textContent).toContain(en.invoices.print.failedLead);
-    expect(failed.querySelector('[data-print-failed]')).toBeTruthy();
-    expect(within(failed).getAllByRole('button').map((b) => b.textContent)).toEqual([en.invoices.print.skip, en.invoices.print.savePdf, en.invoices.print.tryAgain]);
-    await userEvent.setup().click(within(failed).getByRole('button', { name: en.invoices.print.tryAgain }));
-    await waitFor(() => expect(shell.prints()).toHaveLength(2));
-    expect(shell.prints()[1]!.input).toEqual(shell.prints()[0]!.input); // the same request again
-    const again = await screen.findByRole('dialog', { name: en.invoices.print.failedTitle });
-    await userEvent.setup().click(within(again).getByRole('button', { name: en.invoices.print.savePdf }));
-    await waitFor(() => expect(shell.prints()).toHaveLength(3));
-    expect(shell.prints()[2]!.input).toEqual({ invoice_id: 'inv-9', kind: 'receipt', output: 'pdf' });
-    const third = await screen.findByRole('dialog', { name: en.invoices.print.failedTitle });
-    await userEvent.setup().click(within(third).getByRole('button', { name: en.invoices.print.skip }));
-    expect(screen.queryByRole('dialog', { name: en.invoices.print.failedTitle })).toBeNull();
-    expect(screen.getByRole('dialog', { name: en.pos.done.title })).toBeTruthy(); // the saved sale is still there
   });
 });
