@@ -3,6 +3,8 @@ import type { AppState, ApprovalAction, Channel, Output, ParsedInput, SessionUse
 import {
   createCatalogueService,
   createCustomerDirectoryService,
+  createCustomerSettingsService,
+  createPaymentService,
   createKhataService,
   createPurchaseService,
   createReferenceService,
@@ -118,6 +120,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     salesReturn: ReturnType<typeof createSalesReturnService>;
     khata: ReturnType<typeof createKhataService>;
     customers: ReturnType<typeof createCustomerDirectoryService>;
+    customerSettings: ReturnType<typeof createCustomerSettingsService>;
+    payment: ReturnType<typeof createPaymentService>;
   }
   let built: Services | null = null;
   const services = (): Services => {
@@ -137,6 +141,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       salesReturn: createSalesReturnService(deps),
       khata: createKhataService(deps),
       customers: createCustomerDirectoryService(deps),
+      customerSettings: createCustomerSettingsService(deps),
+      payment: createPaymentService(deps),
     };
     return built;
   };
@@ -669,6 +675,49 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       discardHeldBill(db, id, user.id, () => audit(s.repos, { userId: user.id, action: 'bill_discarded', table: 'held_bills', rowId: id, details: {} }));
       return null;
     },
+
+    // ---------- BEGIN Phase 6 M2: customers, payments, statement. The user (and whether they are the owner) comes from the session, never from the request ----------
+    'customers:list': async (input) => (session.require(), services().customers.list(input)),
+    'customers:get': async ({ customer_id }) => (session.require(), services().customers.get({ customer_id })),
+    'customers:findDuplicates': async (input) => (session.require(), services().customers.findDuplicates(input)),
+
+    // `privileged` is the SESSION's role. A staff create that carries a credit limit, price type or farmer field gets FIELD_NOT_ALLOWED from the core.
+    'customers:create': async ({ fields, confirm_duplicate }) => {
+      const user = session.require();
+      return services().customers.create({
+        fields,
+        created_by: user.id,
+        privileged: user.role === 'owner',
+        ...(confirm_duplicate !== undefined ? { confirm_duplicate } : {}),
+      });
+    },
+
+    'customers:update': async (input) => {
+      const user = session.require();
+      return services().customers.update({ ...input, actor: user.id });
+    },
+
+    'customers:setTerms': async (input) => {
+      const user = session.require();
+      requireCapability(user, 'customers.terms');
+      return services().customers.setTerms({ ...input, actor: user.id });
+    },
+
+    'customers:getSettings': async () => (session.require(), services().customerSettings.get()),
+
+    'customers:setSettings': async (input) => {
+      const user = session.require();
+      requireCapability(user, 'customers.settings');
+      return services().customerSettings.set({ ...input, actor_id: user.id });
+    },
+
+    'payments:receive': async ({ customer_id, ...rest }) => {
+      const user = session.require();
+      return services().payment.receiveFromCustomer({ ...rest, party_id: customer_id, created_by: user.id });
+    },
+
+    'khata:statement': async (input) => (session.require(), services().khata.statement(input)),
+    // ---------- END Phase 6 M2 ----------
   };
 
   // Every call goes through the guard: the channel's permission policy first, and errors made safe for the signed-in user.

@@ -34,6 +34,14 @@ import type {
   SalesReturnResult,
   SessionUser,
   SetupResult,
+  // M2 (Phase 6) customers, payments, statement
+  CustomerListView,
+  CustomerSummaryView,
+  DuplicateMatchView,
+  CustomerTermsView,
+  CustomerSettingsView,
+  CustomerPaymentView,
+  StatementView,
 } from './types.js';
 
 // The one list of calls the UI can make. Each channel has a STRICT input schema: an unknown key is an error.
@@ -258,6 +266,97 @@ export const PrintConfigInput = z.strictObject({
 export const HoldBillInput = HeldCartSchema;
 export const HeldBillIdInput = z.strictObject({ id: Id });
 
+// ---------- BEGIN Phase 6 M2: customers, payments, statement ----------
+// Still no created_by / actor / approved_by / user_id / privileged / role anywhere: the shell takes the user from the session and works out
+// `privileged` (is the session user the owner?) itself. A staff `customers:create` that carries an owner-only field is refused by the core
+// with FIELD_NOT_ALLOWED, so the owner-only fields ARE in the create schema (an unknown key would be INVALID_INPUT instead).
+
+/** Largest amount accepted from a screen, in paisa (Rs 10 billion): far above any real shop, far below the safe-integer limit. */
+export const MAX_PAISA = 1_000_000_000_000;
+const PositivePaisa = z.number().int().positive().max(MAX_PAISA);
+const LimitPaisa = z.number().int().min(0).max(MAX_PAISA);
+
+const PersonName = z.string().trim().max(120);
+const PhoneText = z.string().trim().max(30);
+const VillageText = z.string().trim().max(80);
+const CustomerNotes = z.string().trim().max(500);
+const PaymentNote = z.string().trim().max(200);
+const ReferenceText = z.string().trim().max(100);
+const Version = z.number().int().min(1).max(2_000_000_000);
+
+/** A real calendar day, YYYY-MM-DD. */
+const CalendarDay = IsoDate.refine((d) => {
+  const t = new Date(`${d}T00:00:00Z`);
+  return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
+}, { message: 'not a real date' });
+
+/** Contact fields. null clears a field on update. */
+const ContactFields = {
+  name_en: PersonName.nullable().optional(),
+  name_ur: PersonName.nullable().optional(),
+  phone: PhoneText.nullable().optional(),
+  village: VillageText.nullable().optional(),
+  notes: CustomerNotes.nullable().optional(),
+};
+const FarmerFields = {
+  father_name: PersonName.nullable().optional(),
+  cnic: PhoneText.nullable().optional(),
+  phone2: PhoneText.nullable().optional(),
+  guarantor: PersonName.nullable().optional(),
+};
+
+export const CustomerListInput = z.strictObject({
+  query: z.string().max(100).optional(),
+  filter: z.enum(['all', 'owes', 'overdue', 'advance']).optional(),
+  sort: z.enum(['name', 'balance', 'overdue', 'next_due']).optional(),
+  name_language: z.enum(['en', 'ur']).optional(),
+  limit: z.number().int().min(1).max(500).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+export const CustomerDuplicatesInput = z.strictObject({
+  name_en: PersonName.nullish(),
+  name_ur: PersonName.nullish(),
+  phone: PhoneText.nullish(),
+});
+export const CustomerCreateInput = z.strictObject({
+  fields: z.strictObject({ ...ContactFields, ...FarmerFields, credit_limit: LimitPaisa.optional(), default_price_type: PriceType.optional() }),
+  /** True after the screen showed the "already exists" warning and the user chose Save as new. */
+  confirm_duplicate: z.boolean().optional(),
+});
+export const CustomerUpdateInput = z.strictObject({
+  customer_id: Id,
+  /** Contact fields only: terms go through `customers:setTerms`. */
+  fields: z.strictObject(ContactFields),
+  expected_version: Version,
+});
+export const CustomerTermsInput = z.strictObject({
+  customer_id: Id,
+  /** Paisa. 0 means no limit. */
+  credit_limit: LimitPaisa,
+  default_price_type: PriceType,
+  ...FarmerFields,
+  expected_version: Version,
+});
+export const CustomerSettingsSetInput = z.strictObject({
+  default_credit_limit: LimitPaisa.optional(),
+  show_farmer_fields: z.boolean().optional(),
+});
+export const PaymentReceiveInput = z.strictObject({
+  customer_id: Id,
+  /** Paisa, a whole number above zero. */
+  amount: PositivePaisa,
+  method: PaymentMethod,
+  /** Needed for bank, Easypaisa and JazzCash (the core refuses without it: REFERENCE_REQUIRED). */
+  reference_no: ReferenceText.optional(),
+  note: PaymentNote.optional(),
+  /** True after the screen asked "this is more than the customer owes, take it as an advance?". */
+  confirm_advance: z.boolean().optional(),
+});
+export const StatementInput = z
+  .strictObject({ customer_id: Id, from: CalendarDay.optional(), to: CalendarDay.optional() })
+  .refine((i) => i.from === undefined || i.to === undefined || i.from <= i.to, { message: 'from must not be after to', path: ['from'] });
+// ---------- END Phase 6 M2 ----------
+
 /** channel -> input schema. Add a channel here first, then implement it in the shell. */
 export const contract = {
   'app:getState': { input: nothing },
@@ -363,6 +462,18 @@ export const contract = {
   'bills:list': { input: nothing },
   'bills:resume': { input: HeldBillIdInput },
   'bills:discard': { input: HeldBillIdInput },
+  // ---------- BEGIN Phase 6 M2 ----------
+  'customers:list': { input: CustomerListInput },
+  'customers:get': { input: z.strictObject({ customer_id: Id }) },
+  'customers:findDuplicates': { input: CustomerDuplicatesInput },
+  'customers:create': { input: CustomerCreateInput },
+  'customers:update': { input: CustomerUpdateInput },
+  'customers:setTerms': { input: CustomerTermsInput },
+  'customers:getSettings': { input: nothing },
+  'customers:setSettings': { input: CustomerSettingsSetInput },
+  'payments:receive': { input: PaymentReceiveInput },
+  'khata:statement': { input: StatementInput },
+  // ---------- END Phase 6 M2 ----------
 } as const;
 
 export type Channel = keyof typeof contract;
@@ -420,6 +531,18 @@ export interface Outputs {
   'bills:list': HeldBillSummary[];
   'bills:resume': ResumedHeldBill;
   'bills:discard': null;
+  // ---------- BEGIN Phase 6 M2 ----------
+  'customers:list': CustomerListView;
+  'customers:get': CustomerSummaryView;
+  'customers:findDuplicates': DuplicateMatchView[];
+  'customers:create': CustomerSummaryView;
+  'customers:update': CustomerSummaryView;
+  'customers:setTerms': CustomerTermsView;
+  'customers:getSettings': CustomerSettingsView;
+  'customers:setSettings': CustomerSettingsView;
+  'payments:receive': CustomerPaymentView;
+  'khata:statement': StatementView;
+  // ---------- END Phase 6 M2 ----------
 }
 
 export type Output<C extends Channel> = Outputs[C];
