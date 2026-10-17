@@ -72,7 +72,7 @@ export interface DeviceScope {
 }
 
 /** Numbered documents. Numbers come from `number_sequences`, one counter per device. */
-export type DocumentSequence = 'invoice' | 'return' | 'purchase';
+export type DocumentSequence = 'invoice' | 'return' | 'purchase' | 'payment';
 
 /** Primary keys are UUIDs made by the app. Core never calls crypto itself. */
 export interface IdGenerator {

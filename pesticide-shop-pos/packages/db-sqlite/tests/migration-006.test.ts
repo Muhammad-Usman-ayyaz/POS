@@ -21,6 +21,7 @@ afterEach(() => {
 });
 
 const upTo5 = () => loadMigrations().slice(0, 5);
+const upTo6 = () => loadMigrations().slice(0, 6);
 const all = (db: Db, sql: string, ...p: unknown[]) => db.prepare(sql).all(...p) as Row[];
 const one = (db: Db, sql: string, ...p: unknown[]) => db.prepare(sql).get(...p) as Row;
 const tables = (db: Db) => all(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").map((r) => r.name as string);
@@ -65,7 +66,7 @@ describe('migration 006 on a shop that already has sales', () => {
   it('takes a backup of the version-5 file, applies, keeps every row, and leaves existing invoices without a request id', async () => {
     const db = await shopAtVersion5(join(dir, 'shop.db'));
     const before = Object.fromEntries(tables(db).filter((t) => t !== 'schema_version').map((t) => [t, dump(db, t)]));
-    const result = await migrate(db);
+    const result = await migrate(db, { migrations: upTo6() });
     expect(result.applied).toEqual([6]);
     expect(currentSchemaVersion(db)).toBe(6);
     expect(result.backupPath).not.toBeNull();
@@ -96,11 +97,11 @@ describe('migration 006 on a shop that already has sales', () => {
 
   it('a second run changes nothing, and a fresh database gets everything', async () => {
     const db = await shopAtVersion5(join(dir, 'shop.db'));
-    await migrate(db);
-    expect(await migrate(db)).toMatchObject({ applied: [], currentVersion: 6 });
+    await migrate(db, { migrations: upTo6() });
+    expect(await migrate(db, { migrations: upTo6() })).toMatchObject({ applied: [], currentVersion: 6 });
     db.close();
     const fresh = openDatabase(':memory:');
-    expect((await migrate(fresh)).applied).toEqual([1, 2, 3, 4, 5, 6]);
+    expect((await migrate(fresh, { migrations: upTo6() })).applied).toEqual([1, 2, 3, 4, 5, 6]);
     expect(all(fresh, "SELECT name FROM sqlite_master WHERE name IN ('held_bills', 'uq_invoices_request_id', 'idx_held_bills_status') ORDER BY name").map((r) => r.name)).toEqual(['held_bills', 'idx_held_bills_status', 'uq_invoices_request_id']);
     fresh.close();
   });

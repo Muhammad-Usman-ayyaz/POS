@@ -61,6 +61,10 @@ export const Payment = z.object({
   direction: PaymentDirection,
   paid_at: IsoDateTime,
   created_by: Id.nullable(),
+  /** A line typed when the payment was taken (migration 007). */
+  note: z.string().nullable(),
+  /** Receipt number like RCP-A-000001; set on insert only. NULL for payments made before migration 007. */
+  receipt_no: z.string().nullable(),
   ...syncScope,
   ...lineMeta,
 });

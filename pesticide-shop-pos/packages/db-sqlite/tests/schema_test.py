@@ -360,6 +360,48 @@ expect_fail("a held bill can be resolved only once", lambda: db.execute("UPDATE 
 check("resolving bumped the version", one("SELECT version v FROM held_bills WHERE id=?", hb)["v"] == 2)
 check("held bills are not in the change log (a local draft)", one("SELECT COUNT(*) c FROM change_log WHERE table_name='held_bills'")["c"] == 0)
 
+print("\n--- migration 007: payment receipts, farmer fields, payment sequence ---")
+def col_info(table, name):
+    return next((r for r in db.execute(f"PRAGMA table_info({table})") if r["name"] == name), None)
+
+
+for tbl, cname in [("payments", "note"), ("payments", "receipt_no"), ("customers", "father_name"), ("customers", "cnic"),
+                   ("customers", "phone2"), ("customers", "guarantor")]:
+    ci = col_info(tbl, cname)
+    check(f"{tbl}.{cname} exists and is nullable", ci is not None and ci["notnull"] == 0, ci)
+rp1 = ins("payments", party_type="customer", party_id=cust, method="cash", amount=100, direction="in", receipt_no="RCP-A-000001", note="for seed")
+ins("payments", party_type="customer", party_id=cust, method="cash", amount=100, direction="in")
+ins("payments", party_type="customer", party_id=cust, method="cash", amount=100, direction="in")
+check("payments without a receipt_no do not clash", True)
+expect_fail("a second payment with the same receipt_no is refused",
+            lambda: ins("payments", party_type="customer", party_id=cust, method="cash", amount=100, direction="in", receipt_no="RCP-A-000001"), "unique")
+expect_fail("a payment still cannot be updated (receipt_no)", lambda: db.execute("UPDATE payments SET receipt_no='RCP-A-000009' WHERE id=?", (rp1,)), "append-only")
+expect_fail("a payment still cannot be updated (note)", lambda: db.execute("UPDATE payments SET note='x' WHERE id=?", (rp1,)), "append-only")
+
+# a shop migrated from 006: the payment sequence is made for every existing device, payments are not rewritten
+old = sqlite3.connect(":memory:", isolation_level=None)
+old.row_factory = sqlite3.Row
+files = sorted(f for f in os.listdir(MIGRATIONS) if f.endswith(".sql"))
+for name in files:
+    if name < "007":
+        old.executescript(open(os.path.join(MIGRATIONS, name), encoding="utf8").read())
+old.executescript("""
+    INSERT INTO shops (id, name) VALUES ('s','S');
+    INSERT INTO branches (id, shop_id, name, code) VALUES ('b','s','Main','A');
+    INSERT INTO devices (id, branch_id, name, device_code) VALUES ('d1','b','PC','A1'), ('d2','b','PC2','A2');
+    INSERT INTO number_sequences (id, device_id, sequence_name, prefix, last_number) VALUES ('q1','d1','invoice','INV-A-',12);
+    INSERT INTO customers (id, name_en, shop_id, branch_id, device_id) VALUES ('c','C','s','b','d1');
+    INSERT INTO payments (id, party_type, party_id, method, amount, direction, shop_id, branch_id, device_id) VALUES ('p','customer','c','cash',5,'in','s','b','d1');
+""")
+for name in files:
+    if name >= "007":
+        old.executescript(open(os.path.join(MIGRATIONS, name), encoding="utf8").read())
+seqs = {r["device_id"]: (r["prefix"], r["last_number"]) for r in old.execute("SELECT * FROM number_sequences WHERE sequence_name='payment'")}
+check("every existing device got a payment sequence from 0", seqs == {"d1": ("RCP-A-", 0), "d2": ("RCP-A-", 0)}, seqs)
+check("the invoice sequence is unchanged", old.execute("SELECT prefix, last_number FROM number_sequences WHERE id='q1'").fetchone()[:] == ("INV-A-", 12))
+pr = old.execute("SELECT amount, note, receipt_no FROM payments WHERE id='p'").fetchone()
+check("an old payment is unchanged and has no receipt_no", (pr["amount"], pr["note"], pr["receipt_no"]) == (5, None, None), tuple(pr))
+
 print("\n--- integrity ---")
 check("PRAGMA integrity_check is ok", one("PRAGMA integrity_check")[0] == "ok")
 check("no foreign key violations", db.execute("PRAGMA foreign_key_check").fetchall() == [])

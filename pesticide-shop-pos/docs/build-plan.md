@@ -51,6 +51,7 @@ Fast keyboard-friendly billing, product search in English and Urdu, batch auto-p
 
 ## Phase 6: Customers and Khata
 Customers, credit limit and due date, payments, customer statement (printable and shareable), opening balances.
+- **DONE in M0 - migration 007 and ports.** `payments.note`, `payments.receipt_no` (unique where set, set only on insert, old payments stay NULL), nullable `customers.father_name/cnic/phone2/guarantor`, a `payment` number sequence (`RCP-<branch>-`) for every existing device and in `setup.ts`; `DocumentSequence` has `'payment'`; the `Customer` and `Payment` schemas have the new nullable fields. The two new settings (`default_credit_limit`, `customers.show_farmer_fields`) have no database row: their defaults live in code, like `staff_max_discount_percent`. Tests: `packages/db-sqlite/tests/migration-007.test.ts` and the `test:schema` migration 007 section. Additive only; no balance calculation changed.
 
 ## Phase 7: Returns and voids
 Resolve open question 8 first. Return flow with owner approval, void invoice, return slip.

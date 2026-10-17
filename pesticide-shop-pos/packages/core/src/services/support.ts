@@ -136,6 +136,8 @@ export function rowFactory(deps: ServiceDeps) {
       direction: Payment['direction'];
       paid_at: string;
       created_by: string;
+      note?: string | null;
+      receipt_no?: string | null;
     }): NewRow<Payment> {
       return {
         ...base(),
@@ -147,6 +149,8 @@ export function rowFactory(deps: ServiceDeps) {
         direction: a.direction,
         paid_at: a.paid_at,
         created_by: a.created_by,
+        note: a.note ?? null,
+        receipt_no: a.receipt_no ?? null,
       };
     },
   };
