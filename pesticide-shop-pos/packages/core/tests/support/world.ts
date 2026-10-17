@@ -13,6 +13,7 @@ import {
   createSalesReturnService,
   createCatalogueService,
   createCustomerDirectoryService,
+  createCustomerSettingsService,
   createStockService,
   DomainError,
   type Repositories,
@@ -73,7 +74,7 @@ export interface ServiceWorld {
   addStock(batchId: string, qty: number): void;
   /** Write a setting (for example near_expiry_days), as the settings screen would. */
   setSetting(key: string, value: string): void;
-  /** Add a customer as the Khata screens will (not through a service: there is none yet). Returns its id. */
+  /** Add a customer directly, the way seed data does (not through the customers service). Returns its id. */
   addCustomer(row?: Row): string;
 
   /** Make the Nth insert (1-based, counted per unit of work) into `table` throw. */
@@ -98,6 +99,7 @@ export function services(w: ServiceWorld) {
     salesReturn: createSalesReturnService(w.deps),
     catalogue: createCatalogueService(w.deps),
     customers: createCustomerDirectoryService(w.deps),
+    customerSettings: createCustomerSettingsService(w.deps),
   };
 }
 
@@ -158,7 +160,7 @@ export function seedData(today: string, options: WorldOptions = {}): SeedData {
   return {
     users: [user(ID.owner, { name: 'Owner', role: 'owner' }), user(ID.staff), user(ID.inactive, { is_active: 0 })],
     suppliers: [{ id: ID.supplier, name_en: 'Agri Dealer', name_ur: null, phone: null, address: null, ...s }],
-    customers: [{ id: ID.customer, name_en: 'Rashid', name_ur: null, phone: null, village: null, credit_limit: 1_000_000, default_price_type: 'retail', notes: null, ...s }],
+    customers: [{ id: ID.customer, name_en: 'Rashid', name_ur: null, phone: null, village: null, credit_limit: 1_000_000, default_price_type: 'retail', notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, ...s }],
     categories: [{ id: ID.catInsecticide, name_en: 'Insecticide', name_ur: null, ...s }, { id: ID.catFertilizer, name_en: 'Fertilizer', name_ur: null, ...s }],
     brands: [{ id: ID.brandX, name_en: 'Brand X', name_ur: null, ...s }],
     // One group per seeded product (each product is a group with a single, unlabelled size).

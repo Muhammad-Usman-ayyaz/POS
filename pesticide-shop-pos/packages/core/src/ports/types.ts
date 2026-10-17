@@ -1,4 +1,4 @@
-import type { Batch, Product, ProductGroup } from '../schemas/index.js';
+import type { Batch, Customer, LedgerEntry, Product, ProductGroup } from '../schemas/index.js';
 
 /**
  * A row as a service writes it. The database owns `created_at`, `updated_at`, `deleted_at` and `version`,
@@ -85,4 +85,24 @@ export interface IdGenerator {
  */
 export interface DocumentNumbers {
   next(sequence: DocumentSequence): string;
+}
+
+/** Columns of a customer a service may change. The database owns version and updated_at. */
+export type CustomerPatch = Partial<
+  Pick<Customer, 'name_en' | 'name_ur' | 'phone' | 'village' | 'notes' | 'credit_limit' | 'default_price_type' | 'father_name' | 'cnic' | 'phone2' | 'guarantor'>
+>;
+
+/**
+ * One ledger row of a customer with the data a statement shows next to it. Every extra is NULL when it does not apply
+ * (an opening balance has no invoice number; only a payment has a method, a reference and a receipt number).
+ */
+export interface LedgerDisplayRow {
+  entry: LedgerEntry;
+  /** For a sale row (`invoice`). */
+  invoice_no: string | null;
+  return_no: string | null;
+  payment_method: string | null;
+  reference_no: string | null;
+  receipt_no: string | null;
+  note: string | null;
 }

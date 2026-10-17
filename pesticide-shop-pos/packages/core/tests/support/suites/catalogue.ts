@@ -1170,7 +1170,7 @@ export function defineCatalogueTests(make: WorldFactory): void {
         const batch = stockSize(x.sizes[1]!.id, 10_000);
         s.sale.create({ created_by: ID.staff, paid_amount: 25_000, lines: [{ product_id: x.sizes[1]!.id, qty: 500 }] });
         s.stock.adjust({ batch_id: batch, qty_delta: -100, created_by: owner });
-        s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 100, method: 'cash', created_by: ID.staff });
+        s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 100, method: 'cash', confirm_advance: true, created_by: ID.staff });
         expect(signature()).toBe(start); // a sale, a receipt, an adjustment and a payment: the same
 
         const seen = new Set([start]);

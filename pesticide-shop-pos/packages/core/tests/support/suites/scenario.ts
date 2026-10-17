@@ -45,7 +45,7 @@ export function defineScenarioTests(make: WorldFactory): void {
 
       expect(s.stock.stockOfBatch(r.batchId)).toBe(12_000);
       expect(s.khata.balance(ID.customer)).toBe(200_000);
-      expect(s.khata.statement(ID.customer).map((l) => [l.entry.entry_type, l.running_balance])).toEqual([
+      expect(s.khata.statement({ customer_id: ID.customer }).lines.map((l) => [l.entry?.entry_type, l.running_balance])).toEqual([
         ['invoice', 500_000],
         ['payment', 300_000],
         ['return', 200_000],

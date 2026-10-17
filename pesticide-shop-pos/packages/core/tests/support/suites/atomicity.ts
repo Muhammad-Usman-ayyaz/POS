@@ -129,7 +129,7 @@ export function defineAtomicityTests(make: WorldFactory): void {
 
     describe('payment, khata and stock', () => {
       it('a customer payment whose ledger row fails leaves no payment either', () => {
-        expectNothingWritten('ledger_entries', 1, () => s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 1000, method: 'cash', created_by: ID.staff }));
+        expectNothingWritten('ledger_entries', 1, () => s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 1000, method: 'cash', confirm_advance: true, created_by: ID.staff }));
       });
 
       it('a supplier payment whose ledger row fails leaves no payment either', () => {

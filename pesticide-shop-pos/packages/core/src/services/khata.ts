@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { daysBetween, nowIso, todayUtc } from '../clock.js';
 import { outstandingDebts } from '../domain/khata.js';
+import { buildStatement, type StatementResult } from '../domain/statement.js';
 import { DomainError } from '../errors.js';
-import { Id } from '../schemas/common.js';
-import type { LedgerEntry } from '../schemas/index.js';
+import type { Repositories } from '../ports/index.js';
+import { Id, IsoDate } from '../schemas/common.js';
+import type { Customer } from '../schemas/index.js';
 import { activeUser, liveCustomer, parseInput, rowFactory, type ServiceDeps } from './support.js';
 
 const OpeningBalanceInput = z.object({
@@ -14,10 +16,27 @@ const OpeningBalanceInput = z.object({
 });
 export type OpeningBalanceInput = z.input<typeof OpeningBalanceInput>;
 
-export interface StatementLine {
-  entry: LedgerEntry;
-  /** Balance after this entry. */
-  running_balance: number;
+/** A real calendar day, YYYY-MM-DD. */
+const Day = IsoDate.refine((d) => {
+  const t = new Date(`${d}T00:00:00Z`);
+  return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
+}, { message: 'not a real date' });
+
+const StatementInput = z
+  .strictObject({
+    customer_id: Id,
+    /** First day to show (included). Leave out for the whole history. */
+    from: Day.optional(),
+    /** Last day to show (included). Leave out for everything up to now. */
+    to: Day.optional(),
+  })
+  .refine((i) => i.from === undefined || i.to === undefined || i.from <= i.to, { message: 'from must not be after to', path: ['from'] });
+export type StatementInput = z.input<typeof StatementInput>;
+
+export interface Statement extends StatementResult {
+  customer: Pick<Customer, 'id' | 'name_en' | 'name_ur' | 'phone' | 'village'>;
+  from: string | null;
+  to: string | null;
 }
 
 export interface OverdueInvoice {
@@ -27,6 +46,40 @@ export interface OverdueInvoice {
   days_overdue: number;
   /** What is still unpaid on it, after counting payments against the oldest debts first. */
   outstanding: number;
+}
+
+export interface DebtPicture {
+  /** Invoices past their due date that are still unpaid, oldest first. */
+  overdue: OverdueInvoice[];
+  /** The due date of the oldest unpaid invoice that has one. NULL when nothing unpaid has a due date. An opening balance has no due date and is never overdue. */
+  next_due: string | null;
+}
+
+/**
+ * Which invoices are still unpaid, worked out inside a transaction the caller already has.
+ *
+ * THIS IS A DISPLAY RULE, NOT STORED DATA. Payments are taken against the customer's overall balance; no payment-to-invoice
+ * allocation is stored anywhere. To say which invoices are still open we treat all the money received (payments, returns and
+ * other credits) as paying the OLDEST debts first (`outstandingDebts`). It never changes a balance, a payment or a ledger row.
+ */
+export function debtPicture(tx: Repositories, customerId: string, today: string): DebtPicture {
+  const overdue: OverdueInvoice[] = [];
+  let nextDue: string | null = null;
+  for (const debt of outstandingDebts(tx.ledger.list('customer', customerId))) {
+    if (debt.source !== 'invoice' || debt.ref_id === null) continue; // the opening balance has no due date
+    const invoice = tx.invoices.getById(debt.ref_id);
+    if (!invoice || invoice.due_date === null) continue;
+    if (nextDue === null) nextDue = invoice.due_date; // oldest unpaid invoice that has a due date
+    if (invoice.due_date >= today) continue;
+    overdue.push({
+      invoice_id: invoice.id,
+      invoice_no: invoice.invoice_no,
+      due_date: invoice.due_date,
+      days_overdue: daysBetween(invoice.due_date, today),
+      outstanding: debt.outstanding,
+    });
+  }
+  return { overdue, next_due: nextDue };
 }
 
 /** The customer credit ledger (Khata). A balance is never stored: it is the sum of the ledger. */
@@ -42,15 +95,28 @@ export function createKhataService(deps: ServiceDeps) {
       });
     },
 
-    /** Every ledger row, oldest first, with the balance after each. */
-    statement(customerId: string): StatementLine[] {
+    /**
+     * A customer's statement. Every ledger row (oldest first, ties in insertion order) with the balance after it and what to show
+     * beside it: the kind (opening, sale, payment, return, adjustment), the invoice or return number, the payment method,
+     * reference and receipt number, and the payment note. With `from`, the first line is "brought forward": the balance before that day.
+     * `to` stops the statement at the end of that day. Dates are whole UTC days, both ends included.
+     * `closing_balance` is always the sum of the ledger up to `to`, so it can never disagree with `v_customer_balance`
+     * (with no `to`, the service checks it against `ledger.balance` and refuses to answer if they differ).
+     */
+    statement(rawInput: StatementInput): Statement {
+      const input = parseInput(StatementInput, rawInput);
       return deps.uow.run((tx) => {
-        liveCustomer(tx, customerId);
-        let running = 0;
-        return tx.ledger.list('customer', customerId).map((entry) => {
-          running += entry.amount_delta;
-          return { entry, running_balance: running };
-        });
+        const customer = liveCustomer(tx, input.customer_id);
+        const result = buildStatement(tx.ledger.customerStatementRows(customer.id), { from: input.from, to: input.to });
+        if (input.to === undefined && result.closing_balance !== tx.ledger.balance('customer', customer.id)) {
+          throw new DomainError('INTERNAL', 'statement does not add up to the ledger balance');
+        }
+        return {
+          customer: { id: customer.id, name_en: customer.name_en, name_ur: customer.name_ur, phone: customer.phone, village: customer.village },
+          from: input.from ?? null,
+          to: input.to ?? null,
+          ...result,
+        };
       });
     },
 
@@ -70,27 +136,14 @@ export function createKhataService(deps: ServiceDeps) {
     },
 
     /**
-     * Invoices past their due date that are still unpaid. Payments hit the overall balance, so we treat the
-     * money received as paying the oldest debts first (docs/database-rules.md, "Reports from views").
+     * Invoices past their due date that are still unpaid, oldest first. A display rule (see `debtPicture`): payments hit the
+     * overall balance, so the money received is counted as paying the oldest debts first (docs/database-rules.md, "Reports from views").
      */
     overdue(customerId: string): OverdueInvoice[] {
       return deps.uow.run((tx) => {
         const today = todayUtc(deps.clock);
         liveCustomer(tx, customerId);
-        const result: OverdueInvoice[] = [];
-        for (const debt of outstandingDebts(tx.ledger.list('customer', customerId))) {
-          if (debt.source !== 'invoice' || debt.ref_id === null) continue;
-          const invoice = tx.invoices.getById(debt.ref_id);
-          if (!invoice || invoice.due_date === null || invoice.due_date >= today) continue;
-          result.push({
-            invoice_id: invoice.id,
-            invoice_no: invoice.invoice_no,
-            due_date: invoice.due_date,
-            days_overdue: daysBetween(invoice.due_date, today),
-            outstanding: debt.outstanding,
-          });
-        }
-        return result;
+        return debtPicture(tx, customerId, today).overdue;
       });
     },
   };

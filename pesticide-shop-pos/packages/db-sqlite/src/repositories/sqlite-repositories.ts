@@ -9,6 +9,7 @@ import type {
   GroupWithSizes,
   Invoice,
   InvoiceItem,
+  LedgerDisplayRow,
   LedgerEntry,
   Product,
   ProductGroup,
@@ -17,6 +18,7 @@ import type {
   SizeStatus,
   Supplier,
 } from '@pos/core';
+import { randomUUID } from 'node:crypto';
 import type { Statement } from 'better-sqlite3';
 import type { Db } from '../connection.js';
 
@@ -34,7 +36,7 @@ const META_COLUMNS = ['created_at', 'updated_at', 'deleted_at', 'version'] as co
 const COLUMN_NAME = /^[a-z][a-z0-9_]*$/;
 
 type InsertableTable =
-  | 'suppliers' | 'categories' | 'brands' | 'product_groups' | 'products' | 'batches' | 'stock_movements' | 'invoices' | 'invoice_items' | 'sales_returns' | 'sales_return_items'
+  | 'customers' | 'suppliers' | 'categories' | 'brands' | 'product_groups' | 'products' | 'batches' | 'stock_movements' | 'invoices' | 'invoice_items' | 'sales_returns' | 'sales_return_items'
   | 'purchases' | 'purchase_items' | 'payments' | 'ledger_entries' | 'audit_log';
 
 /** Columns of a user that are safe to hand to the services. The password hash is never selected. */
@@ -83,7 +85,7 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
   };
 
   /** UPDATE of the given columns of one row. Same checks as insert: the database owns id and the meta columns. */
-  const update = (table: 'products' | 'product_groups', id: string, patch: Record<string, unknown>): void => {
+  const update = (table: 'products' | 'product_groups' | 'customers', id: string, patch: Record<string, unknown>): void => {
     needTx('update ' + table);
     const columns = Object.keys(patch);
     for (const column of columns) {
@@ -103,6 +105,14 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
         const row = one<{ value: string | null }>('settings', 'SELECT value FROM settings WHERE "key" = ? AND deleted_at IS NULL', key);
         const n = row?.value == null ? Number.NaN : Number.parseInt(row.value, 10);
         return Number.isInteger(n) ? n : fallback;
+      },
+      setInt: (key, value) => {
+        needTx('settings');
+        if (!Number.isSafeInteger(value)) throw new Error(`setting ${key} must be a whole number`);
+        const changed = stmt('UPDATE settings SET value = ? WHERE "key" = ? AND deleted_at IS NULL').run(String(value), key).changes;
+        if (changed === 0) {
+          stmt('INSERT INTO settings (id, "key", value, shop_id, branch_id, device_id) VALUES (?, ?, ?, ?, ?, ?)').run(randomUUID(), key, String(value), scope.shop_id, scope.branch_id, scope.device_id);
+        }
       },
     },
 
@@ -253,6 +263,8 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
     customers: {
       getById: (id) => one<Customer>('customers', 'SELECT * FROM customers WHERE id = ?', id),
       list: () => all<Customer>('customers', 'SELECT * FROM customers WHERE deleted_at IS NULL ORDER BY COALESCE(name_en, name_ur), id'),
+      insert: (row) => insert('customers', row),
+      update: (id, patch) => update('customers', id, patch),
     },
 
     suppliers: {
@@ -305,6 +317,38 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
       list: (type, id) =>
         all<LedgerEntry>('ledger', 'SELECT * FROM ledger_entries WHERE party_type = ? AND party_id = ? ORDER BY entry_date, rowid', type, id),
       insert: (row) => insert('ledger_entries', row),
+      balancesByParty: (type) => {
+        const rows = all<{ party_id: string; total: number }>(
+          'ledger',
+          'SELECT party_id AS party_id, SUM(amount_delta) AS total FROM ledger_entries WHERE party_type = ? GROUP BY party_id',
+          type,
+        );
+        return new Map(rows.map((r) => [r.party_id, r.total]));
+      },
+      // One row per ledger row: the joins can only add a column, never a row (each ref is one id of a primary key), and every join also
+      // checks ref_type so an id from another table can never match. party_type = 'customer' is part of the WHERE: a supplier's rows never show.
+      customerStatementRows: (customerId) => {
+        const rows = all<{
+          id: string; party_type: LedgerEntry['party_type']; party_id: string; entry_type: LedgerEntry['entry_type']; amount_delta: number; ref_type: string | null; ref_id: string | null;
+          entry_date: string; created_by: string | null; shop_id: string; branch_id: string; device_id: string; created_at: string; version: number;
+          invoice_no: string | null; return_no: string | null; payment_method: string | null; reference_no: string | null; receipt_no: string | null; note: string | null;
+        }>(
+          'ledger',
+          `SELECT l.id AS id, l.party_type AS party_type, l.party_id AS party_id, l.entry_type AS entry_type, l.amount_delta AS amount_delta,
+                  l.ref_type AS ref_type, l.ref_id AS ref_id, l.entry_date AS entry_date, l.created_by AS created_by,
+                  l.shop_id AS shop_id, l.branch_id AS branch_id, l.device_id AS device_id, l.created_at AS created_at, l.version AS version,
+                  i.invoice_no AS invoice_no, r.return_no AS return_no,
+                  p.method AS payment_method, p.reference_no AS reference_no, p.receipt_no AS receipt_no, p.note AS note
+             FROM ledger_entries l
+             LEFT JOIN invoices i ON l.ref_type = 'invoice' AND i.id = l.ref_id
+             LEFT JOIN sales_returns r ON l.ref_type = 'return' AND r.id = l.ref_id
+             LEFT JOIN payments p ON l.ref_type = 'payment' AND p.id = l.ref_id
+            WHERE l.party_type = 'customer' AND l.party_id = ?
+            ORDER BY l.entry_date, l.rowid`,
+          customerId,
+        );
+        return rows.map(({ invoice_no, return_no, payment_method, reference_no, receipt_no, note, ...entry }): LedgerDisplayRow => ({ entry, invoice_no, return_no, payment_method, reference_no, receipt_no, note }));
+      },
     },
 
     audit: {
