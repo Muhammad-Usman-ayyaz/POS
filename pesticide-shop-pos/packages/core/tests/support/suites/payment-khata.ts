@@ -17,7 +17,7 @@ export function definePaymentKhataTests(make: WorldFactory): void {
     describe('payments', () => {
       it('a customer payment writes payments (in) and a ledger payment row with a minus', () => {
         creditSale(4); // owes 200000
-        const id = s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 120_000, method: 'jazzcash', reference_no: 'JC-5', created_by: ID.staff });
+        const id = s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 120_000, method: 'jazzcash', reference_no: 'JC-5', created_by: ID.staff }).payment.id;
 
         expect(w.rows('payments')).toEqual([
           expect.objectContaining({ id, party_type: 'customer', party_id: ID.customer, method: 'jazzcash', reference_no: 'JC-5', amount: 120_000, direction: 'in' }),
@@ -36,7 +36,7 @@ export function definePaymentKhataTests(make: WorldFactory): void {
 
       it('paying more than is owed leaves the customer in credit', () => {
         creditSale(1);
-        s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 80_000, method: 'cash', created_by: ID.staff });
+        s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 80_000, method: 'cash', confirm_advance: true, created_by: ID.staff });
         expect(s.khata.balance(ID.customer)).toBe(-30_000);
       });
 
@@ -59,7 +59,7 @@ export function definePaymentKhataTests(make: WorldFactory): void {
       });
 
       it('is one unit of work', () => {
-        s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 1000, method: 'cash', created_by: ID.staff });
+        s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 1000, method: 'cash', confirm_advance: true, created_by: ID.staff });
         expect(w.runs()).toBe(1);
       });
     });
@@ -76,7 +76,7 @@ export function definePaymentKhataTests(make: WorldFactory): void {
         creditSale(2, { paid_amount: 40_000 });
         s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 10_000, method: 'cash', created_by: ID.staff });
 
-        expect(s.khata.statement(ID.customer).map((l) => [l.entry.entry_type, l.entry.amount_delta, l.running_balance])).toEqual([
+        expect(s.khata.statement({ customer_id: ID.customer }).lines.map((l) => [l.entry?.entry_type, l.entry?.amount_delta, l.running_balance])).toEqual([
           ['opening', 30_000, 30_000],
           ['invoice', 100_000, 130_000],
           ['payment', -40_000, 90_000],

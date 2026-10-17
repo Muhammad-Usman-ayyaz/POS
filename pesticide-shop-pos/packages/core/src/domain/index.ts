@@ -5,3 +5,6 @@ export * from './khata.js';
 export * from './catalogue.js';
 export * from './documents.js';
 export * from './held-bills.js';
+export * from './statement.js';
+export * from './phone.js';
+export * from './customers.js';

@@ -3,6 +3,8 @@ import type { WorldFactory } from '../world.js';
 import { defineAtomicityTests } from './atomicity.js';
 import { defineCatalogueTests } from './catalogue.js';
 import { defineCatalogueListTests } from './catalogue-list.js';
+import { defineCustomerKhataTests } from './customer-khata.js';
+import { defineCustomerTests } from './customers.js';
 import { defineContractTests } from './contract.js';
 import { defineDirectoryTests } from './directory.js';
 import { definePaymentKhataTests } from './payment-khata.js';
@@ -24,6 +26,8 @@ export function defineServiceSuites(label: string, make: WorldFactory): void {
     definePurchaseTests(make);
     defineStockTests(make);
     definePaymentKhataTests(make);
+    defineCustomerTests(make);
+    defineCustomerKhataTests(make);
     defineSalesReturnTests(make);
     defineCatalogueTests(make);
     defineCatalogueListTests(make);

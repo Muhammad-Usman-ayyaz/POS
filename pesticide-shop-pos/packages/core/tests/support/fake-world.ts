@@ -38,7 +38,7 @@ interface FakeData {
 const emptyData = (): FakeData => ({
   categories: [], brands: [], product_groups: [], products: [], batches: [], stock_movements: [], customers: [], suppliers: [], users: [], invoices: [], invoice_items: [],
   sales_returns: [], sales_return_items: [], purchases: [], purchase_items: [], payments: [], ledger_entries: [], audit_log: [],
-  sequences: { invoice: 0, return: 0, purchase: 0 },
+  sequences: { invoice: 0, return: 0, purchase: 0, payment: 0 },
 });
 
 class FakeStore {
@@ -48,7 +48,7 @@ class FakeStore {
   /** Counts every write. Never taken back by a rollback (like SQLite's total_changes()). */
   writes = 0;
   inTx = false;
-  readonly prefixes: Record<string, string> = { invoice: 'INV-A-', return: 'RET-A-', purchase: 'PUR-A-' };
+  readonly prefixes: Record<string, string> = { invoice: 'INV-A-', return: 'RET-A-', purchase: 'PUR-A-', payment: 'RCP-A-' };
 
   insert(table: InsertTable, row: Row): void {
     this.needTx(`insert into ${table}`);
@@ -66,8 +66,20 @@ class FakeStore {
     (this.data[table] as Row[]).push({ ...row, ...meta });
   }
 
+  /** A new customer. Like the database: the farmer columns default to NULL and the meta columns are the database's. */
+  insertCustomer(row: Row): void {
+    this.needTx('insert into customers');
+    for (const key of META_COLUMNS) {
+      if (key in row) throw new Error(`service set ${key} on customers: the database owns that column`);
+    }
+    if (row.name_en == null && row.name_ur == null) throw new Error('customers: a name is required');
+    if ((row.credit_limit as number) < 0) throw new Error('customers: credit_limit cannot be negative');
+    this.writes += 1;
+    this.data.customers.push({ father_name: null, cnic: null, phone2: null, guarantor: null, ...row, ...meta } as unknown as Customer);
+  }
+
   /** Changes columns of one row, like an UPDATE. The database owns version and updated_at, so a service may not set them. */
-  update(table: 'products' | 'product_groups', id: string, patch: Row): void {
+  update(table: 'products' | 'product_groups' | 'customers', id: string, patch: Row): void {
     this.needTx('update ' + table);
     for (const key of [...META_COLUMNS, 'id']) {
       if (key in patch) throw new Error('service set ' + key + ' on ' + table + ': the database owns that column');
@@ -104,6 +116,11 @@ function createRepositories(store: FakeStore): Repositories {
         store.needTx('settings');
         const n = Number.parseInt(store.settings.get(key) ?? '', 10);
         return Number.isInteger(n) ? n : fallback;
+      },
+      setInt: (key, value) => {
+        store.needTx('settings');
+        store.writes += 1;
+        store.settings.set(key, String(value));
       },
     },
     categories: {
@@ -224,6 +241,8 @@ function createRepositories(store: FakeStore): Repositories {
     customers: {
       getById: (id) => (store.needTx('customers'), store.data.customers.find((c) => c.id === id)),
       list: () => (store.needTx('customers'), byName(store.data.customers.filter((c) => c.deleted_at === null)).map((c) => ({ ...c }))),
+      insert: (row) => store.insertCustomer(row),
+      update: (id, patch) => store.update('customers', id, patch),
     },
     suppliers: {
       getById: (id) => (store.needTx('suppliers'), store.data.suppliers.find((s) => s.id === id)),
@@ -265,6 +284,34 @@ function createRepositories(store: FakeStore): Repositories {
       balance: (type, id) => (store.needTx('ledger'), store.data.ledger_entries.filter((e) => e.party_type === type && e.party_id === id).reduce((s, e) => s + e.amount_delta, 0)),
       list: (type, id) => (store.needTx('ledger'), store.data.ledger_entries.filter((e) => e.party_type === type && e.party_id === id)),
       insert: (row) => store.insert('ledger_entries', row),
+      balancesByParty: (type) => {
+        store.needTx('ledger');
+        const out = new Map<string, number>();
+        for (const e of store.data.ledger_entries) if (e.party_type === type) out.set(e.party_id, (out.get(e.party_id) ?? 0) + e.amount_delta);
+        return out;
+      },
+      customerStatementRows: (customerId) => {
+        store.needTx('ledger');
+        const d = store.data;
+        return d.ledger_entries
+          .map((entry, i) => ({ entry, i }))
+          .filter(({ entry }) => entry.party_type === 'customer' && entry.party_id === customerId)
+          .sort((a, b) => (a.entry.entry_date < b.entry.entry_date ? -1 : a.entry.entry_date > b.entry.entry_date ? 1 : a.i - b.i))
+          .map(({ entry }) => {
+            const invoice = entry.ref_type === 'invoice' ? d.invoices.find((x) => x.id === entry.ref_id) : undefined;
+            const ret = entry.ref_type === 'return' ? d.sales_returns.find((x) => x.id === entry.ref_id) : undefined;
+            const pay = entry.ref_type === 'payment' ? d.payments.find((x) => x.id === entry.ref_id) : undefined;
+            return {
+              entry: { ...entry },
+              invoice_no: invoice?.invoice_no ?? null,
+              return_no: (ret?.return_no as string | undefined) ?? null,
+              payment_method: (pay?.method as string | undefined) ?? null,
+              reference_no: (pay?.reference_no as string | null | undefined) ?? null,
+              receipt_no: (pay?.receipt_no as string | null | undefined) ?? null,
+              note: (pay?.note as string | null | undefined) ?? null,
+            };
+          });
+      },
     },
     audit: { insert: (row) => store.insert('audit_log', row) },
     numbers: {
@@ -351,7 +398,7 @@ export function createFakeWorld(options: WorldOptions = {}): ServiceWorld {
     addCustomer: (row = {}) => {
       const id = (row.id as string | undefined) ?? uuid(7000 + store.data.customers.length);
       store.writes += 1;
-      store.data.customers.push({ id, name_en: 'Customer', name_ur: null, phone: null, village: null, credit_limit: 0, default_price_type: 'retail', notes: null, ...SCOPE, ...meta, ...row } as unknown as Customer);
+      store.data.customers.push({ id, name_en: 'Customer', name_ur: null, phone: null, village: null, credit_limit: 0, default_price_type: 'retail', notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, ...SCOPE, ...meta, ...row } as unknown as Customer);
       return id;
     },
     failOnInsert: (table, nth) => probe.failOnInsert(table, nth),

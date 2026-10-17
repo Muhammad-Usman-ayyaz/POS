@@ -46,7 +46,21 @@ Positive `amount_delta` means the customer owes more (or we owe the supplier mor
 7. Cash received report = `payments` (in, cash) + walk-in `invoices.paid_amount` where `payment_method` is cash. Do not add `paid_amount` of customer invoices: that money is already in `payments`.
 
 ## Record a customer payment
-Insert `payments` (`in`) and `ledger_entries` (`payment`, minus amount). Payments reduce the overall balance, not one invoice.
+`payment.receiveFromCustomer`, ONE unit of work (`deps.uow.run`):
+1. The amount is a whole number of paisa above zero. The payment is dated now: there is no back-dating, and the input has no date.
+2. Bank, Easypaisa and JazzCash need a `reference_no` (blank counts as missing: `REFERENCE_REQUIRED`); cash does not. An optional `note` (at most 200 characters).
+3. **Advance.** If the amount is more than the customer's balance now (a customer who owes nothing, or is already in credit, included), the payment makes them a customer in credit. It is refused with `ADVANCE_NOT_CONFIRMED` unless `confirm_advance: true` is sent. Paying exactly the balance needs no confirmation.
+4. Take the receipt number with `numbers.next('payment')` INSIDE the unit of work (`RCP-<branch>-000001`), insert `payments` (`in`, with `receipt_no` and `note`) and `ledger_entries` (`payment`, minus amount). If anything fails, the payment, the ledger row and the receipt number all go back; a refused payment never uses a number.
+5. The result is `{ payment, receipt_no, balance_after, advance }` (`advance` is true when `balance_after` is below zero). Payments reduce the overall balance, not one invoice.
+6. No audit row: `payments` (append-only, with who and when) is the record of a payment. A payment taken at the counter together with a sale is part of the sale: it has no payment receipt number (its `receipt_no` stays NULL).
+Supplier payments (`payToSupplier`) are unchanged.
+
+## Customer statement
+`khata.statement({ customer_id, from?, to? })` (read only):
+- Rows are the customer's ledger rows (`party_type = 'customer'` always) ordered by `(entry_date, rowid)`, each with the balance after it. Each line also carries what to print beside it: a label (`opening`, `sale`, `payment`, `return`, `adjustment`), the invoice number (sale rows), the return number (return rows), and for payment rows the method, reference, receipt number and note. The joins only add columns: they never add or drop a row.
+- `from` and `to` are whole UTC days, both included. With `from`, the first line is a **brought-forward** line equal to the sum of every ledger row before that day. `totals` are `owes_more` (the plus rows in the range) and `owes_less` (the minus rows in the range, as a positive number).
+- `closing_balance` is always the sum of every ledger row up to and including `to` (brought forward + owes_more - owes_less). Without a `to` the service also compares it with `ledger.balance` and refuses to answer if they ever differ, so a statement can never disagree with `v_customer_balance`. Return and adjustment rows count like any other.
+- Nothing is stored for a statement.
 
 ## Return (customer brings goods back)
 1. Owner approves. A return must link to an active invoice.
@@ -69,6 +83,7 @@ Insert `payments` (`in`) and `ledger_entries` (`payment`, minus amount). Payment
 ## Reports from views
 `v_batch_stock`, `v_product_stock` (one row per SIZE: total and sellable stock, with its group and label), `v_low_stock` (per size: switched on, `min_stock` above 0, and sellable stock at or under it), `v_group_stock` (a whole product: its sizes added up, size count, how many sizes are low by the same rule), `v_product_group_mismatch` (must stay empty), `v_near_expiry` (uses `settings.near_expiry_days`, default 30), `v_expired_stock`, `v_customer_balance`, `v_supplier_balance`, `v_invoice_item_returnable`, `v_profit_by_day` (a return takes back its refund minus `tax_refund`: the tax was never revenue; the total equals the rows to the paisa).
 Overdue invoices are not a view yet: since payments hit the overall balance, treat payments as paying the oldest invoices first and calculate overdue in the service.
+**This allocation is a DISPLAY rule only.** No payment-to-invoice allocation is stored anywhere, and nothing here changes a balance. `debtPicture` (khata service) treats all money received as paying the oldest debts first; from the invoices still open it gives the overdue list (past due date), `next_due` (the due date of the oldest unpaid invoice that has one; an opening balance has no due date and is never overdue) and, for the customers list, `overdue_amount` and `overdue_days` (the largest days overdue).
 
 ## First launch
 The app must create the `shops`, `branches` and `devices` rows, the owner user, and default `settings` (for example `near_expiry_days = 30`) because every other table references them.
@@ -119,3 +134,11 @@ Triggers write `change_log` on every insert and update. Set `synced_at` after a 
 - `customers.father_name`, `cnic`, `phone2`, `guarantor`: optional nullable text, empty for every existing customer. The screens show them only when the setting `customers.show_farmer_fields` is on; the stored data stays when it is turned off.
 - Settings `default_credit_limit` (paisa, default 0) and `customers.show_farmer_fields` (default off) have no row until the owner changes them: like `staff_max_discount_percent`, a missing row means the default in code. Owner-only to change.
 - Nothing about how a balance, a payment or an opening balance is calculated changed in 007.
+
+### Customers service (Phase 6 M1)
+- `customers.create({ fields, created_by, privileged, confirm_duplicate? })`: anyone adds a customer with contact fields. The credit limit, price type and farmer fields are the owner's (`privileged`, checked against the user's real role): from anyone else they are REFUSED with `FIELD_NOT_ALLOWED`, never quietly dropped. A new customer starts with the shop setting `default_credit_limit` (code default 0) and the retail price type. Another live customer with the same normalised name (case, spaces, Urdu letter and digit variants, either language against either) or the same phone (digits only: spaces, dashes, a leading 0 or +92 ignored) needs `confirm_duplicate: true`, otherwise `DUPLICATE_CUSTOMER` (params `count` and `matches` as JSON text). Creating a customer is not audited (like creating a product).
+- `customers.update({ customer_id, fields, expected_version, actor })`: contact fields only (name_en, name_ur, phone, village, notes; one name must remain). A credit limit, price type or farmer field is not accepted. A stale `expected_version` is `VERSION_CONFLICT` (params `expected_version`, `current_version`). Nothing is written when nothing changed.
+- `customers.setTerms({ customer_id, credit_limit, default_price_type, father_name?, cnic?, phone2?, guarantor?, expected_version, actor })`: owner only. One audit row `customer_terms_changed` (`details`: `fields`, `before`, `after`, and `below_balance` + `balance` when flagged) in the same transaction as the change; no row when nothing changed. Setting a limit above 0 that is lower than what the customer owes is allowed and returned as `below_balance: true`.
+- `customers.findDuplicates`, `customers.list` and `customers.get`: `credit_left` is the limit minus the balance, never below 0 (`over_limit: true` then); a limit of 0 is `no_limit: true` with `credit_left` NULL (never 0 or negative). List totals: `total_outstanding` is the sum of POSITIVE balances only, `overdue_total` the sum of overdue amounts (both shop-wide, not narrowed by the search or filter), `count` the rows matching the search and filter.
+- `customers.search` also matches a typed phone number by digits only.
+- `customerSettings.get` / `set`: `default_credit_limit` (non-negative whole paisa) and `customers.show_farmer_fields`. `set` is owner only and writes one `customer_setting_changed` audit row (`field`, `from`, `to`) per setting that really changed.

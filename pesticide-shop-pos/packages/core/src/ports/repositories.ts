@@ -18,7 +18,7 @@ import type {
   StockMovement,
   Supplier,
 } from '../schemas/index.js';
-import type { BatchWithStock, CatalogueGroup, DocumentNumbers, GroupWithSizes, NewRow, ProductGroupPatch, ProductPatch, SizeStatus, SizeStock } from './types.js';
+import type { BatchWithStock, CatalogueGroup, CustomerPatch, DocumentNumbers, GroupWithSizes, LedgerDisplayRow, NewRow, ProductGroupPatch, ProductPatch, SizeStatus, SizeStock } from './types.js';
 
 // Repository interfaces. They are SYNCHRONOUS on purpose: better-sqlite3 is synchronous, and a SQLite
 // transaction cannot stay open across an `await`. Adapters hide all SQL; services never see it.
@@ -84,6 +84,8 @@ export interface BrandRepository {
 export interface SettingsRepository {
   /** A whole-number setting (for example near_expiry_days), or `fallback` when it is missing or not a number. */
   getInt(key: string, fallback: number): number;
+  /** Writes a whole-number setting (creates the row if there is none). The caller validates the value and says who changed it (audit). */
+  setInt(key: string, value: number): void;
 }
 
 export interface BatchRepository {
@@ -104,6 +106,9 @@ export interface CustomerRepository {
   getById(id: string): Customer | undefined;
   /** Every live customer in name order (a shop has hundreds, not millions: the service filters in memory, with the same name matching as the catalogue). */
   list(): Customer[];
+  insert(row: NewRow<Customer>): void;
+  /** Changes only the columns given. The database keeps version and updated_at. */
+  update(id: string, patch: CustomerPatch): void;
 }
 
 export interface SupplierRepository {
@@ -154,6 +159,13 @@ export interface LedgerRepository {
   /** Oldest first. */
   list(partyType: 'customer' | 'supplier', partyId: string): LedgerEntry[];
   insert(row: NewRow<LedgerEntry>): void;
+  /** The balance of every party of one type that has at least one ledger row (a party with no rows is not in the map: its balance is 0). */
+  balancesByParty(partyType: 'customer' | 'supplier'): Map<string, number>;
+  /**
+   * Every ledger row of one CUSTOMER (party_type 'customer' always) in (entry_date, insertion) order, with the invoice number,
+   * return number, payment method, reference, receipt number and note joined on for the statement. Same rows as `list`, nothing added or left out.
+   */
+  customerStatementRows(customerId: string): LedgerDisplayRow[];
 }
 
 /** Everything a service can reach inside one transaction. */

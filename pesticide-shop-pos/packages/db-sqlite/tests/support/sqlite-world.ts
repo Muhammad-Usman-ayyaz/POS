@@ -41,7 +41,7 @@ export async function createSqliteWorld(options: WorldOptions = {}): Promise<Sql
   insertSeed(db, 'shops', { id: SCOPE.shop_id, name: 'Test Shop' });
   insertSeed(db, 'branches', { id: SCOPE.branch_id, shop_id: SCOPE.shop_id, name: 'Main', code: 'A' });
   insertSeed(db, 'devices', { id: SCOPE.device_id, branch_id: SCOPE.branch_id, name: 'Counter PC', device_code: 'A1' });
-  const sequences: [string, string][] = [['invoice', 'INV-A-'], ['return', 'RET-A-'], ['purchase', 'PUR-A-']];
+  const sequences: [string, string][] = [['invoice', 'INV-A-'], ['return', 'RET-A-'], ['purchase', 'PUR-A-'], ['payment', 'RCP-A-']];
   sequences.forEach(([name, prefix], i) =>
     insertSeed(db, 'number_sequences', { id: `00000000-0000-4000-8000-0000000008${String(i).padStart(2, '0')}`, device_id: SCOPE.device_id, sequence_name: name, prefix }),
   );
