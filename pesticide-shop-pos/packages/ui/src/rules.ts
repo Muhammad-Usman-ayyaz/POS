@@ -3,3 +3,6 @@
 export * as productFormRules from './pages/products/product-form-state.js';
 export * as receiveRules from './pages/purchases/receive-state.js';
 export * as invoiceRules from './pages/invoices/invoices-requests.js';
+// BEGIN customers form
+export * as customerFormRules from './pages/customers/form/customer-form-requests.js';
+// END customers form

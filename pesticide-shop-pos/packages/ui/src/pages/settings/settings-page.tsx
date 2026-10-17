@@ -8,6 +8,7 @@ import { Card } from '../../components/ui/primitives.js';
 import { Select } from '../../components/ui/select.js';
 import { useI18n } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
+import { CustomerSettingsSection, SettingsNav, type SettingsSection } from './customer-settings-section.js';
 import { Seg } from './seg.js';
 import { buildSettingsRequest, draftFrom, FOOTER_MAX, SHOP_NAME_MAX, shopNameMissing, type SettingsDraft } from './settings-state.js';
 
@@ -63,6 +64,7 @@ function OwnerSettings({ api, onShopRenamed }: { api: Api; onShopRenamed?: () =>
   const [loadError, setLoadError] = useState<unknown>(null);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
+  const [section, setSection] = useState<SettingsSection>('shop');
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -109,15 +111,25 @@ function OwnerSettings({ api, onShopRenamed }: { api: Api; onShopRenamed?: () =>
     { value: 'ur' as const, label: s.urdu, lang: 'ur' },
   ];
 
+  // BEGIN customers settings: the Customers section has its own form, so it is shown instead of this one (forms do not nest)
+  if (section === 'customers') {
+    return (
+      <div data-page="settings" className="flex flex-col gap-[18px]">
+        <Header />
+        <div className="flex items-start gap-6">
+          <SettingsNav section={section} onSelect={setSection} shopLabel={s.sectionShop} label={s.sectionsLabel} />
+          <CustomerSettingsSection api={api} />
+        </div>
+      </div>
+    );
+  }
+  // END customers settings
+
   return (
     <form data-page="settings" noValidate onSubmit={(e) => (e.preventDefault(), void submit())} className="flex flex-col gap-[18px]">
       <Header />
       <div className="flex items-start gap-6">
-        <nav aria-label={s.sectionsLabel} className="flex w-[216px] shrink-0 flex-col gap-1">
-          <span aria-current="page" className="flex min-h-12 items-center rounded-sm bg-tint px-3.5 text-[15px] font-bold text-accent-dark shadow-[inset_3px_0_0_var(--color-accent)] rtl:shadow-[inset_-3px_0_0_var(--color-accent)]">
-            {s.sectionShop}
-          </span>
-        </nav>
+        <SettingsNav section={section} onSelect={setSection} shopLabel={s.sectionShop} label={s.sectionsLabel} />
         <div className="min-w-0 grow">
           {loadError != null && (
             <div className="mb-4 flex flex-wrap items-start gap-3">
