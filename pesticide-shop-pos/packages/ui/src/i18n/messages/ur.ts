@@ -556,6 +556,43 @@ export const ur: Messages = {
     },
   },
 
+  // BEGIN customers list (Phase 6 M3)
+  customersList: {
+    title: 'گاہک',
+    addCustomer: 'گاہک شامل کریں',
+    totalOutstanding: 'کل بقایا',
+    overdue: 'مدت گزر گئی',
+    searchLabel: 'گاہک تلاش کریں',
+    searchPlaceholder: 'نام، گاؤں یا فون',
+    filterLabel: 'دکھائیں',
+    filterAll: 'سب',
+    filterOwes: 'بقایا',
+    filterOverdue: 'مدت گزر گئی',
+    filterAdvance: 'ایڈوانس',
+    count: (n: number) => `${n} گاہک`,
+    owes: (amount: string) => `بقایا ${amount}`,
+    advance: (amount: string) => `ایڈوانس ${amount}`,
+    noLimit: 'کوئی حد نہیں',
+    overLimit: 'حد سے زیادہ',
+    creditLeft: (amount: string) => `${amount} باقی`,
+    // The third argument (the number of days) only matters in English (day / days); Urdu says دن either way.
+    overdueChip: (amount: string, days: string, _n: number) => `مدت گزر گئی ${amount} · ${days} دن`,
+    nextDue: (date: string) => `اگلی تاریخ ${date}`,
+    unnamed: 'نام نہیں',
+    openLabel: (name: string) => `${name} کھولیں`,
+    showing: (from: number, to: number, total: number) => `${from}–${to} از ${total}`,
+    previous: 'پچھلا',
+    next: 'اگلا',
+    loading: 'گاہک لوڈ ہو رہے ہیں…',
+    retry: 'دوبارہ کوشش کریں',
+    emptyTitle: 'ابھی کوئی گاہک نہیں',
+    emptyHint: 'کھاتا شروع کرنے کے لیے پہلا گاہک شامل کریں۔',
+    noMatchTitle: 'کوئی گاہک نہیں ملا',
+    noMatchHint: 'ہجے دیکھیں، یا تلاش اور فلٹر صاف کریں۔',
+    clearFilters: 'تلاش اور فلٹر صاف کریں',
+  },
+  // END customers list
+
   validation: {
     required: 'ضروری ہے',
     passwordShort: 'کم از کم 8 حروف',
