@@ -575,7 +575,8 @@ export const ur: Messages = {
     noLimit: 'کوئی حد نہیں',
     overLimit: 'حد سے زیادہ',
     creditLeft: (amount: string) => `${amount} باقی`,
-    overdueChip: (amount: string, days: string) => `مدت گزر گئی ${amount} · ${days} دن`,
+    // The third argument (the number of days) only matters in English (day / days); Urdu says دن either way.
+    overdueChip: (amount: string, days: string, _n: number) => `مدت گزر گئی ${amount} · ${days} دن`,
     nextDue: (date: string) => `اگلی تاریخ ${date}`,
     unnamed: 'نام نہیں',
     openLabel: (name: string) => `${name} کھولیں`,
