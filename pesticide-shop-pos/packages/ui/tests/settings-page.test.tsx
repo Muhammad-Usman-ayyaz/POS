@@ -107,7 +107,8 @@ describe('conformance with docs/design/Settings.dc.html', () => {
       expect(document.body.textContent, words).toContain(words);
     }
     expect(screen.getByRole('heading', { name: 'Shop details', level: 2 })).toBeTruthy();
-    expect(screen.getByRole('navigation', { name: 'Settings sections' }).textContent).toBe('Shop details');
+    // the design's first section, then the Customers section added in Phase 6 M4 (customer-form-page.test.tsx covers it)
+    expect(screen.getByRole('navigation', { name: 'Settings sections' }).textContent).toBe(`Shop details${en.customerSettings.sectionLabel}`);
     expect(saveButton().textContent).toBe('Save shop details');
     // sizes of the design: 30px page title, 20px section title, 48px fields, 12px capital labels, 14px panel corners
     expect(heading.className).toContain('text-[30px]');
