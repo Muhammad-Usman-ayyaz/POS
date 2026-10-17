@@ -19,7 +19,7 @@ const failureOf = async (promise: Promise<unknown>): Promise<DomainError> => {
 describe('the permission table', () => {
   it('has one line per capability, and by default every one is owner-only', () => {
     expect(capabilities.sort()).toEqual([
-      'catalogue.edit', 'cost.view', 'credit.override', 'directory.add', 'khata.openingBalance', 'prices.override', 'print.configure', 'profit.view', 'returns.approve',
+      'catalogue.edit', 'cost.view', 'credit.override', 'customers.settings', 'customers.terms', 'directory.add', 'khata.openingBalance', 'prices.override', 'print.configure', 'profit.view', 'returns.approve',
       'stock.adjust', 'stock.openingStock', 'stock.receive', 'stock.writeOff',
     ]);
     for (const capability of capabilities) {
@@ -66,6 +66,8 @@ describe('enforced in the handlers', () => {
     'writing off stock': () => h()['stock:writeOff']({ batch_id: batch, qty: 1000, kind: 'damage' }),
     'opening stock': () => h()['stock:openingStock']({ product_id: product, batch_no: 'NEW-1', expiry_date: day(300), cost_price: 40_000, qty: 5000 }),
     'an opening balance': () => h()['khata:setOpeningBalance']({ customer_id: shop.demo.customers['sajid']!, amount: 10_000 }),
+    'setting customer terms': () => h()['customers:setTerms']({ customer_id: shop.demo.customers['sajid']!, credit_limit: 9_000_000, default_price_type: 'wholesale', expected_version: 1 }),
+    'changing the customer settings': () => h()['customers:setSettings']({ default_credit_limit: 9_000_000, show_farmer_fields: true }),
   };
 
   describe('staff', () => {
@@ -84,6 +86,8 @@ describe('enforced in the handlers', () => {
       'writing off stock': 'stock.writeOff',
       'opening stock': 'stock.openingStock',
       'an opening balance': 'khata.openingBalance',
+      'setting customer terms': 'customers.terms',
+      'changing the customer settings': 'customers.settings',
     };
 
     // A different price and going over the credit limit are not refused outright any more: staff may do them with the owner's one-use approval
@@ -206,7 +210,10 @@ describe('enforced in the handlers', () => {
   });
 
   describe('nobody signed in', () => {
-    const business: Channel[] = ['sale:create', 'salesReturn:create', 'stock:batchesOf', 'stock:openingStock', 'stock:adjust', 'stock:writeOff', 'khata:setOpeningBalance', 'reports:profitByDay', 'auth:regenerateRecoveryCode'];
+    const business: Channel[] = [
+      'sale:create', 'salesReturn:create', 'stock:batchesOf', 'stock:openingStock', 'stock:adjust', 'stock:writeOff', 'khata:setOpeningBalance', 'reports:profitByDay', 'auth:regenerateRecoveryCode',
+      'payments:receive', 'khata:statement', 'customers:setTerms', 'customers:setSettings',
+    ];
 
     it('every business channel says NOT_SIGNED_IN, and writes nothing', async () => {
       const before = footprint();
@@ -220,6 +227,10 @@ describe('enforced in the handlers', () => {
         'khata:setOpeningBalance': { customer_id: product, amount: 1 },
         'reports:profitByDay': { from: day(-1), to: day(0) },
         'auth:regenerateRecoveryCode': { password: 'x' },
+        'payments:receive': { customer_id: product, amount: 100, method: 'cash' },
+        'khata:statement': { customer_id: product },
+        'customers:setTerms': { customer_id: product, credit_limit: 1, default_price_type: 'retail', expected_version: 1 },
+        'customers:setSettings': { default_credit_limit: 1 },
       };
       for (const channel of business) {
         const handler = h()[channel] as (input: unknown) => Promise<unknown>;
@@ -228,9 +239,9 @@ describe('enforced in the handlers', () => {
       expect(footprint()).toEqual(before);
     });
 
-    it('covers every channel: each one is public, listed above, or covered by catalogue-api.test.ts (catalogue, receiving stock, quick-add, lists), or bills-api.test.ts (held bills)', () => {
+    it('covers every channel: each one is public, listed above, or covered by catalogue-api.test.ts (catalogue, receiving stock, quick-add, lists, the customer reads and writes), bills-api.test.ts (held bills) or customers-api.test.ts (customers)', () => {
       const publicChannels: Channel[] = ['app:getState', 'setup:createShop', 'auth:login', 'auth:logout', 'auth:me', 'auth:resetOwnerPassword', 'prefs:setLanguage'];
-      const coveredElsewhere = channels.filter((c) => /^(catalogue|suppliers|categories|brands|customers|approval|invoices|print|printers|bills):/.test(c) || c === 'stock:receive' || c === 'sale:quote');
+      const coveredElsewhere = channels.filter((c) => !business.includes(c) && (/^(catalogue|suppliers|categories|brands|customers|approval|invoices|print|printers|bills):/.test(c) || c === 'stock:receive' || c === 'sale:quote'));
       expect([...publicChannels, ...business, ...coveredElsewhere].sort()).toEqual([...channels].sort());
     });
   });

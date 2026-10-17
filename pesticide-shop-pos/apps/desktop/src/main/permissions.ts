@@ -27,6 +27,12 @@ export const CAPABILITY_ROLES = {
   'directory.add': ['owner'],
   /** Choose the receipt printer and the languages, and give the shop's address, phone and Urdu name that are printed on every document. */
   'print.configure': ['owner'],
+  // ---------- BEGIN Phase 6 M2 ----------
+  /** Credit limit, default price type and the farmer details of a customer (plan D1). */
+  'customers.terms': ['owner'],
+  /** The shop-level customer settings: the default credit limit for new customers, and showing the farmer fields (plan D2, D8). */
+  'customers.settings': ['owner'],
+  // ---------- END Phase 6 M2 ----------
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Capability = keyof typeof CAPABILITY_ROLES;
@@ -112,6 +118,21 @@ export const CHANNEL_POLICY = {
   'bills:list': 'signed-in',
   'bills:resume': 'signed-in',
   'bills:discard': 'signed-in',
+
+  // ---------- BEGIN Phase 6 M2 ----------
+  // Customers and the Khata: any signed-in user finds, adds and edits (contact fields) customers, takes payments and reads a statement.
+  // Terms (credit limit, price type, farmer details) and the shop-level customer settings are the owner's.
+  'customers:list': 'signed-in',
+  'customers:get': 'signed-in',
+  'customers:findDuplicates': 'signed-in',
+  'customers:create': 'signed-in',
+  'customers:update': 'signed-in',
+  'customers:setTerms': { capability: 'customers.terms' },
+  'customers:getSettings': 'signed-in',
+  'customers:setSettings': { capability: 'customers.settings' },
+  'payments:receive': 'signed-in',
+  'khata:statement': 'signed-in',
+  // ---------- END Phase 6 M2 ----------
 } as const satisfies Record<Channel, ChannelPolicy>;
 
 /** Throws NOT_SIGNED_IN or NOT_AUTHORIZED unless this user may call the channel. */

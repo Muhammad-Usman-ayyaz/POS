@@ -52,6 +52,17 @@ const samples: Record<Channel, () => Record<string, unknown>> = {
   'bills:list': () => ({}),
   'bills:resume': () => ({ id: id() }),
   'bills:discard': () => ({ id: id() }),
+  // Phase 6 M2
+  'customers:list': () => ({ query: '0300', filter: 'owes', sort: 'balance', name_language: 'ur', limit: 50, offset: 0 }),
+  'customers:get': () => ({ customer_id: id() }),
+  'customers:findDuplicates': () => ({ name_en: 'Rashid Ali', name_ur: null, phone: '0300 1234567' }),
+  'customers:create': () => ({ fields: { name_en: 'Rashid Ali', phone: '0300 1234567', village: 'Chak 5', notes: null }, confirm_duplicate: true }),
+  'customers:update': () => ({ customer_id: id(), fields: { phone: '0301 7654321', notes: null }, expected_version: 1 }),
+  'customers:setTerms': () => ({ customer_id: id(), credit_limit: 500_000, default_price_type: 'wholesale', father_name: 'Ali', cnic: '35202-1234567-1', phone2: null, guarantor: 'Bashir', expected_version: 3 }),
+  'customers:getSettings': () => ({}),
+  'customers:setSettings': () => ({ default_credit_limit: 100_000, show_farmer_fields: true }),
+  'payments:receive': () => ({ customer_id: id(), amount: 50_000, method: 'bank', reference_no: 'TRX-1', note: 'for the wheat', confirm_advance: true }),
+  'khata:statement': () => ({ customer_id: id(), from: '2026-10-01', to: '2026-10-31' }),
 };
 
 describe('the contract', () => {
@@ -76,7 +87,7 @@ describe('the contract', () => {
 
   it('never lets the renderer say who is acting: created_by, approved_by and user_id are refused on every channel', () => {
     for (const channel of channels) {
-      for (const key of ['created_by', 'approved_by', 'user_id', 'userId', 'role', 'actor_id', 'include_cost']) {
+      for (const key of ['created_by', 'approved_by', 'user_id', 'userId', 'role', 'actor_id', 'actor', 'privileged', 'include_cost']) {
         const result = contract[channel].input.safeParse({ ...samples[channel](), [key]: id() });
         expect(result.success, `${channel} accepted ${key}`).toBe(false);
       }
@@ -89,7 +100,7 @@ describe('the contract', () => {
       const def = (schema as unknown as { def: { type: string; shape?: Record<string, z.ZodType>; element?: z.ZodType; innerType?: z.ZodType } }).def;
       if (def.type === 'object' && def.shape) {
         for (const [key, child] of Object.entries(def.shape)) {
-          if (/^(created_by|approved_by|user_id|userId|role|actor_id|include_cost)$/.test(key)) found.push(`${path}.${key}`);
+          if (/^(created_by|approved_by|user_id|userId|role|actor_id|actor|privileged|include_cost)$/.test(key)) found.push(`${path}.${key}`);
           walk(child, `${path}.${key}`);
         }
       } else if (def.type === 'array' && def.element) walk(def.element, `${path}[]`);
@@ -205,7 +216,7 @@ describe('field rules', () => {
 describe('buildApi', () => {
   it('turns channels into named functions: app:getState is api.app.getState', () => {
     const api = buildApi(async () => ({ ok: true, data: null }));
-    expect(Object.keys(api).sort()).toEqual(['app', 'approval', 'auth', 'bills', 'brands', 'catalogue', 'categories', 'customers', 'invoices', 'khata', 'prefs', 'print', 'printers', 'reports', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
+    expect(Object.keys(api).sort()).toEqual(['app', 'approval', 'auth', 'bills', 'brands', 'catalogue', 'categories', 'customers', 'invoices', 'khata', 'payments', 'prefs', 'print', 'printers', 'reports', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
     expect(Object.keys(api.auth).sort()).toEqual(['login', 'logout', 'me', 'regenerateRecoveryCode', 'resetOwnerPassword']);
     // one function per channel, nothing else
     const functions = Object.values(api).flatMap((ns) => Object.values(ns as Record<string, unknown>));
@@ -299,5 +310,100 @@ describe('print:setConfig input: print format, receipt footer and shop name', ()
     expect(parse({ shop_id: id() }).success).toBe(false);
     expect(parse({ actor_id: id() }).success).toBe(false);
     expect(parse({ shop_name_en: 'x' }).success).toBe(false);
+  });
+});
+
+describe('Phase 6 M2: customers, payments, statement', () => {
+  const create = contract['customers:create'].input;
+  const update = contract['customers:update'].input;
+  const terms = contract['customers:setTerms'].input;
+  const settings = contract['customers:setSettings'].input;
+  const pay = contract['payments:receive'].input;
+  const statement = contract['khata:statement'].input;
+  const list = contract['customers:list'].input;
+
+  it('refuses an actor, a user or a privilege flag at the top AND inside `fields`, on every new channel', () => {
+    const fresh = ['customers:list', 'customers:get', 'customers:findDuplicates', 'customers:create', 'customers:update', 'customers:setTerms', 'customers:getSettings', 'customers:setSettings', 'payments:receive', 'khata:statement'] as const;
+    for (const channel of fresh) {
+      for (const key of ['created_by', 'actor', 'actor_id', 'approved_by', 'user_id', 'privileged', 'role']) {
+        expect(contract[channel].input.safeParse({ ...samples[channel](), [key]: key === 'privileged' ? true : id() }).success, `${channel} accepted ${key}`).toBe(false);
+      }
+    }
+    for (const key of ['created_by', 'actor', 'privileged', 'user_id', 'role']) {
+      expect(create.safeParse({ fields: { name_en: 'A', [key]: key === 'privileged' ? true : id() } }).success, `create fields.${key}`).toBe(false);
+      expect(update.safeParse({ customer_id: id(), fields: { phone: '1', [key]: id() }, expected_version: 1 }).success, `update fields.${key}`).toBe(false);
+    }
+  });
+
+  it('update takes contact fields only: a credit limit, price type or farmer field goes through setTerms', () => {
+    for (const key of ['credit_limit', 'default_price_type', 'father_name', 'cnic', 'phone2', 'guarantor']) {
+      expect(update.safeParse({ customer_id: id(), fields: { [key]: 'x' }, expected_version: 1 }).success, key).toBe(false);
+    }
+    expect(update.safeParse({ customer_id: id(), fields: { name_en: 'A' } }).success).toBe(false); // expected_version is required
+    expect(update.safeParse({ customer_id: id(), fields: { name_en: 'A' }, expected_version: 0 }).success).toBe(false);
+    expect(update.safeParse({ customer_id: id(), fields: { name_en: 'A' }, expected_version: 1.5 }).success).toBe(false);
+  });
+
+  it('setTerms needs the version and both terms; the limit is a non-negative whole number of paisa', () => {
+    const ok = { customer_id: id(), credit_limit: 0, default_price_type: 'retail' as const, expected_version: 1 };
+    expect(terms.safeParse(ok).success).toBe(true);
+    for (const bad of [{ credit_limit: -1 }, { credit_limit: 1.5 }, { credit_limit: 1_000_000_000_001 }, { credit_limit: '5' }, { default_price_type: 'credit' }, { expected_version: undefined }]) {
+      expect(terms.safeParse({ ...ok, ...bad }).success, JSON.stringify(bad)).toBe(false);
+    }
+    const { default_price_type: _a, ...noType } = ok;
+    expect(terms.safeParse(noType).success).toBe(false);
+  });
+
+  it('settings: a negative, fractional or huge default limit is refused', () => {
+    expect(settings.safeParse({}).success).toBe(true);
+    expect(settings.safeParse({ default_credit_limit: 0 }).success).toBe(true);
+    for (const bad of [-1, 1.5, 1_000_000_000_001, Number.NaN, '100']) expect(settings.safeParse({ default_credit_limit: bad }).success, String(bad)).toBe(false);
+    expect(settings.safeParse({ show_farmer_fields: 1 }).success).toBe(false);
+  });
+
+  it('payment amounts are positive whole paisa within the maximum; the note and reference have bounds; the method is one of four', () => {
+    const ok = { customer_id: id(), amount: 1, method: 'cash' as const };
+    expect(pay.safeParse(ok).success).toBe(true);
+    expect(pay.safeParse({ ...ok, amount: 1_000_000_000_000 }).success).toBe(true);
+    for (const bad of [{ amount: 0 }, { amount: -5 }, { amount: 1.5 }, { amount: 1_000_000_000_001 }, { amount: Number.MAX_SAFE_INTEGER + 1 }, { method: 'cheque' }, { note: 'x'.repeat(201) }, { reference_no: 'x'.repeat(101) }, { confirm_advance: 'yes' }, { date: '2026-10-01' }, { paid_at: '2026-10-01' }]) {
+      expect(pay.safeParse({ ...ok, ...bad }).success, JSON.stringify(bad)).toBe(false);
+    }
+    expect(pay.safeParse({ ...ok, note: 'x'.repeat(200) }).success).toBe(true);
+  });
+
+  it('text bounds: names 120, phone 30, village 80, notes 500, text is trimmed', () => {
+    const f = (fields: Record<string, unknown>) => create.safeParse({ fields });
+    expect(f({ name_en: 'x'.repeat(120) }).success).toBe(true);
+    expect(f({ name_en: 'x'.repeat(121) }).success).toBe(false);
+    expect(f({ name_ur: 'x'.repeat(121) }).success).toBe(false);
+    expect(f({ phone: 'x'.repeat(30) }).success).toBe(true);
+    expect(f({ phone: 'x'.repeat(31) }).success).toBe(false);
+    expect(f({ village: 'x'.repeat(80) }).success).toBe(true);
+    expect(f({ village: 'x'.repeat(81) }).success).toBe(false);
+    expect(f({ notes: 'x'.repeat(500) }).success).toBe(true);
+    expect(f({ notes: 'x'.repeat(501) }).success).toBe(false);
+    expect(f({ credit_limit: -1 }).success).toBe(false);
+    expect(f({ credit_limit: 1.5 }).success).toBe(false);
+    expect(create.parse({ fields: { name_en: '  Ali  ' } }).fields.name_en).toBe('Ali');
+  });
+
+  it('the owner-only fields ARE accepted by the create schema (so a staff create gets FIELD_NOT_ALLOWED from the core, not a vague INVALID_INPUT)', () => {
+    expect(create.safeParse({ fields: { name_en: 'A', credit_limit: 5, default_price_type: 'wholesale', father_name: 'B', cnic: '1', phone2: '2', guarantor: 'C' } }).success).toBe(true);
+  });
+
+  it('the statement dates are real days and `from` is not after `to`', () => {
+    const c = id();
+    expect(statement.safeParse({ customer_id: c }).success).toBe(true);
+    expect(statement.safeParse({ customer_id: c, from: '2026-10-05', to: '2026-10-05' }).success).toBe(true);
+    for (const bad of [{ from: '2026-10-06', to: '2026-10-05' }, { from: '2026-02-30' }, { to: '2026-13-01' }, { from: '2026-1-1' }, { from: 'yesterday' }]) {
+      expect(statement.safeParse({ customer_id: c, ...bad }).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('the list takes bounded paging and only known filters and sorts', () => {
+    expect(list.safeParse({}).success).toBe(true);
+    for (const bad of [{ filter: 'rich' }, { sort: 'cost' }, { name_language: 'fr' }, { limit: 0 }, { limit: 501 }, { offset: -1 }, { query: 'x'.repeat(101) }]) {
+      expect(list.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
   });
 });

@@ -138,3 +138,14 @@ export interface PrintResult {
   /** This document said COPY (it was not the first print of this invoice). */
   is_copy: boolean;
 }
+
+// ---------- Phase 6 M2: customers, payments, statement (none of it carries a cost) ----------
+import type { CustomerList, CustomerPaymentResult, CustomerSettings, CustomerSummary, CustomerTermsResult, DuplicateMatch, Statement } from '@pos/core';
+
+export type CustomerListView = CustomerList;
+export type CustomerSummaryView = CustomerSummary;
+export type DuplicateMatchView = DuplicateMatch;
+export type CustomerTermsView = CustomerTermsResult;
+export type CustomerSettingsView = CustomerSettings;
+export type CustomerPaymentView = CustomerPaymentResult;
+export type StatementView = Statement;
