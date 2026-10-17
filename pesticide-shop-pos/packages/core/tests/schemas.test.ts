@@ -50,7 +50,7 @@ describe('Batch and Customer', () => {
   });
 
   it('Customer credit limit cannot be negative', () => {
-    const customer = { id: randomUUID(), name_en: 'Rashid', name_ur: null, phone: null, village: 'Kot', credit_limit: 1_000_000, default_price_type: 'retail' as const, notes: null, ...scope(), ...meta() };
+    const customer = { id: randomUUID(), name_en: 'Rashid', name_ur: null, phone: null, village: 'Kot', credit_limit: 1_000_000, default_price_type: 'retail' as const, notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, ...scope(), ...meta() };
     expect(Customer.safeParse(customer).success).toBe(true);
     expect(Customer.safeParse({ ...customer, credit_limit: -1 }).success).toBe(false);
   });

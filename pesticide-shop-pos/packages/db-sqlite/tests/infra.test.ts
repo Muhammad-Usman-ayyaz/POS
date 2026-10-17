@@ -52,15 +52,16 @@ describe('migrations', () => {
       [4, 'product_groups'],
       [5, 'return_tax_and_name_snapshot'],
       [6, 'sale_request_id_and_held_bills'],
+      [7, 'customers_khata'],
     ]);
   });
 
   it('applies on a fresh database, records the version, and is a no-op the second time', async () => {
     const db = openDatabase(':memory:');
     const first = await migrate(db);
-    expect(first.applied).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(first.applied).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(first.backupPath).toBeNull();
-    expect(currentSchemaVersion(db)).toBe(6);
+    expect(currentSchemaVersion(db)).toBe(7);
     const second = await migrate(db);
     expect(second.applied).toEqual([]);
   });
@@ -93,7 +94,7 @@ describe('migrations', () => {
       expect(() => db.prepare('SELECT payment_method FROM invoices').get()).toThrow(/no such column/);
 
       const result = await migrate(db);
-      expect(result.applied).toEqual([2, 3, 4, 5, 6]);
+      expect(result.applied).toEqual([2, 3, 4, 5, 6, 7]);
       expect(result.backupPath).not.toBeNull(); // the existing database was copied first
       expect(db.prepare("SELECT payment_method FROM invoices WHERE id = 'old-1'").get()).toEqual({ payment_method: 'cash' });
     });
@@ -174,7 +175,7 @@ describe('first-launch setup', () => {
     expect(db.prepare('SELECT role FROM users WHERE id=?').get(ids.ownerId)).toEqual({ role: 'owner' });
     expect(db.prepare("SELECT value FROM settings WHERE \"key\"='near_expiry_days'").get()).toEqual({ value: '30' });
     const prefixes = db.prepare('SELECT prefix FROM number_sequences ORDER BY sequence_name').all();
-    expect(prefixes).toEqual([{ prefix: 'INV-A-' }, { prefix: 'PUR-A-' }, { prefix: 'RET-A-' }]);
+    expect(prefixes).toEqual([{ prefix: 'INV-A-' }, { prefix: 'RCP-A-' }, { prefix: 'PUR-A-' }, { prefix: 'RET-A-' }]);
     expect(checkIntegrity(db).ok).toBe(true);
   });
 
