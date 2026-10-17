@@ -8,6 +8,9 @@ import { I18nProvider, useI18n } from '../i18n/index.js';
 import { LoginPage } from '../pages/login-page.js';
 import { PlaceholderPage } from '../pages/placeholder-page.js';
 import { CustomersListPage } from '../pages/customers/list/customers-list-page.js';
+// BEGIN customers form
+import { CustomerFormPage } from '../pages/customers/form/customer-form-page.js';
+// END customers form
 import { InvoicesPage } from '../pages/invoices/invoices-page.js';
 import { PrintActions } from '../pages/invoices/print-actions.js';
 import { PosPage } from '../pages/pos/pos-page.js';
@@ -107,6 +110,10 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut, onShopRenamed 
           <Route path="/products" element={<ProductsPage api={api} user={user} />} />
           <Route path="/products/new" element={<ProductFormPage api={api} user={user} />} />
           <Route path="/products/:groupId/edit" element={<ProductFormPage api={api} user={user} />} />
+          {/* BEGIN customers form */}
+          <Route path="/customers/new" element={<CustomerFormPage api={api} user={user} />} />
+          <Route path="/customers/:id/edit" element={<CustomerFormPage api={api} user={user} />} />
+          {/* END customers form */}
           <Route path="/purchases" element={<PurchasesPage user={user} />} />
           <Route path="/purchases/receive" element={<ReceiveStockPage api={api} user={user} />} />
           {/* BEGIN customers list */}

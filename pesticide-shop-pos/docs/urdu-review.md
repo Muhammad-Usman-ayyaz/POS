@@ -284,3 +284,51 @@ Written by the developer, not yet checked by a native speaker. The keys are `set
 | `settings.receiptFooter` (label) | Receipt footer text | رسید کے نیچے کی عبارت | |
 | `settings.receiptFooterPlaceholder` (also the standard printed line) | Thank you. Please keep this receipt. | شکریہ۔ رسید سنبھال کر رکھیں۔ | |
 | `settings.receiptFooterHint` | Printed at the bottom of receipts and invoices instead of the standard thank-you line. Left empty, the standard line is printed. | رسید اور بل کے نیچے عام شکریے کی سطر کی جگہ چھپتی ہے۔ خالی ہو تو عام سطر چھپتی ہے۔ | |
+
+## Customer form and Customers settings (Phase 6 M4): the developer's Urdu, NOT reviewed
+
+`customerForm.*` and `customerSettings.*`. Only the Urdu field label "نام (اردو)" is the design's own. Everything else below is the developer's wording and needs a native speaker. (The error messages `DUPLICATE_CUSTOMER`, `VERSION_CONFLICT` and `FIELD_NOT_ALLOWED` are older and listed with the Phase 6 errors.)
+
+| Key | English | Urdu | Reviewer's correction |
+|---|---|---|---|
+| `customerForm.back` | Customers & Khata | گاہک اور کھاتہ | |
+| `customerForm.addTitle` | Add customer | نیا گاہک | |
+| `customerForm.editTitle` | Edit customer · {name} | گاہک میں تبدیلی · {name} | |
+| `customerForm.subtitle` | Write a name and how to reach the customer. One name is enough. | نام اور رابطے کی تفصیل لکھیں۔ ایک نام کافی ہے۔ | |
+| `customerForm.cancel` / `dupCancel` | Cancel | منسوخ | |
+| `customerForm.save` | Save customer | گاہک محفوظ کریں | |
+| `customerForm.saving` / `saved` | Saving… / Customer saved | محفوظ ہو رہا ہے… / گاہک محفوظ ہو گیا | |
+| `customerForm.loading` / `notFound` / `retry` | Loading customer… / This customer was not found / Try again | گاہک کھل رہا ہے… / یہ گاہک نہیں ملا / دوبارہ کوشش کریں | |
+| `customerForm.nameEn` | Name (English) | نام (English) | |
+| `customerForm.nameUr` | Name (اردو) | نام (اردو) (from the design) | |
+| `customerForm.phone` / `village` / `notes` | Phone / Village / Notes | فون / گاؤں / نوٹ | |
+| `customerForm.problems.name` | Write a name in English or Urdu | انگریزی یا اردو میں نام لکھیں | |
+| `customerForm.problems.creditLimit` | Write the limit in rupees, such as 10000, or 0 for no limit | حد روپوں میں لکھیں، مثلاً 10000، یا بغیر حد کے لیے 0 | |
+| `customerForm.termsHeading` / `termsHint` | Terms / Only the owner sets these. | شرائط / یہ صرف مالک مقرر کرتا ہے۔ | |
+| `customerForm.priceType` | Default price type | عام ریٹ کی قسم | |
+| `customerForm.retail` / `wholesale` | Retail / Wholesale | پرچون / تھوک | |
+| `customerForm.creditLimit` / `creditLimitHint` | Credit limit / 0 = no limit | ادھار کی حد / 0 = کوئی حد نہیں | |
+| `customerForm.staffLimitNote` | The credit limit is set by the owner. | ادھار کی حد مالک مقرر کرتا ہے۔ | |
+| `customerForm.staffDefaultLimit` | A new customer starts with {amount}. | نیا گاہک {amount} کی حد سے شروع ہوتا ہے۔ | |
+| `customerForm.staffCustomerLimit` | This customer's limit is {amount}. | اس گاہک کی حد {amount} ہے۔ | |
+| `customerForm.noLimit` | No limit | کوئی حد نہیں | |
+| `customerForm.addFarmer` / `hideFarmer` | Add farmer details / Hide farmer details | کسان کی تفصیل شامل کریں / کسان کی تفصیل چھپائیں | |
+| `customerForm.farmerHeading` / `farmerHint` | Extra details / Optional. They are never needed to save. | اضافی تفصیل / اختیاری۔ محفوظ کرنے کے لیے ضروری نہیں۔ | |
+| `customerForm.fatherName` / `cnic` / `phone2` / `guarantor` | Father's name / CNIC / Second phone / Guarantor | والد کا نام / شناختی کارڈ نمبر / دوسرا فون / ضامن | |
+| `customerForm.dupTitle` | A customer named {name} is already saved. | {name} نام کا گاہک پہلے سے محفوظ ہے۔ | |
+| `customerForm.dupTitlePhone` | A customer with this phone number is already saved. | اس فون نمبر کا گاہک پہلے سے محفوظ ہے۔ | |
+| `customerForm.dupHint` | If this is another person, add the village or father's name so staff can tell them apart. | اگر یہ کوئی اور شخص ہے تو گاؤں یا والد کا نام لکھ دیں تاکہ عملہ فرق کر سکے۔ | |
+| `customerForm.dupOpen` | Open existing {name} | موجودہ {name} کھولیں | |
+| `customerForm.dupSaveNew` | Save as new | نیا محفوظ کریں | |
+| `customerForm.owes` / `advance` | Owes {amount} / Advance {amount} | بقایا {amount} / پیشگی {amount} | |
+| `customerForm.conflictTitle` / `conflictBody` / `reload` | Someone changed this customer / Reload to see the new details, then make your change again. / Reload | اس گاہک کی تفصیل کسی اور نے بدل دی ہے / نئی تفصیل دیکھنے کے لیے دوبارہ کھولیں، پھر اپنی تبدیلی کریں۔ / دوبارہ کھولیں | |
+| `customerForm.partial` | The contact details were saved, but the terms were not. The form now shows what is saved. | رابطے کی تفصیل محفوظ ہو گئی مگر شرائط محفوظ نہیں ہوئیں۔ فارم میں اب جو محفوظ ہے وہی نظر آ رہا ہے۔ | |
+| `customerForm.belowBalance` | The limit is below what the customer owes; the next credit sale will need the owner | حد گاہک کے بقایا سے کم ہے؛ اگلی ادھار فروخت کے لیے مالک کی منظوری چاہیے ہوگی | |
+| `customerSettings.sectionLabel` / `heading` | Customers | گاہک | |
+| `customerSettings.hint` | What a new customer starts with, and what the customer form shows. | نئے گاہک کی شروعات کیا ہو، اور گاہک کے فارم میں کیا نظر آئے۔ | |
+| `customerSettings.defaultLimit` / `defaultLimitHint` | Default credit limit / Given to every new customer. 0 = no limit. | ادھار کی عام حد / ہر نئے گاہک کو ملتی ہے۔ 0 = کوئی حد نہیں۔ | |
+| `customerSettings.limitInvalid` | Write the limit in rupees, such as 10000, or 0 for no limit | حد روپوں میں لکھیں، مثلاً 10000، یا بغیر حد کے لیے 0 | |
+| `customerSettings.showFarmer` / `showFarmerHint` | Show farmer details / Father's name, CNIC, second phone and guarantor on the customer form. Details already saved stay when this is off. | کسان کی تفصیل دکھائیں / گاہک کے فارم میں والد کا نام، شناختی کارڈ، دوسرا فون اور ضامن۔ بند کرنے پر پہلے سے محفوظ تفصیل مٹتی نہیں۔ | |
+| `customerSettings.on` / `off` | On / Off | چالو / بند | |
+| `customerSettings.save` / `saving` / `saved` | Save / Saving… / Settings saved | محفوظ کریں / محفوظ ہو رہا ہے… / ترتیبات محفوظ ہو گئیں | |
+| `customerSettings.nothingChanged` / `loading` / `retry` | Nothing changed yet / Loading… / Try again | ابھی کچھ نہیں بدلا / کھل رہا ہے… / دوبارہ کوشش کریں | |
