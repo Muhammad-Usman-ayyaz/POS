@@ -3,3 +3,4 @@
 export * as productFormRules from './pages/products/product-form-state.js';
 export * as receiveRules from './pages/purchases/receive-state.js';
 export * as invoiceRules from './pages/invoices/invoices-requests.js';
+export * as customerListRules from './pages/customers/list/customer-list-requests.js';
