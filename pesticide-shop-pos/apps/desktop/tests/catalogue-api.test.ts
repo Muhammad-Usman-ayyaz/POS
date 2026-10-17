@@ -61,6 +61,17 @@ const EXPECTED: Record<Channel, Who> = {
   'bills:list': 'signed-in',
   'bills:resume': 'signed-in',
   'bills:discard': 'signed-in',
+  // Phase 6 M2: customers, payments, statement. Terms and shop settings are the owner's; everything else is any signed-in user.
+  'customers:list': 'signed-in',
+  'customers:get': 'signed-in',
+  'customers:findDuplicates': 'signed-in',
+  'customers:create': 'signed-in',
+  'customers:update': 'signed-in',
+  'customers:setTerms': 'owner',
+  'customers:getSettings': 'signed-in',
+  'customers:setSettings': 'owner',
+  'payments:receive': 'signed-in',
+  'khata:statement': 'signed-in',
 };
 
 const OWNER_USER: SessionUser = { id: randomUUID(), name: 'Owner', username: 'owner', role: 'owner' };
@@ -114,6 +125,16 @@ const SAMPLES: Record<Channel, () => Record<string, unknown>> = {
   'bills:list': () => ({}),
   'bills:resume': () => ({ id: randomUUID() }),
   'bills:discard': () => ({ id: randomUUID() }),
+  'customers:list': () => ({ query: 'rashid', filter: 'owes' }),
+  'customers:get': () => ({ customer_id: randomUUID() }),
+  'customers:findDuplicates': () => ({ name_en: 'Rashid', phone: '0300 1234567' }),
+  'customers:create': () => ({ fields: { name_en: 'New Farmer', phone: '0300 5551234' } }),
+  'customers:update': () => ({ customer_id: randomUUID(), fields: { village: 'Chak 5' }, expected_version: 1 }),
+  'customers:setTerms': () => ({ customer_id: randomUUID(), credit_limit: 500_000, default_price_type: 'retail', expected_version: 1 }),
+  'customers:getSettings': () => ({}),
+  'customers:setSettings': () => ({ default_credit_limit: 100_000 }),
+  'payments:receive': () => ({ customer_id: randomUUID(), amount: 10_000, method: 'cash' }),
+  'khata:statement': () => ({ customer_id: randomUUID(), from: '2026-10-01', to: '2026-10-31' }),
 };
 
 /** A stand-in for Electron's ipcMain: calls arrive the way the renderer's would. */
@@ -219,7 +240,7 @@ describe('role x channel matrix', () => {
 // The renderer never says who is acting
 // ---------------------------------------------------------------------------------------------------------------------------
 describe('spoofed identity is refused on every channel', () => {
-  it.each(['actor_id', 'created_by', 'approved_by', 'user_id'])('%s: refused before any handler runs, on all channels', async (key) => {
+  it.each(['actor_id', 'created_by', 'approved_by', 'user_id', 'actor', 'privileged', 'role'])('%s: refused before any handler runs, on all channels', async (key) => {
     const ipc = fakeIpc();
     const { handlers, calls } = spyHandlers();
     registerIpc(ipc.ipcMain, handlers, () => true);
@@ -382,7 +403,7 @@ describe('with a real shop', () => {
       await ownerSetsUp();
       await shop.signOut();
       const before = footprint();
-      for (const channel of channels.filter((c) => /^(catalogue|suppliers|categories|brands):/.test(c) || c === 'stock:receive')) {
+      for (const channel of channels.filter((c) => /^(catalogue|suppliers|categories|brands|customers|payments):/.test(c) || c === 'stock:receive' || c === 'khata:statement')) {
         const result = await attempt((h()[channel] as (i: unknown) => Promise<unknown>)(SAMPLES[channel]()));
         expect(result, channel).toMatchObject({ ok: false, error: { code: 'NOT_SIGNED_IN' } });
       }
@@ -442,6 +463,10 @@ describe('with a real shop', () => {
       // Two bills held by staff, for the held-bills channels to list, resume and discard (the owner's cost is in the database all the same).
       const toResume = await h()['bills:hold']({ customer_id: shop.demo.customers['rashid']!, lines: [{ product_id: five.id, qty: 500, discount: { kind: 'amount', value: 100 } }] });
       const toDiscard = await h()['bills:hold']({ lines: [{ product_id: one.id, qty: 1000 }] });
+      // Phase 6 M2: a real customer, her current version (for update), and a second customer sharing her name (for the duplicate error).
+      const rashid = shop.demo.customers['rashid']!;
+      const rashidNow = await h()['customers:get']({ customer_id: rashid });
+      const rashidName = rashidNow.customer.name_en!;
 
       const real: Partial<Record<Channel, object[]>> = {
         'bills:hold': [{ lines: [{ product_id: five.id, qty: 500 }] }, { price_type: 'wholesale', note: 'x', lines: [{ product_id: one.id, qty: 1000 }] }],
@@ -469,6 +494,27 @@ describe('with a real shop', () => {
         'catalogue:updateSize': [{ product_id: five.id, changes: { retail_price: 1 } }],
         'catalogue:createGroup': [{ name_en: 'x' }],
         'catalogue:updateGroup': [{ group_id: made.group.id, name_en: 'x' }],
+        // Phase 6 M2: every new channel, as staff, with real data (and the errors staff can reach)
+        'customers:list': [{}, { query: 'rashid' }, { filter: 'owes', sort: 'balance' }, { filter: 'overdue', sort: 'overdue', name_language: 'ur' }, { filter: 'advance', limit: 5, offset: 0 }],
+        'customers:get': [{ customer_id: rashid }],
+        'customers:findDuplicates': [{ name_en: rashidName }, { phone: '0300 0000000' }],
+        'customers:create': [
+          { fields: { name_en: 'Staff Added Farmer', phone: '0311 1112223', village: 'Chak 9' } },
+          { fields: { name_en: rashidName } }, // DUPLICATE_CUSTOMER
+          { fields: { name_en: rashidName }, confirm_duplicate: true },
+          { fields: { name_en: 'Greedy Farmer', credit_limit: 9_000_000 } }, // FIELD_NOT_ALLOWED
+        ],
+        'customers:update': [{ customer_id: rashid, fields: { village: 'Chak 7' }, expected_version: rashidNow.customer.version }, { customer_id: rashid, fields: { village: 'Chak 8' }, expected_version: rashidNow.customer.version }], // the 2nd is VERSION_CONFLICT
+        'customers:setTerms': [{ customer_id: rashid, credit_limit: 9_000_000, default_price_type: 'wholesale', expected_version: rashidNow.customer.version }],
+        'customers:getSettings': [{}],
+        'customers:setSettings': [{ default_credit_limit: 9_000_000 }],
+        'payments:receive': [
+          { customer_id: rashid, amount: 1_000, method: 'cash', note: 'part payment' },
+          { customer_id: rashid, amount: 1_000, method: 'bank' }, // REFERENCE_REQUIRED
+          { customer_id: rashid, amount: 1_000, method: 'bank', reference_no: 'TRX-77' },
+          { customer_id: rashid, amount: 900_000_000, method: 'cash' }, // ADVANCE_NOT_CONFIRMED
+        ],
+        'khata:statement': [{ customer_id: rashid }, { customer_id: rashid, from: day(-30), to: day(0) }],
       };
       const replies: unknown[] = [];
       const succeeded = new Set<Channel>();
@@ -487,10 +533,16 @@ describe('with a real shop', () => {
       const found = replies.flatMap((r, i) => leaks(r).map((l) => `reply #${i} ${JSON.stringify(r).slice(0, 120)} -> ${l}`));
       expect(found).toEqual([]);
       // The calls were real, as STAFF: these channels really answered with data (not NOT_SIGNED_IN, not INVALID_INPUT), so a clean scan means something.
-      for (const channel of ['catalogue:list', 'stock:batchesOf', 'sale:create', 'invoices:list', 'invoices:get', 'invoices:receipt', 'print:document', 'printers:list', 'print:getConfig', 'bills:hold', 'bills:list', 'bills:resume', 'bills:discard'] as const) {
+      for (const channel of ['catalogue:list', 'stock:batchesOf', 'sale:create', 'invoices:list', 'invoices:get', 'invoices:receipt', 'print:document', 'printers:list', 'print:getConfig', 'bills:hold', 'bills:list', 'bills:resume', 'bills:discard',
+        'customers:list', 'customers:get', 'customers:findDuplicates', 'customers:create', 'customers:update', 'customers:getSettings', 'payments:receive', 'khata:statement'] as const) {
         expect(succeeded.has(channel), `${channel} never succeeded for staff`).toBe(true);
       }
       expect(succeeded.has('print:setConfig')).toBe(false); // owner-only: staff only ever got the refusal
+      expect(succeeded.has('customers:setTerms')).toBe(false);
+      expect(succeeded.has('customers:setSettings')).toBe(false);
+      // ...and the Phase 6 error codes really were reached by staff (so the error replies were scanned too)
+      const codes = new Set(replies.flatMap((r) => ((r as { ok: boolean; error?: { code: string } }).ok ? [] : [(r as { error: { code: string } }).error.code])));
+      for (const code of ['DUPLICATE_CUSTOMER', 'FIELD_NOT_ALLOWED', 'VERSION_CONFLICT', 'REFERENCE_REQUIRED', 'ADVANCE_NOT_CONFIRMED']) expect(codes.has(code), code).toBe(true);
     });
 
     // The same deep scan, extended to the PRINT OUTPUT: what a staff member sends to the printer or saves as a PDF (the 80 mm receipt and the A4
