@@ -40,6 +40,11 @@ export const Customer = z
     credit_limit: NonNegPaisa,
     default_price_type: PriceType,
     notes: z.string().nullable(),
+    /** Optional farmer details (migration 007). Shown only when the setting customers.show_farmer_fields is on. */
+    father_name: z.string().nullable(),
+    cnic: z.string().nullable(),
+    phone2: z.string().nullable(),
+    guarantor: z.string().nullable(),
     ...syncScope,
     ...editableMeta,
   })

@@ -34,6 +34,7 @@ const SEQUENCES: readonly (readonly [string, string])[] = [
   ['invoice', 'INV'],
   ['return', 'RET'],
   ['purchase', 'PUR'],
+  ['payment', 'RCP'],
 ];
 
 export function isSetupDone(db: Db): boolean {
