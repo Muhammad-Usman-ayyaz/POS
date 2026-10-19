@@ -133,6 +133,12 @@ export const CHANNEL_POLICY = {
   'payments:receive': 'signed-in',
   'khata:statement': 'signed-in',
   // ---------- END Phase 6 M2 ----------
+  // ---------- BEGIN Phase 6 M6 ----------
+  // Statements and payment receipts hold no cost; the counter prints them all day (like print:document). The CSV is saved through a dialog the main process opens.
+  'print:statement': 'signed-in',
+  'print:paymentReceipt': 'signed-in',
+  'khata:exportStatement': 'signed-in',
+  // ---------- END Phase 6 M6 ----------
 } as const satisfies Record<Channel, ChannelPolicy>;
 
 /** Throws NOT_SIGNED_IN or NOT_AUTHORIZED unless this user may call the channel. */

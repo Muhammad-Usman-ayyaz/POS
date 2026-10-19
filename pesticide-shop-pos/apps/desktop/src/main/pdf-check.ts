@@ -7,8 +7,8 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BrowserWindow } from 'electron';
-import type { InvoiceDocumentData } from '@pos/core';
-import { findCostLeaks, PAGE, renderDocumentHtml } from '@pos/ui/print';
+import type { InvoiceDocumentData, PaymentReceiptData, StatementDocumentData, StatementDocumentLine } from '@pos/core';
+import { findCostLeaks, PAGE, renderDocumentHtml, renderPaymentReceiptHtml, renderStatementHtml } from '@pos/ui/print';
 import { createElectronPrintDriver } from './printing/electron-driver.js';
 import { documentFonts } from './printing/fonts.js';
 
@@ -75,6 +75,8 @@ export interface PdfReport {
   items: { str: string; dir: string; x: number; y: number; width: number }[];
   /** All items joined, one line per text row. */
   text: string;
+  /** The text of each page on its own (page 1 first): to tell which page a row is on. */
+  pageTexts: string[];
   /** Each page drawn at `scale` pixels per CSS pixel (3 unless asked), as a PNG data address. */
   pngs: string[];
 }
@@ -84,7 +86,7 @@ const READ_PDF = (scale: number) => `(async () => {
   const pdfjs = await import('./pdf.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = './pdf.worker.mjs';
   const doc = await pdfjs.getDocument({ data: new Uint8Array(await (await fetch('./doc.pdf')).arrayBuffer()), useSystemFonts: false }).promise;
-  const out = { pages: doc.numPages, items: [], text: '', pngs: [] };
+  const out = { pages: doc.numPages, items: [], text: '', pngs: [], pageTexts: [] };
   for (let n = 1; n <= doc.numPages; n++) {
     const page = await doc.getPage(n);
     const content = await page.getTextContent();
@@ -96,6 +98,7 @@ const READ_PDF = (scale: number) => `(async () => {
       if (it.hasEOL) { line += '\\n'; }
     }
     out.text += line + '\\n';
+    out.pageTexts.push(line);
     const canvas = document.createElement('canvas');
     const viewport = page.getViewport({ scale: ${scale} * 96 / 72 });
     canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
@@ -188,6 +191,152 @@ export function checkReadingOrder(label: string, text: string, expected: Expecte
   });
 }
 
+
+// ---------- Phase 6 M6: the customer statement (80 mm and A4) and the payment receipt, English and Urdu ----------
+
+const statementLine = (_n: number, label: StatementDocumentLine['label'], date: string, delta: number, running: number, extra: Partial<StatementDocumentLine> = {}): StatementDocumentLine => ({
+  kind: 'entry', label, date, amount_delta: delta, running_balance: running, invoice_no: null, return_no: null, payment_method: null, reference_no: null, receipt_no: null, note: null, ...extra,
+});
+
+/** The statement of docs/design/CustomerForms.dc.html section 4, with an Urdu customer, an Urdu note and Latin references that sit inside Urdu text. */
+export function urduStatement(kind: 'receipt' | 'invoice'): StatementDocumentData {
+  return {
+    kind,
+    shop: { name: 'Pesticide Club Shop', name_ur: 'پیسٹیسائیڈ کلب شاپ', address: null, phone: null },
+    customer: { name_en: 'Rashid Ali', name_ur: 'راشد علی', village: 'چک 12', phone: '0300 1234567' },
+    from: null,
+    to: null,
+    lines: [
+      statementLine(1, 'opening', '2026-10-01T07:00:00.000Z', 400_000, 400_000),
+      statementLine(2, 'sale', '2026-10-02T07:00:00.000Z', 500_000, 900_000, { invoice_no: 'INV-A-000001' }),
+      statementLine(3, 'payment', '2026-10-02T08:00:00.000Z', -200_000, 700_000, { payment_method: 'cash', receipt_no: 'RCP-A-000001', note: 'کپاس کی فصل کے بعد' }),
+      statementLine(4, 'return', '2026-10-02T09:00:00.000Z', -100_000, 600_000, { return_no: 'RET-A-000001' }),
+      statementLine(5, 'payment', '2026-10-07T07:00:00.000Z', -150_000, 450_000, { payment_method: 'bank', reference_no: 'TRX 88213', receipt_no: 'RCP-A-000002' }),
+      statementLine(6, 'sale', '2026-10-09T07:00:00.000Z', 450_000, 900_000, { invoice_no: 'INV-A-000009' }),
+    ],
+    brought_forward: 0,
+    totals: { owes_more: 1_350_000, owes_less: 450_000 },
+    closing_balance: 900_000,
+    credit_limit: 1_000_000,
+    copies_printed: 0,
+    is_copy: false,
+    time_zone: 'Asia/Karachi',
+  };
+}
+
+/** A long A4 statement: every row has a note under its type, so a row has two lines and could be split by a page break. */
+export function longStatement(rows: number): StatementDocumentData {
+  const lines: StatementLine[] = [];
+  let running = 0;
+  for (let i = 1; i <= rows; i++) {
+    const sale = i % 3 !== 0;
+    const delta = sale ? 100_000 + i * 100 : -(50_000 + i * 100);
+    running += delta;
+    lines.push(statementLine(i, sale ? 'sale' : 'payment', '2026-10-02T07:00:00.000Z', delta, running, sale ? { invoice_no: `INV-A-${String(i).padStart(6, '0')}`, note: `NOTE-${String(i).padStart(3, '0')}` } : { payment_method: 'cash', receipt_no: `RCP-A-${String(i).padStart(6, '0')}`, note: `NOTE-${String(i).padStart(3, '0')}` }));
+  }
+  return { ...urduStatement('invoice'), lines, totals: { owes_more: 1, owes_less: 1 }, closing_balance: running };
+}
+type StatementLine = StatementDocumentLine;
+
+export function urduPaymentReceipt(): PaymentReceiptData {
+  return {
+    shop: { name: 'Pesticide Club Shop', name_ur: 'پیسٹیسائیڈ کلب شاپ', address: null, phone: null },
+    customer: { name_en: 'Rashid Ali', name_ur: 'راشد علی', village: 'چک 12', phone: null },
+    payment: { id: '55555555-5555-4555-8555-555555555555', receipt_no: 'RCP-A-000001', paid_at: '2026-10-12T05:42:00.000Z', method: 'easypaisa', reference_no: 'EP-48210937', note: 'دکان پر بیٹے نے ادا کیے', amount: 500_000 },
+    balance_after: 400_000,
+    copies_printed: 0,
+    is_copy: false,
+    time_zone: 'Asia/Karachi',
+  };
+}
+
+const KHATA_URDU = ['راشد علی', 'پیسٹیسائیڈ کلب شاپ', 'ابتدائی بقایا', 'فروخت', 'ادائیگی', 'واپسی کا کریڈٹ', 'ان کے ذمے', 'کپاس کی فصل کے بعد'];
+const KHATA_LATIN = ['INV-A-000001', 'RCP-A-000001', 'RET-A-000001', 'TRX 88213', 'Rs 9,000', 'Rs 10,000', '01 Oct'];
+const RECEIPT_URDU = ['راشد علی', 'پیسٹیسائیڈ کلب شاپ', 'ادائیگی کی رسید', 'وصول کنندہ از', 'ایزی پیسہ', 'وصول شدہ رقم', 'اس کے بعد بقایا', 'ان کے ذمے', 'دکان پر بیٹے نے ادا کیے'];
+const RECEIPT_LATIN = ['RCP-A-000001', 'EP-48210937', 'Rs 5,000', 'Rs 4,000', '12 Oct 2026, 10:42'];
+
+/** Prints each new document to a real PDF, reads it back, and checks: Urdu joined and right to left, Latin runs whole, fonts, no cost, and A4 pagination without a split row. */
+async function runKhataChecks(driver: ReturnType<typeof createElectronPrintDriver>, outDir: string, pdfjsBuildDir: string, checks: Check[]): Promise<void> {
+  const receiptPage = { widthMm: PAGE.receipt.widthMm, heightMm: PAGE.receipt.heightMm };
+  const a4Page = { widthMm: PAGE.invoice.widthMm, heightMm: PAGE.invoice.heightMm };
+  const docs: { label: string; file: string; language: 'en' | 'ur'; html: string; page: { widthMm: number; heightMm: number | null }; urdu: string[]; latin: string[]; sample: unknown }[] = [];
+  for (const language of ['en', 'ur'] as const) {
+    docs.push({ label: `statement 80 mm (${language})`, file: `statement-80mm-${language}`, language, html: renderStatementHtml(urduStatement('receipt'), language, documentFonts), page: receiptPage, urdu: KHATA_URDU.filter((s) => s !== 'کپاس کی فصل کے بعد'), latin: KHATA_LATIN, sample: urduStatement('receipt') });
+    docs.push({ label: `statement A4 (${language})`, file: `statement-a4-${language}`, language, html: renderStatementHtml(urduStatement('invoice'), language, documentFonts), page: a4Page, urdu: KHATA_URDU, latin: KHATA_LATIN.filter((s) => s !== '01 Oct'), sample: urduStatement('invoice') });
+    docs.push({ label: `payment receipt (${language})`, file: `payment-receipt-${language}`, language, html: renderPaymentReceiptHtml(urduPaymentReceipt(), language, documentFonts), page: receiptPage, urdu: RECEIPT_URDU, latin: RECEIPT_LATIN, sample: urduPaymentReceipt() });
+  }
+  for (const d of docs) {
+    const label = d.label;
+    const pdf = await driver.toPdf(d.html, { page: d.page });
+    const pdfPath = join(outDir, `${d.file}.pdf`);
+    writeFileSync(pdfPath, pdf);
+    const report = await readPdf(pdf, pdfjsBuildDir, join(outDir, '.reader'), 2);
+    report.pngs.forEach((png, i) => writeFileSync(join(outDir, `${d.file}${i === 0 ? '' : ` page ${i + 1}`}.png`), Buffer.from(png.split(',')[1] ?? '', 'base64')));
+    checks.push({ name: `${label}: one PDF page`, ok: report.pages === 1, detail: `${report.pages} page(s)` });
+    const fonts = pdfFontNames(pdf);
+    checks.push({ name: `${label}: embedded fonts are only Noto Naskh Arabic and IBM Plex Sans`, ok: fonts.length > 0 && fonts.every((f) => /Naskh|Plex/i.test(f)), detail: fonts.join(', ') });
+    const flat = report.text.replace(/\s+/g, ' ');
+    for (const run of d.latin) checks.push({ name: `${label}: "${run}" is whole and in order`, ok: flat.includes(run), detail: flat.includes(run) ? undefined : 'not found' });
+    checks.push({ name: `${label}: no flipped Latin runs ("88213 TRX", "000001-A-INV", "Oct 01")`, ok: !/88213 TRX|000001-A-INV|000001-A-RCP|\bOct 0?[1-9]\b(?! 2026)/.test(flat) });
+    const text = pdftotext(pdfPath);
+    if (d.language === 'ur') {
+      const forms = report.text.match(PRESENTATION_FORMS)?.length ?? 0;
+      checks.push({ name: `${label}: Urdu letters are SHAPED (contextual forms in the text layer)`, ok: forms >= 40, detail: `${forms} contextual-form letters` });
+      if (text !== null) checks.push(...checkReadingOrder(label, text, { urdu: d.urdu, latin: [] }));
+    }
+    // No cost: the same document, but its data carries a cost on everything (a field that must never be printed).
+    const dirty = d.sample as Record<string, unknown>;
+    const withCost = { ...dirty, cost_total: COST_SENTINEL, profit: COST_SENTINEL, cost: COST_SENTINEL, margin: COST_SENTINEL, ...(Array.isArray(dirty['lines']) ? { lines: (dirty['lines'] as object[]).map((l) => ({ ...l, cost_price: COST_SENTINEL, margin: COST_SENTINEL })) } : {}) };
+    const costHtml = d.file.startsWith('payment') ? renderPaymentReceiptHtml(withCost as unknown as PaymentReceiptData, d.language, documentFonts) : renderStatementHtml(withCost as unknown as StatementDocumentData, d.language, documentFonts);
+    const costPdf = await driver.toPdf(costHtml, { page: d.page });
+    const costPath = join(outDir, `${d.file}-costscan.pdf`);
+    writeFileSync(costPath, costPdf);
+    const costReport = await readPdf(costPdf, pdfjsBuildDir, join(outDir, '.reader'), 1);
+    const costText = pdftotext(costPath);
+    const leaks = [...findCostLeaks(costReport.text, COST_SENTINEL), ...(costText === null ? [] : findCostLeaks(costText, COST_SENTINEL))];
+    checks.push({ name: `${label}: no cost, margin or profit in the PDF text layer (sentinel ${COST_SENTINEL} paisa in the data)`, ok: leaks.length === 0, detail: leaks.length ? leaks.join(', ') : 'pdf.js and pdftotext text' });
+  }
+
+  // Urdu direction: in a right-to-left line the first word sits at the right edge. The customer's Urdu name and the label "Received from" (Urdu) are on the right of their amounts.
+  {
+    const html = renderPaymentReceiptHtml(urduPaymentReceipt(), 'ur', documentFonts);
+    const report = await readPdf(await driver.toPdf(html, { page: receiptPage }), pdfjsBuildDir, join(outDir, '.reader'), 1);
+    const amount = report.items.find((i) => i.str.trim() === 'Rs 5,000');
+    const label = report.items.find((i) => /^\s*[\u0600-\u06FF\uFB50-\uFEFF]/.test(i.str) && amount && Math.abs(i.y - amount.y) < 2 && i.x > amount.x);
+    checks.push({ name: 'payment receipt (ur): right to left, the label stands to the RIGHT of its amount on the same line', ok: !!amount && !!label, detail: amount ? `amount at x=${amount.x.toFixed(0)}, ${label ? 'label at x=' + label.x.toFixed(0) : 'no label to its right'}` : 'amount not found' });
+  }
+
+  // A long A4 statement: several pages, the column heads on every page, no row split (a row's reference, its note and its balance are on ONE page), totals and closing on the last page.
+  for (const language of ['en', 'ur'] as const) {
+    const rows = 90;
+    const data = longStatement(rows);
+    const label = `long A4 statement (${language}, ${rows} rows)`;
+    const pdf = await driver.toPdf(renderStatementHtml(data, language, documentFonts), { page: a4Page });
+    writeFileSync(join(outDir, `statement-a4-long-${language}.pdf`), pdf);
+    const report = await readPdf(pdf, pdfjsBuildDir, join(outDir, '.reader'), 1);
+    report.pngs.forEach((png, i) => writeFileSync(join(outDir, `statement-a4-long-${language} page ${i + 1}.png`), Buffer.from(png.split(',')[1] ?? '', 'base64')));
+    checks.push({ name: `${label}: runs over several pages`, ok: report.pages >= 2, detail: `${report.pages} pages` });
+    const heads = language === 'en' ? 'Owes more' : 'بقایا بڑھا';
+    // Urdu in pdf.js comes in visual order; pdftotext reads it in logical order, one page per form feed.
+    const viaTool = pdftotext(join(outDir, `statement-a4-long-${language}.pdf`));
+    const readable = language === 'ur' && viaTool !== null ? viaTool.split('\f').filter((p, i, all) => p.trim() !== '' || i < all.length - 1) : report.pageTexts;
+    const headCounts = readable.map((t) => (plain(t).includes(plain(heads)) ? 1 : 0));
+    checks.push({ name: `${label}: the column heads repeat on every page`, ok: headCounts.every((n) => n >= 1), detail: headCounts.join(',') });
+    const split: string[] = [];
+    for (let i = 1; i <= rows; i++) {
+      const ref = i % 3 !== 0 ? `INV-A-${String(i).padStart(6, '0')}` : `RCP-A-${String(i).padStart(6, '0')}`;
+      const note = `NOTE-${String(i).padStart(3, '0')}`;
+      const pageOf = (needle: string): number => report.pageTexts.findIndex((t) => t.includes(needle));
+      const a = pageOf(ref);
+      const b = pageOf(note);
+      if (a === -1 || b === -1 || a !== b) split.push(`row ${i} (ref page ${a + 1}, note page ${b + 1})`);
+    }
+    checks.push({ name: `${label}: every row is whole on one page (reference and note together), and every row is present`, ok: split.length === 0, detail: split.slice(0, 5).join('; ') || undefined });
+    const last = readable[readable.length - 1] ?? '';
+    checks.push({ name: `${label}: totals and the closing balance are on the last page`, ok: plain(last).includes(plain(language === 'en' ? 'Totals' : 'میزان')) && plain(last).includes(plain(language === 'en' ? 'He owes' : 'ان کے ذمے')) });
+  }
+}
+
 export async function runPdfCheck(outDir: string, pdfjsBuildDir: string): Promise<boolean> {
   mkdirSync(outDir, { recursive: true });
   // The app quits when its last window closes (and the driver closes each window it opens): this one keeps it alive until the checks are done.
@@ -254,6 +403,7 @@ export async function runPdfCheck(outDir: string, pdfjsBuildDir: string): Promis
       checks.push({ name: `${label}: every amount and number of the design is in the text layer`, ok: missing.length === 0, detail: missing.length ? `missing ${missing.join(' | ')}` : undefined });
     }
   }
+  await runKhataChecks(driver, outDir, pdfjsBuildDir, checks);
   for (const c of checks) console.log(`${c.ok ? 'PASS' : 'FAIL'} ${c.name}${c.detail ? ` (${c.detail})` : ''}`);
   const failed = checks.filter((c) => !c.ok).length;
   console.log(`PDF CHECK: ${checks.length - failed} passed, ${failed} failed. PDFs, text dumps and PNGs are in ${outDir}. Now LOOK at the two PNGs: joined letters, right to left, "1 L" not "L 1".`);

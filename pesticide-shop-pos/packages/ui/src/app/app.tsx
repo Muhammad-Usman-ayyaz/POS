@@ -1,6 +1,6 @@
 import type { Api, AppState, Language, SessionUser } from '@pos/api-contract';
 import { useCallback, useEffect, useState } from 'react';
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { AppShell } from '../components/app-shell.js';
 import { ErrorNotice, ToastProvider } from '../components/feedback.js';
 import { NAV_ITEMS } from '../components/sidebar.js';
@@ -14,6 +14,9 @@ import { CustomerFormPage } from '../pages/customers/form/customer-form-page.js'
 // BEGIN customers detail
 import { CustomerDetailPage } from '../pages/customers/detail/customer-detail-page.js';
 // END customers detail
+// BEGIN customers statement
+import { PaymentReceiptActions, StatementPage, StatementPrintActions } from '../pages/khata/index.js';
+// END customers statement
 import { InvoicesPage } from '../pages/invoices/invoices-page.js';
 import { PrintActions } from '../pages/invoices/print-actions.js';
 import { PosPage } from '../pages/pos/pos-page.js';
@@ -97,6 +100,20 @@ function Screens({ api, state, bootError, refresh }: { api: Api; state: AppState
   return <SignedIn api={api} user={state.user} shopName={shopName} deviceText={deviceText} onSignedOut={() => void refresh()} onShopRenamed={() => void refresh()} />;
 }
 
+/** The customer page with Phase 6 M6's print buttons in its two slots: the payment receipt after a saved payment, and the statement buttons. */
+function CustomerDetailRoute({ api, user }: { api: Api; user: SessionUser }) {
+  const { id } = useParams();
+  return (
+    <CustomerDetailPage
+      api={api}
+      user={user}
+      receiptActions={(result) => <PaymentReceiptActions api={api} paymentId={result.payment.id} />}
+      statementActions={<StatementPrintActions api={api} customerId={id ?? ''} from="" to="" />}
+    />
+  );
+}
+
+
 function SignedIn({ api, user, shopName, deviceText, onSignedOut, onShopRenamed }: { api: Api; user: SessionUser; shopName: string; deviceText: string; onSignedOut: () => void; onShopRenamed: () => void }) {
   const signOut = () => void api.auth.logout().then(onSignedOut);
   return (
@@ -117,13 +134,16 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut, onShopRenamed 
           <Route path="/customers/new" element={<CustomerFormPage api={api} user={user} />} />
           <Route path="/customers/:id/edit" element={<CustomerFormPage api={api} user={user} />} />
           {/* END customers form */}
+          {/* BEGIN customers statement */}
+          <Route path="/customers/:id/statement" element={<StatementPage api={api} user={user} />} />
+          {/* END customers statement */}
           <Route path="/purchases" element={<PurchasesPage user={user} />} />
           <Route path="/purchases/receive" element={<ReceiveStockPage api={api} user={user} />} />
           {/* BEGIN customers list */}
           <Route path="/customers" element={<CustomersListPage api={api} user={user} />} />
           {/* END customers list */}
           {/* BEGIN customers detail */}
-          <Route path="/customers/:id" element={<CustomerDetailPage api={api} user={user} />} />
+          <Route path="/customers/:id" element={<CustomerDetailRoute api={api} user={user} />} />
           {/* END customers detail */}
           <Route path="/settings" element={<SettingsPage api={api} user={user} onShopRenamed={onShopRenamed} />} />
           {NAV_ITEMS.filter(({ key }) => key !== 'pos' && key !== 'invoices' && key !== 'products' && key !== 'purchases' && key !== 'customers' && key !== 'settings').map(({ key, path }) => (

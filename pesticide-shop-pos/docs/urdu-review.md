@@ -336,3 +336,19 @@ Written by the developer, not yet checked by a native speaker. The keys are `set
 ## Customer page, payment and opening balance (Phase 6 M5): the developer's Urdu, NOT reviewed
 
 `customerDetail.*`, `customerPayment.*` and `customerOpening.*` in `ur.ts` are all the developer's wording and need a native speaker. Check first: ابتدائی بقایا (opening balance), ادائیگی وصول کریں (receive payment), ایڈوانس (advance, as on the customers list), واپسی کا کریڈٹ (return credit), "ان کے ذمے ہمارے / ہمارے ذمے ان کے" (They owe us / We owe them), and the sentence for OPENING_BALANCE_EXISTS.
+### Statement screen and printed statement / payment receipt (Phase 6 M6; the developer's Urdu, not reviewed)
+
+| Key | English | Urdu | Reviewed? |
+|---|---|---|---|
+| printed `statement` / `paymentReceipt` titles | STATEMENT / PAYMENT RECEIPT | کھاتے کی تفصیل / ادائیگی کی رسید | |
+| line types | Opening balance / Sale / Payment / Return credit / Adjustment / Brought forward | ابتدائی بقایا / فروخت / ادائیگی / واپسی کا کریڈٹ / ایڈجسٹمنٹ / پچھلا بقایا | |
+| columns | Owes more / Owes less / Balance / Totals | بقایا بڑھا / بقایا کم ہوا / بقایا / میزان | |
+| closing | He owes / Advance / Clear | ان کے ذمے / ایڈوانس / حساب صاف | |
+| `Credit limit`, `Total owes more`, `Total owes less` | | ادھار کی حد / کل بقایا بڑھا / کل بقایا کم ہوا | |
+| range | `{from} to {to}` / From / Up to / All entries | `{from} تا {to}` / `{from} سے` / `{to} تک` / تمام اندراجات | |
+| legend (80 mm) | + owes more, - owes less | + بقایا بڑھا، - بقایا کم ہوا | |
+| legend (A4, screen) | Owes more: he owes more after this line. Owes less: he owes less. Entries are never edited or deleted. | بقایا بڑھا: اس اندراج کے بعد ان کے ذمے زیادہ۔ بقایا کم ہوا: ان کے ذمے کم۔ اندراج کبھی بدلے یا مٹائے نہیں جاتے۔ | |
+| payment receipt | Receipt / Received from / Method / Reference number / Note / Amount received / Balance after | رسید / وصول کنندہ از / طریقہ / حوالہ نمبر / نوٹ / وصول شدہ رقم / اس کے بعد بقایا | |
+| `statement.*` (screen) | Customer statement / Back to customer / Dates / From / To / Quick ranges / This month / Last 30 days / All / Current balance / Credit left / No limit / Closing balance | کسٹمر کھاتے کی تفصیل / کسٹمر کے صفحے پر واپس / تاریخیں / سے / تک / فوری مدت / اس مہینے / پچھلے 30 دن / سب / موجودہ بقایا / باقی ادھار / کوئی حد نہیں / اختتامی بقایا | |
+| `statement.*` (buttons, notices) | Print statement / Print A4 / Save PDF / Export CSV / CSV saved / Not saved | کھاتہ پرنٹ کریں / A4 پرنٹ / PDF محفوظ کریں / CSV بنائیں / CSV محفوظ ہو گئی / محفوظ نہیں ہوئی | |
+| `paymentReceipt.*` | Print receipt / Save receipt as PDF | رسید پرنٹ کریں / رسید PDF میں محفوظ کریں | |

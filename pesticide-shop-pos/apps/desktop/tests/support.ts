@@ -7,6 +7,19 @@ import type { PrinterInfo } from '@pos/core';
 import type { PrintDriver, PrintPage } from '../src/main/printing/driver.js';
 import { createRuntime, type Runtime } from '../src/main/runtime.js';
 import type { PasswordHasher } from '../src/main/password.js';
+import type { SaveDialog } from '../src/main/printing/save-dialog.js';
+
+/** A stand-in for the system Save-as box: records what it was asked and answers with `path` (null: the person cancelled). */
+export function fakeSaveDialog(path: string | null) {
+  const state = { asked: [] as { defaultName: string; filterName: string; extension: string }[], path };
+  const dialog: SaveDialog = {
+    chooseSavePath: async (options) => {
+      state.asked.push(options);
+      return state.path;
+    },
+  };
+  return { dialog, state };
+}
 
 /** A fast stand-in for argon2: tests that need the real thing pass argon2Hasher. */
 export const fastHasher: PasswordHasher & { verifyCalls: number } = {
@@ -40,9 +53,9 @@ export function movableClock(startIso = new Date().toISOString()): Clock & { adv
   return { now: () => new Date(now), advance: (ms: number) => void (now += ms) };
 }
 
-export async function makeShop(options: { hasher?: PasswordHasher; prefsPath?: string | null; schedule?: (job: () => void) => void; clock?: Clock; dbPath?: string; printing?: PrintDriver } = {}): Promise<Shop> {
+export async function makeShop(options: { hasher?: PasswordHasher; prefsPath?: string | null; schedule?: (job: () => void) => void; clock?: Clock; dbPath?: string; printing?: PrintDriver; saveDialog?: SaveDialog } = {}): Promise<Shop> {
   const hasher = options.hasher ?? fastHasher;
-  const runtime = await createRuntime({ dbPath: options.dbPath ?? ':memory:', prefsPath: options.prefsPath ?? null, hasher, ...(options.schedule ? { schedule: options.schedule } : {}), ...(options.clock ? { clock: options.clock } : {}), ...(options.printing ? { printing: options.printing } : {}) });
+  const runtime = await createRuntime({ dbPath: options.dbPath ?? ':memory:', prefsPath: options.prefsPath ?? null, hasher, ...(options.saveDialog ? { saveDialog: options.saveDialog } : {}), ...(options.schedule ? { schedule: options.schedule } : {}), ...(options.clock ? { clock: options.clock } : {}), ...(options.printing ? { printing: options.printing } : {}) });
   const setup = await runtime.handlers['setup:createShop']({ ...OWNER });
 
   const info = loadDeviceInfo(runtime.db);

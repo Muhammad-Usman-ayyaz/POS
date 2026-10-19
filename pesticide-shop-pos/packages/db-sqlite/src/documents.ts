@@ -168,9 +168,9 @@ const SETTING_KEYS = {
   shop_address: 'shop.address',
   shop_phone: 'shop.phone',
 } as const satisfies Record<Exclude<keyof PrintConfig, 'shop_name'>, string>;
-const TIME_ZONE_KEY = 'shop.time_zone';
+export const TIME_ZONE_KEY = 'shop.time_zone';
 
-function readSetting(db: Db, key: string): string | null {
+export function readSetting(db: Db, key: string): string | null {
   const row = db.prepare('SELECT value FROM settings WHERE "key" = ? AND deleted_at IS NULL').get(key) as { value: string | null } | undefined;
   const value = row?.value?.trim();
   return value ? value : null;

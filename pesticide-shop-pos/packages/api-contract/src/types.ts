@@ -149,3 +149,11 @@ export type CustomerTermsView = CustomerTermsResult;
 export type CustomerSettingsView = CustomerSettings;
 export type CustomerPaymentView = CustomerPaymentResult;
 export type StatementView = Statement;
+
+// ---------- BEGIN Phase 6 M6 ----------
+/** `khata:exportStatement`: the main process asked where to save the CSV. 'cancelled' means the person closed the save box: nothing was written. */
+export interface ExportStatementResult {
+  status: 'saved' | 'cancelled';
+  path?: string;
+}
+// ---------- END Phase 6 M6 ----------

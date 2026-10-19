@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
 import type { AppState, ApprovalAction, Channel, Output, ParsedInput, SessionUser } from '@pos/api-contract';
 import {
   createCatalogueService,
@@ -17,7 +18,7 @@ import {
   type DeviceScope,
   type IdGenerator,
 } from '@pos/core';
-import { PAGE, renderDocumentHtml, type DocumentFonts } from '@pos/ui/print';
+import { PAGE, renderDocumentHtml, renderPaymentReceiptHtml, renderStatementHtml, statementCsv, statementFileName, type DocumentFonts } from '@pos/ui/print';
 import {
   createSqliteRepositories,
   createSqliteUnitOfWork,
@@ -37,7 +38,11 @@ import {
   loadDeviceInfo,
   migrate,
   openDatabase,
+  paymentReceiptData,
+  PAYMENT_RECEIPT_AUDIT_ACTION,
   PRINT_AUDIT_ACTION,
+  STATEMENT_AUDIT_ACTION,
+  statementDocumentData,
   profitByDay,
   resetCredentials,
   setPrintConfig,
@@ -48,6 +53,7 @@ import {
 } from '@pos/db-sqlite';
 import { createApprovalStore, neededApprovals, subjectHash } from './approvals.js';
 import { noPrinting, type PrintDriver } from './printing/driver.js';
+import { noSaveDialog, type SaveDialog } from './printing/save-dialog.js';
 import { documentFonts } from './printing/fonts.js';
 import { argon2Hasher, type PasswordHasher } from './password.js';
 import { guardHandlers, requireCapability } from './permissions.js';
@@ -75,6 +81,8 @@ export interface RuntimeOptions {
   schedule?: (job: () => void) => void;
   /** Puts a document on paper (Electron's printing in the app, a fake in tests). Left out: no printer, no PDF. */
   printing?: PrintDriver;
+  /** Where a CSV is saved (the system Save-as box in the app, a fake in tests). Left out: every export is cancelled and nothing is written. */
+  saveDialog?: SaveDialog;
   /** The fonts a printed document carries inside itself. Defaults to the ones bundled with the app. */
   fonts?: DocumentFonts;
 }
@@ -105,6 +113,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const approvals = createApprovalStore(clock);
   const prefs = new PrefsStore(options.prefsPath);
   const printing = options.printing ?? noPrinting;
+  const saveDialog = options.saveDialog ?? noSaveDialog;
   const fonts = options.fonts ?? documentFonts;
 
   // ---- services: built once the shop exists, because they need its shop, branch and device ids ----
@@ -170,6 +179,44 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const inTransaction = <T>(work: (s: Services) => T): T => {
     const s = services();
     return db.transaction(() => work(s)).immediate();
+  };
+
+
+  /**
+   * Puts one document on paper, or, with no printer / a missing printer / a printer error / output 'pdf', saves a PDF instead (a normal outcome:
+   * `fallback` says why). Throws INTERNAL only when not even a PDF could be made. Shared by the Phase 6 print channels.
+   */
+  const deliver = async (
+    html: string,
+    pageSpec: { widthMm: number; heightMm: number | null },
+    pdfName: string,
+    output: 'printer' | 'pdf' | undefined,
+  ): Promise<{ printed: boolean; fallback: 'no_printer' | 'print_failed' | null; pdfPath: string | null }> => {
+    const config = getPrintConfig(db);
+    let fallback: 'no_printer' | 'print_failed' | null = null;
+    let printed = false;
+    if (output !== 'pdf') {
+      const available = await printing.listPrinters().catch(() => []);
+      const target = config.printer_name;
+      if (available.length === 0 || (target !== null && !available.some((p) => p.name === target))) fallback = 'no_printer';
+      else {
+        try {
+          await printing.print(html, { page: pageSpec, printerName: target });
+          printed = true;
+        } catch {
+          fallback = 'print_failed';
+        }
+      }
+    }
+    let pdfPath: string | null = null;
+    if (!printed) {
+      try {
+        pdfPath = await printing.savePdf(pdfName, await printing.toPdf(html, { page: pageSpec }));
+      } catch {
+        throw new DomainError('INTERNAL', 'the document could not be printed or saved as a PDF');
+      }
+    }
+    return { printed, fallback, pdfPath };
   };
 
   // A real hash to compare against when the user does not exist, so an unknown name takes as long as a wrong password.
@@ -718,6 +765,63 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
     'khata:statement': async (input) => (session.require(), services().khata.statement(input)),
     // ---------- END Phase 6 M2 ----------
+
+    // ---------- BEGIN Phase 6 M6: statement and payment receipt printing, CSV export. Nothing here holds a cost; the user comes from the session ----------
+    // Prints the statement (80 mm or A4) or saves a PDF instead: a normal outcome, like print:document. The figures are `khata.statement`'s own.
+    'print:statement': async ({ customer_id, from, to, kind, language, output }) => {
+      const user = session.require();
+      const s = services();
+      const statement = s.khata.statement({ customer_id, ...(from !== undefined ? { from } : {}), ...(to !== undefined ? { to } : {}) });
+      const data = statementDocumentData(db, statement, kind);
+      const config = getPrintConfig(db);
+      const chosen = language ?? (kind === 'receipt' ? config.receipt_language : config.invoice_language);
+      const html = renderStatementHtml(data, chosen, fonts);
+      const page = PAGE[kind];
+      const outcome = await deliver(html, { widthMm: page.widthMm, heightMm: page.heightMm }, `Statement-${kind}${data.is_copy ? '-copy' : ''}-${chosen}-${ids.newId().slice(0, 8)}.pdf`, output);
+      inTransaction((tx) =>
+        audit(tx.repos, {
+          userId: user.id,
+          action: STATEMENT_AUDIT_ACTION,
+          table: 'customers',
+          rowId: customer_id,
+          details: { kind, language: chosen, result: outcome.printed ? 'printed' : 'pdf_saved', fallback: outcome.fallback, copy: data.is_copy, from: data.from, to: data.to, closing_balance: data.closing_balance },
+        }),
+      );
+      return { status: outcome.printed ? 'printed' : 'pdf_saved', pdf_path: outcome.pdfPath, fallback: outcome.fallback, kind, language: chosen, is_copy: data.is_copy };
+    },
+
+    // The payment receipt is always the 80 mm slip. COPY: from the second print of the same payment's receipt.
+    'print:paymentReceipt': async ({ payment_id, language, output }) => {
+      const user = session.require();
+      const data = paymentReceiptData(db, payment_id);
+      if (!data) throw new DomainError('NOT_FOUND', 'there is no such payment');
+      const config = getPrintConfig(db);
+      const chosen = language ?? config.receipt_language;
+      const html = renderPaymentReceiptHtml(data, chosen, fonts);
+      const outcome = await deliver(html, { widthMm: PAGE.receipt.widthMm, heightMm: PAGE.receipt.heightMm }, `${data.payment.receipt_no ?? 'Payment'}-receipt${data.is_copy ? '-copy' : ''}-${chosen}.pdf`, output);
+      inTransaction((tx) =>
+        audit(tx.repos, {
+          userId: user.id,
+          action: PAYMENT_RECEIPT_AUDIT_ACTION,
+          table: 'payments',
+          rowId: payment_id,
+          details: { kind: 'receipt', language: chosen, result: outcome.printed ? 'printed' : 'pdf_saved', fallback: outcome.fallback, copy: data.is_copy },
+        }),
+      );
+      return { status: outcome.printed ? 'printed' : 'pdf_saved', pdf_path: outcome.pdfPath, fallback: outcome.fallback, kind: 'receipt', language: chosen, is_copy: data.is_copy };
+    },
+
+    // The CSV is written by THIS process, and only after the person chose a place in the save box. Cancel writes nothing.
+    'khata:exportStatement': async ({ customer_id, from, to }) => {
+      session.require();
+      const statement = services().khata.statement({ customer_id, ...(from !== undefined ? { from } : {}), ...(to !== undefined ? { to } : {}) });
+      const data = statementDocumentData(db, statement, 'invoice');
+      const path = await saveDialog.chooseSavePath({ defaultName: statementFileName(data, clock.now().toISOString().slice(0, 10)), filterName: 'CSV', extension: 'csv' });
+      if (path === null) return { status: 'cancelled' };
+      await writeFile(path, statementCsv(data), 'utf8');
+      return { status: 'saved', path };
+    },
+    // ---------- END Phase 6 M6 ----------
   };
 
   // Every call goes through the guard: the channel's permission policy first, and errors made safe for the signed-in user.

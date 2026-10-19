@@ -63,6 +63,11 @@ const samples: Record<Channel, () => Record<string, unknown>> = {
   'customers:setSettings': () => ({ default_credit_limit: 100_000, show_farmer_fields: true }),
   'payments:receive': () => ({ customer_id: id(), amount: 50_000, method: 'bank', reference_no: 'TRX-1', note: 'for the wheat', confirm_advance: true }),
   'khata:statement': () => ({ customer_id: id(), from: '2026-10-01', to: '2026-10-31' }),
+  // BEGIN Phase 6 M6 samples
+  'print:statement': () => ({ customer_id: id(), from: '2026-10-01', to: '2026-10-31', kind: 'invoice', language: 'ur', output: 'pdf' }),
+  'print:paymentReceipt': () => ({ payment_id: id(), language: 'en', output: 'printer' }),
+  'khata:exportStatement': () => ({ customer_id: id(), from: '2026-10-01' }),
+  // END Phase 6 M6 samples
 };
 
 describe('the contract', () => {

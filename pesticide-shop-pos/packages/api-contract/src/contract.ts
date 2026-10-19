@@ -42,6 +42,7 @@ import type {
   CustomerSettingsView,
   CustomerPaymentView,
   StatementView,
+  ExportStatementResult,
 } from './types.js';
 
 // The one list of calls the UI can make. Each channel has a STRICT input schema: an unknown key is an error.
@@ -357,6 +358,26 @@ export const StatementInput = z
   .refine((i) => i.from === undefined || i.to === undefined || i.from <= i.to, { message: 'from must not be after to', path: ['from'] });
 // ---------- END Phase 6 M2 ----------
 
+// ---------- BEGIN Phase 6 M6: statement and payment receipt printing, CSV export ----------
+// Like every request: no created_by / actor / user_id (the shell takes the user from the session). `kind` is the paper: 'receipt' is 80 mm, 'invoice' is A4.
+export const PrintStatementInput = z
+  .strictObject({
+    customer_id: Id,
+    from: CalendarDay.optional(),
+    to: CalendarDay.optional(),
+    kind: DocumentKindSchema,
+    /** Left out: the language chosen in the print settings for that paper. */
+    language: Language2.optional(),
+    /** 'pdf' skips the printer and makes a PDF file. 'printer' falls back to a PDF by itself. */
+    output: z.enum(['printer', 'pdf']).optional(),
+  })
+  .refine((i) => i.from === undefined || i.to === undefined || i.from <= i.to, { message: 'from must not be after to', path: ['from'] });
+export const PrintPaymentReceiptInput = z.strictObject({ payment_id: Id, language: Language2.optional(), output: z.enum(['printer', 'pdf']).optional() });
+export const ExportStatementInput = z
+  .strictObject({ customer_id: Id, from: CalendarDay.optional(), to: CalendarDay.optional() })
+  .refine((i) => i.from === undefined || i.to === undefined || i.from <= i.to, { message: 'from must not be after to', path: ['from'] });
+// ---------- END Phase 6 M6 ----------
+
 /** channel -> input schema. Add a channel here first, then implement it in the shell. */
 export const contract = {
   'app:getState': { input: nothing },
@@ -474,6 +495,11 @@ export const contract = {
   'payments:receive': { input: PaymentReceiveInput },
   'khata:statement': { input: StatementInput },
   // ---------- END Phase 6 M2 ----------
+  // ---------- BEGIN Phase 6 M6 ----------
+  'print:statement': { input: PrintStatementInput },
+  'print:paymentReceipt': { input: PrintPaymentReceiptInput },
+  'khata:exportStatement': { input: ExportStatementInput },
+  // ---------- END Phase 6 M6 ----------
 } as const;
 
 export type Channel = keyof typeof contract;
@@ -543,6 +569,11 @@ export interface Outputs {
   'payments:receive': CustomerPaymentView;
   'khata:statement': StatementView;
   // ---------- END Phase 6 M2 ----------
+  // ---------- BEGIN Phase 6 M6 ----------
+  'print:statement': PrintResult;
+  'print:paymentReceipt': PrintResult;
+  'khata:exportStatement': ExportStatementResult;
+  // ---------- END Phase 6 M6 ----------
 }
 
 export type Output<C extends Channel> = Outputs[C];
