@@ -11,6 +11,9 @@ import { CustomersListPage } from '../pages/customers/list/customers-list-page.j
 // BEGIN customers form
 import { CustomerFormPage } from '../pages/customers/form/customer-form-page.js';
 // END customers form
+// BEGIN customers statement
+import { StatementPage } from '../pages/khata/statement-page.js';
+// END customers statement
 import { InvoicesPage } from '../pages/invoices/invoices-page.js';
 import { PrintActions } from '../pages/invoices/print-actions.js';
 import { PosPage } from '../pages/pos/pos-page.js';
@@ -114,6 +117,9 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut, onShopRenamed 
           <Route path="/customers/new" element={<CustomerFormPage api={api} user={user} />} />
           <Route path="/customers/:id/edit" element={<CustomerFormPage api={api} user={user} />} />
           {/* END customers form */}
+          {/* BEGIN customers statement */}
+          <Route path="/customers/:id/statement" element={<StatementPage api={api} user={user} />} />
+          {/* END customers statement */}
           <Route path="/purchases" element={<PurchasesPage user={user} />} />
           <Route path="/purchases/receive" element={<ReceiveStockPage api={api} user={user} />} />
           {/* BEGIN customers list */}

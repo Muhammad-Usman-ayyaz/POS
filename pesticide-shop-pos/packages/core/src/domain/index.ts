@@ -8,3 +8,4 @@ export * from './held-bills.js';
 export * from './statement.js';
 export * from './phone.js';
 export * from './customers.js';
+export * from './khata-documents.js';

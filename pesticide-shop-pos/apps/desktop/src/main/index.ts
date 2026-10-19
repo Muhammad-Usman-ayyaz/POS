@@ -3,6 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, session } from 'electron';
 import { parseMigrationFiles } from '@pos/db-sqlite';
 import { registerIpc, type IpcEventLike } from './ipc.js';
 import { createElectronPrintDriver } from './printing/electron-driver.js';
+import { createElectronSaveDialog } from './printing/electron-save-dialog.js';
 import { resolveNativeBinding } from './native.js';
 import { createRuntime, type Runtime } from './runtime.js';
 import { isAllowedNavigation, isTrustedSender, windowOptions, type TrustedPages } from './security.js';
@@ -96,6 +97,7 @@ async function start(): Promise<void> {
     }),
     migrations: parseMigrationFiles(migrationFiles),
     prefsPath: join(app.getPath('userData'), 'preferences.json'),
+    saveDialog: createElectronSaveDialog(),
     printing: __POS_DEV_TOOLS__ && !app.isPackaged && process.env['POS_SCREENSHOT_DIR'] ? (await import('./screenshots.js')).screenshotPrinting(createElectronPrintDriver()) : createElectronPrintDriver(),
   });
   const trusted = (event: IpcEventLike): boolean =>
