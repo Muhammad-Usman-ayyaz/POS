@@ -7,6 +7,8 @@ import { formatMoney, useI18n } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
 import { useDebouncedSearch } from '../../lib/use-debounced-search.js';
 import { Actions } from './counter-ui.js';
+import { CustomerQuickAdd } from './customer-quick-add.js';
+import { startForm, type QuickAddForm } from './customer-quick-add-request.js';
 import { customerFrom, pickName, type Customer } from './pos-state.js';
 
 const RESULTS = 8;
@@ -17,6 +19,7 @@ export function CustomerDialog({ api, current, onPick, onClose }: { api: Api; cu
   const t = m.pos.customer;
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<string | 'walk-in'>(current?.id ?? 'walk-in');
+  const [adding, setAdding] = useState<QuickAddForm | null>(null); // the quick-add form, in this same dialog
   const run = useCallback((q: string) => api.customers.search({ query: q, limit: RESULTS }), [api]);
   const search = useDebouncedSearch(run, query);
   const matches = search.data ?? [];
@@ -29,6 +32,16 @@ export function CustomerDialog({ api, current, onPick, onClose }: { api: Api; cu
     else if (current && current.id === chosen) onPick(current);
   };
 
+  const noMatch = !search.loading && search.answeredFor === query && search.data !== null && matches.length === 0 && query.trim() !== '';
+
+  if (adding) {
+    return (
+      <Dialog counter open title={m.quickAdd.title} lead={m.quickAdd.lead} onClose={onClose}>
+        <CustomerQuickAdd api={api} start={adding} onBack={() => setAdding(null)} onCreated={onPick} />
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog counter open title={t.dialogTitle} lead={t.dialogLead} onClose={onClose}>
       <div className="field flex h-12 items-center gap-2.5 rounded-md border border-field-line bg-card px-3.5 focus-within:border-accent">
@@ -37,6 +50,13 @@ export function CustomerDialog({ api, current, onPick, onClose }: { api: Api; cu
           aria-label={t.searchLabel}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter with nothing found offers to add what was typed.
+            if (e.key === 'Enter' && noMatch) {
+              e.preventDefault();
+              setAdding(startForm(query));
+            }
+          }}
           className="h-full min-w-0 flex-1 border-0 bg-transparent text-base shadow-none [&::-webkit-search-cancel-button]:hidden"
           autoFocus
         />
@@ -60,8 +80,18 @@ export function CustomerDialog({ api, current, onPick, onClose }: { api: Api; cu
           </li>
         ))}
         {!search.loading && search.data !== null && matches.length === 0 && query.trim() !== '' && <li className="px-2 py-2 text-muted">{t.none}</li>}
+        {noMatch && (
+          <li>
+            <Button variant="secondary" size="dialog" className="w-full justify-start" onClick={() => setAdding(startForm(query))}>
+              {m.quickAdd.addText(query.trim())}
+            </Button>
+          </li>
+        )}
       </ul>
       <Actions>
+        <Button variant="secondary" size="dialog" onClick={() => setAdding(startForm(query))}>
+          {m.quickAdd.newCustomer}
+        </Button>
         <Button variant="secondary" size="dialog" onClick={onClose}>
           {t.cancel}
         </Button>
