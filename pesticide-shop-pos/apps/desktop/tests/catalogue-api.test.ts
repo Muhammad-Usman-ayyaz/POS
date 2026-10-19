@@ -8,7 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerIpc, type IpcEventLike, type IpcMainLike } from '../src/main/ipc.js';
 import { CAPABILITY_ROLES, CHANNEL_POLICY, can, guardHandlers, sanitizeErrorFor, type Capability } from '../src/main/permissions.js';
 import type { Handlers } from '../src/main/runtime.js';
-import { day, fakePrinting, makeShop, type Shop } from './support.js';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { day, fakePrinting, fakeSaveDialog, makeShop, type Shop } from './support.js';
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // What the policy SHOULD be, written out by hand. If someone loosens a channel, this table must be changed on purpose.
@@ -72,6 +75,11 @@ const EXPECTED: Record<Channel, Who> = {
   'customers:setSettings': 'owner',
   'payments:receive': 'signed-in',
   'khata:statement': 'signed-in',
+  // BEGIN Phase 6 M6 matrix rows: printing a statement or a payment receipt and exporting the CSV are for any signed-in user
+  'print:statement': 'signed-in',
+  'print:paymentReceipt': 'signed-in',
+  'khata:exportStatement': 'signed-in',
+  // END Phase 6 M6 matrix rows
 };
 
 const OWNER_USER: SessionUser = { id: randomUUID(), name: 'Owner', username: 'owner', role: 'owner' };
@@ -135,6 +143,11 @@ const SAMPLES: Record<Channel, () => Record<string, unknown>> = {
   'customers:setSettings': () => ({ default_credit_limit: 100_000 }),
   'payments:receive': () => ({ customer_id: randomUUID(), amount: 10_000, method: 'cash' }),
   'khata:statement': () => ({ customer_id: randomUUID(), from: '2026-10-01', to: '2026-10-31' }),
+  // BEGIN Phase 6 M6 samples
+  'print:statement': () => ({ customer_id: randomUUID(), kind: 'receipt', from: '2026-10-01', to: '2026-10-31' }),
+  'print:paymentReceipt': () => ({ payment_id: randomUUID() }),
+  'khata:exportStatement': () => ({ customer_id: randomUUID(), from: '2026-10-01', to: '2026-10-31' }),
+  // END Phase 6 M6 samples
 };
 
 /** A stand-in for Electron's ipcMain: calls arrive the way the renderer's would. */
@@ -276,6 +289,8 @@ describe('with a real shop', () => {
   let shop: Shop;
   let jobs: (() => void)[];
   let printing: ReturnType<typeof fakePrinting>;
+  let saving: ReturnType<typeof fakeSaveDialog>;
+  let csvPath: string;
   const h = () => shop.runtime.handlers;
   const COST = 7_654_321; // a cost nothing else in the shop looks like
   const COST_2 = 7_654_322;
@@ -288,7 +303,9 @@ describe('with a real shop', () => {
   beforeEach(async () => {
     jobs = [];
     printing = fakePrinting();
-    shop = await makeShop({ schedule: (job) => void jobs.push(job), printing: printing.driver });
+    csvPath = join(mkdtempSync(join(tmpdir(), 'pos-csv-')), 'out.csv');
+    saving = fakeSaveDialog(csvPath);
+    shop = await makeShop({ schedule: (job) => void jobs.push(job), printing: printing.driver, saveDialog: saving.dialog });
   });
   afterEach(() => shop.runtime.close());
 
@@ -456,6 +473,9 @@ describe('with a real shop', () => {
       // any invoice or print channel (history, one invoice, the document data, printing, the print settings, the printer list).
       const owners = await h()['sale:create']({ customer_id: shop.demo.customers['rashid']!, paid_amount: 10_000, lines: [{ product_id: five.id, qty: 500 }] });
       const invoiceId = owners.invoice.id;
+      // Phase 6 M6: a payment by the owner (its receipt is printed by staff below)
+      const ownersPayment = await h()['payments:receive']({ customer_id: shop.demo.customers['rashid']!, amount: 2_000, method: 'bank', reference_no: 'TRX-1', note: 'by his son' });
+      const paymentId = ownersPayment.payment.id;
       await shop.signOut();
       await shop.signInAs('staff');
       const ipc = fakeIpc();
@@ -515,6 +535,13 @@ describe('with a real shop', () => {
           { customer_id: rashid, amount: 900_000_000, method: 'cash' }, // ADVANCE_NOT_CONFIRMED
         ],
         'khata:statement': [{ customer_id: rashid }, { customer_id: rashid, from: day(-30), to: day(0) }],
+        // Phase 6 M6: the three new channels as staff (printer, PDF, both papers, both languages; a CSV saved and a CSV cancelled; a missing payment is NOT_FOUND)
+        'print:statement': [
+          { customer_id: rashid, kind: 'receipt' }, { customer_id: rashid, kind: 'invoice', language: 'ur', output: 'pdf' },
+          { customer_id: rashid, kind: 'receipt', from: day(-30), to: day(0), language: 'ur' }, { customer_id: randomUUID(), kind: 'receipt' },
+        ],
+        'print:paymentReceipt': [{ payment_id: paymentId }, { payment_id: paymentId, language: 'ur', output: 'pdf' }, { payment_id: randomUUID() }],
+        'khata:exportStatement': [{ customer_id: rashid }, { customer_id: rashid, from: day(-30) }],
       };
       const replies: unknown[] = [];
       const succeeded = new Set<Channel>();
@@ -534,7 +561,7 @@ describe('with a real shop', () => {
       expect(found).toEqual([]);
       // The calls were real, as STAFF: these channels really answered with data (not NOT_SIGNED_IN, not INVALID_INPUT), so a clean scan means something.
       for (const channel of ['catalogue:list', 'stock:batchesOf', 'sale:create', 'invoices:list', 'invoices:get', 'invoices:receipt', 'print:document', 'printers:list', 'print:getConfig', 'bills:hold', 'bills:list', 'bills:resume', 'bills:discard',
-        'customers:list', 'customers:get', 'customers:findDuplicates', 'customers:create', 'customers:update', 'customers:getSettings', 'payments:receive', 'khata:statement'] as const) {
+        'customers:list', 'customers:get', 'customers:findDuplicates', 'customers:create', 'customers:update', 'customers:getSettings', 'payments:receive', 'khata:statement', 'print:statement', 'print:paymentReceipt', 'khata:exportStatement'] as const) {
         expect(succeeded.has(channel), `${channel} never succeeded for staff`).toBe(true);
       }
       expect(succeeded.has('print:setConfig')).toBe(false); // owner-only: staff only ever got the refusal
@@ -585,6 +612,40 @@ describe('with a real shop', () => {
         // Real pages: every one names the product, and the Urdu ones are right to left.
         expect(pages.filter((html) => /Booster|بوسٹر/.test(html)).length).toBe(8);
         expect(pages.filter((html) => html.includes('<html lang="ur" dir="rtl">')).length).toBe(4);
+      });
+
+      // Phase 6 M6: the same scan over the statement (80 mm and A4), the payment receipt and the exported CSV, as staff. The customer has a real sale whose
+      // line holds the sentinel cost in the database, so a statement that selected a cost column would show it.
+      it('printing a statement and a payment receipt as staff, and exporting the CSV, puts no cost, margin or profit on any page or in the file', async () => {
+        const { findCostLeaks } = await import('@pos/ui/print');
+        const rashid = shop.demo.customers['rashid']!;
+        await ownerSetsUp().then(async ({ five }) => {
+          await h()['sale:create']({ customer_id: rashid, paid_amount: 10_000, lines: [{ product_id: five.id, qty: 500 }] });
+        });
+        const payment = await h()['payments:receive']({ customer_id: rashid, amount: 1_000, method: 'cash', note: 'paid by his son' });
+        await shop.signOut();
+        await shop.signInAs('staff');
+        for (const kind of KINDS) {
+          for (const language of LANGUAGES) {
+            for (const output of ['pdf', 'printer'] as const) await h()['print:statement']({ customer_id: rashid, kind, language, output });
+            await h()['print:statement']({ customer_id: rashid, kind, language, from: day(-30), to: day(0), output: 'pdf' });
+          }
+        }
+        for (const language of LANGUAGES) for (const output of ['pdf', 'printer'] as const) await h()['print:paymentReceipt']({ payment_id: payment.payment.id, language, output });
+        const pages = [...printing.state.printed, ...printing.state.pdfs].map((p) => p.html);
+        expect(pages).toHaveLength(12 + 4);
+        const statements = pages.filter((html) => html.includes('data-document="statement"'));
+        const receipts = pages.filter((html) => html.includes('data-document="payment-receipt"'));
+        expect(statements).toHaveLength(12);
+        expect(receipts).toHaveLength(4);
+        const clean = (text: string) => text;
+        for (const html of pages) expect(findCostLeaks(clean(html), COST), html.slice(0, 120)).toEqual([]);
+        expect(statements.some((html) => /Booster|بوسٹر/.test(html))).toBe(false); // a statement lists money, never products
+        expect((await h()['khata:exportStatement']({ customer_id: rashid })).status).toBe('saved');
+        const csv = readFileSync(csvPath, 'utf8');
+        expect(csv).toContain('Payment · Cash');
+        expect(findCostLeaks(clean(csv), COST)).toEqual([]);
+        expect(saving.state.asked).toHaveLength(1);
       });
 
       it('even if the document data DID carry the cost (a field added by mistake), the renderer prints none of it', async () => {

@@ -241,7 +241,7 @@ describe('enforced in the handlers', () => {
 
     it('covers every channel: each one is public, listed above, or covered by catalogue-api.test.ts (catalogue, receiving stock, quick-add, lists, the customer reads and writes), bills-api.test.ts (held bills) or customers-api.test.ts (customers)', () => {
       const publicChannels: Channel[] = ['app:getState', 'setup:createShop', 'auth:login', 'auth:logout', 'auth:me', 'auth:resetOwnerPassword', 'prefs:setLanguage'];
-      const coveredElsewhere = channels.filter((c) => !business.includes(c) && (/^(catalogue|suppliers|categories|brands|customers|approval|invoices|print|printers|bills):/.test(c) || c === 'stock:receive' || c === 'sale:quote'));
+      const coveredElsewhere = channels.filter((c) => !business.includes(c) && (/^(catalogue|suppliers|categories|brands|customers|approval|invoices|print|printers|bills):/.test(c) || c === 'stock:receive' || c === 'sale:quote' || c === 'khata:exportStatement'));
       expect([...publicChannels, ...business, ...coveredElsewhere].sort()).toEqual([...channels].sort());
     });
   });

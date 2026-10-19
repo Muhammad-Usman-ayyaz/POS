@@ -93,6 +93,9 @@ describe('invoice history, receipts and printing', () => {
         'printers:list': {},
         'print:getConfig': {},
         'print:setConfig': { shop_phone: 'x' },
+        // Phase 6 M6 (their own tests are in statement-printing.test.ts)
+        'print:statement': { customer_id: sold.invoice.id, kind: 'receipt' },
+        'print:paymentReceipt': { payment_id: sold.invoice.id },
       };
       expect(Object.keys(inputs).sort()).toEqual(channels.filter((c) => /^(invoices|print|printers):/.test(c)).sort());
       for (const [channel, input] of Object.entries(inputs)) {
