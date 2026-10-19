@@ -11,6 +11,9 @@ import { CustomersListPage } from '../pages/customers/list/customers-list-page.j
 // BEGIN customers form
 import { CustomerFormPage } from '../pages/customers/form/customer-form-page.js';
 // END customers form
+// BEGIN customers detail
+import { CustomerDetailPage } from '../pages/customers/detail/customer-detail-page.js';
+// END customers detail
 import { InvoicesPage } from '../pages/invoices/invoices-page.js';
 import { PrintActions } from '../pages/invoices/print-actions.js';
 import { PosPage } from '../pages/pos/pos-page.js';
@@ -118,8 +121,10 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut, onShopRenamed 
           <Route path="/purchases/receive" element={<ReceiveStockPage api={api} user={user} />} />
           {/* BEGIN customers list */}
           <Route path="/customers" element={<CustomersListPage api={api} user={user} />} />
-          <Route path="/customers/:id" element={<PlaceholderPage page="customers" />} />
           {/* END customers list */}
+          {/* BEGIN customers detail */}
+          <Route path="/customers/:id" element={<CustomerDetailPage api={api} user={user} />} />
+          {/* END customers detail */}
           <Route path="/settings" element={<SettingsPage api={api} user={user} onShopRenamed={onShopRenamed} />} />
           {NAV_ITEMS.filter(({ key }) => key !== 'pos' && key !== 'invoices' && key !== 'products' && key !== 'purchases' && key !== 'customers' && key !== 'settings').map(({ key, path }) => (
             <Route key={key} path={path} element={<PlaceholderPage page={key} />} />

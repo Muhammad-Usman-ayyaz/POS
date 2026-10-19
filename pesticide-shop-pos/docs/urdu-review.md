@@ -332,3 +332,7 @@ Written by the developer, not yet checked by a native speaker. The keys are `set
 | `customerSettings.on` / `off` | On / Off | چالو / بند | |
 | `customerSettings.save` / `saving` / `saved` | Save / Saving… / Settings saved | محفوظ کریں / محفوظ ہو رہا ہے… / ترتیبات محفوظ ہو گئیں | |
 | `customerSettings.nothingChanged` / `loading` / `retry` | Nothing changed yet / Loading… / Try again | ابھی کچھ نہیں بدلا / کھل رہا ہے… / دوبارہ کوشش کریں | |
+
+## Customer page, payment and opening balance (Phase 6 M5): the developer's Urdu, NOT reviewed
+
+`customerDetail.*`, `customerPayment.*` and `customerOpening.*` in `ur.ts` are all the developer's wording and need a native speaker. Check first: ابتدائی بقایا (opening balance), ادائیگی وصول کریں (receive payment), ایڈوانس (advance, as on the customers list), واپسی کا کریڈٹ (return credit), "ان کے ذمے ہمارے / ہمارے ذمے ان کے" (They owe us / We owe them), and the sentence for OPENING_BALANCE_EXISTS.
