@@ -556,6 +556,25 @@ export const ur: Messages = {
     },
   },
 
+  // BEGIN quick add (Phase 6 M7). No design file exists for this: it follows the customer picker of docs/design/PosDialogs.dc.html.
+  quickAdd: {
+    newCustomer: 'نیا گاہک',
+    addText: (text: string) => `"${text}" شامل کریں`,
+    title: 'نیا گاہک',
+    lead: 'نام اور فون کافی ہیں۔ ادھار کی شرائط مالک گاہک کے صفحے پر طے کرتا ہے۔',
+    name: 'نام (انگریزی یا اردو)',
+    phone: 'فون',
+    village: 'گاؤں (اختیاری)',
+    nameRequired: 'انگریزی یا اردو میں نام لکھیں',
+    limitNone: 'ادھار کی حد: کوئی حد نہیں (مالک طے کرتا ہے)',
+    limitIs: (amount: string) => `ادھار کی حد: ${amount} (مالک طے کرتا ہے)`,
+    back: 'تلاش پر واپس',
+    save: 'محفوظ کریں اور استعمال کریں',
+    saving: 'محفوظ ہو رہا ہے…',
+    useExisting: (name: string) => `موجودہ ${name} استعمال کریں`,
+  },
+  // END quick add
+
   // BEGIN customers list (Phase 6 M3)
   customersList: {
     title: 'گاہک',

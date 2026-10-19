@@ -8,7 +8,7 @@ import { balanceKind } from './customer-form-requests.js';
  * The "already exists" warning (docs/design/CustomerForms.dc.html, section 1b). It never blocks: Cancel goes back to the form, Open existing
  * goes to that customer, Save as new sends the same save again with confirm_duplicate. A balance is "Owes Rs X" or "Advance Rs X", never a minus sign.
  */
-export function CustomerDuplicateDialog({ matches, typedName, busy, onCancel, onOpen, onSaveNew }: { matches: DuplicateMatchView[] | null; typedName: string; busy: boolean; onCancel: () => void; onOpen: (customerId: string) => void; onSaveNew: () => void }) {
+export function CustomerDuplicateDialog({ matches, typedName, busy, onCancel, onOpen, onSaveNew, openLabel }: { matches: DuplicateMatchView[] | null; typedName: string; busy: boolean; onCancel: () => void; onOpen: (customerId: string) => void; onSaveNew: () => void; openLabel?: (name: string) => string }) {
   const { m, language } = useI18n();
   const f = m.customerForm;
   if (matches === null) return null;
@@ -45,8 +45,8 @@ export function CustomerDuplicateDialog({ matches, typedName, busy, onCancel, on
           {f.dupCancel}
         </Button>
         {matches.map((row) => (
-          <Button key={row.customer_id} variant="secondary" size="dialog" className="border-warn-ink" onClick={() => onOpen(row.customer_id)}>
-            {f.dupOpen(nameOf(row))}
+          <Button key={row.customer_id} variant="secondary" size="dialog" className="border-warn-ink" disabled={busy} onClick={() => onOpen(row.customer_id)}>
+            {(openLabel ?? f.dupOpen)(nameOf(row))}
           </Button>
         ))}
         <Button size="dialog" disabled={busy} onClick={onSaveNew}>

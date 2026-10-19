@@ -7,6 +7,9 @@ export * as customerListRules from './pages/customers/list/customer-list-request
 // BEGIN customers form
 export * as customerFormRules from './pages/customers/form/customer-form-requests.js';
 // END customers form
+// BEGIN quick add
+export * as quickAddRules from './pages/pos/customer-quick-add-request.js';
+// END quick add
 // BEGIN customers detail
 export * as customerDetailRules from './pages/customers/detail/customer-detail-state.js';
 export * as customerPaymentRules from './pages/customers/payment/customer-payment-requests.js';

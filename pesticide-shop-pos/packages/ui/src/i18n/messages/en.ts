@@ -555,6 +555,25 @@ export const en = {
     },
   },
 
+  // BEGIN quick add (Phase 6 M7). No design file exists for this: it follows the customer picker of docs/design/PosDialogs.dc.html.
+  quickAdd: {
+    newCustomer: 'New customer',
+    addText: (text: string) => `Add "${text}"`,
+    title: 'New customer',
+    lead: 'A name and a phone are enough. The owner sets credit terms on the customer page.',
+    name: 'Name (English or Urdu)',
+    phone: 'Phone',
+    village: 'Village (optional)',
+    nameRequired: 'Write a name in English or Urdu',
+    limitNone: 'Credit limit: No limit (set by the owner)',
+    limitIs: (amount: string) => `Credit limit: ${amount} (set by the owner)`,
+    back: 'Back to search',
+    save: 'Save and use',
+    saving: 'Saving…',
+    useExisting: (name: string) => `Use existing ${name}`,
+  },
+  // END quick add
+
   // BEGIN customers list (Phase 6 M3)
   customersList: {
     title: 'Customers',
