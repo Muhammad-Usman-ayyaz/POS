@@ -104,7 +104,7 @@ export function CustomerPaymentDialog({
   if (result) {
     const now = balanceView(result.balance_after);
     return (
-      <Dialog counter open title={t.savedTitle} onClose={onClose} className="max-w-[460px]">
+      <Dialog counter open title={t.savedTitle} onClose={onClose} className="max-w-[520px]">
         <div data-payment-saved className="flex flex-col gap-3">
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-[12px] bg-tint-soft p-4 text-[15px]">
             <dt className="text-muted">{t.receiptNo}</dt>
@@ -129,17 +129,17 @@ export function CustomerPaymentDialog({
 
   const amountMsg = problems.amount ? t.amountInvalid : undefined;
   return (
-    <Dialog counter open title={t.title} lead={t.lead} onClose={onClose} locked={saving} className="max-w-[460px]">
+    <Dialog counter open title={t.title} lead={t.lead} onClose={onClose} locked={saving} className="max-w-[520px]">
       <form
         noValidate
         data-payment-form
-        className="flex flex-col gap-3.5"
+        className="flex flex-col gap-2.5"
         onSubmit={(e) => {
           e.preventDefault();
           void save();
         }}
       >
-        <div className="flex items-start justify-between gap-3 rounded-[12px] bg-tint-soft p-3">
+        <div className="flex items-start justify-between gap-3 rounded-[12px] bg-tint-soft px-3 py-2.5">
           <div className="min-w-0">
             <div data-customer-name className="font-bold">
               {name}
@@ -154,6 +154,7 @@ export function CustomerPaymentDialog({
           </div>
         </div>
 
+        <div className="grid grid-cols-[1.4fr_1fr] gap-3">
         <div>
           <FieldLabel htmlFor="pay-amount">{t.amount}</FieldLabel>
           <div dir="ltr" className="relative">
@@ -167,6 +168,13 @@ export function CustomerPaymentDialog({
               {amountMsg}
             </p>
           )}
+        </div>
+          <div>
+            <FieldLabel>{t.date}</FieldLabel>
+            <div data-payment-date className="flex h-12 items-center rounded-sm border border-line bg-thead px-3 text-[15px] text-muted">
+              {t.today}
+            </div>
+          </div>
         </div>
 
         <div>
@@ -187,25 +195,18 @@ export function CustomerPaymentDialog({
           </div>
         </div>
 
-        {draft.method !== 'cash' && (
-          <div>
-            <FieldLabel htmlFor="pay-reference">{t.reference}</FieldLabel>
-            <DialogInput id="pay-reference" dir="ltr" autoComplete="off" placeholder={t.referencePlaceholder} value={draft.reference} invalid={problems.reference} aria-describedby={problems.reference ? 'pay-reference-error' : undefined} onChange={(e) => edit({ reference: e.target.value })} className="num" />
-            {problems.reference && (
-              <p id="pay-reference-error" role="alert" className="mt-1 text-sm font-medium text-danger-ink">
-                {t.referenceRequired}
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <FieldLabel>{t.date}</FieldLabel>
-            <div data-payment-date className="flex h-12 items-center rounded-sm border border-line bg-thead px-3 text-[15px] text-muted">
-              {t.today}
+        <div className={cn('grid gap-3', draft.method !== 'cash' && 'grid-cols-2')}>
+          {draft.method !== 'cash' && (
+            <div>
+              <FieldLabel htmlFor="pay-reference">{t.reference}</FieldLabel>
+              <DialogInput id="pay-reference" dir="ltr" autoComplete="off" placeholder={t.referencePlaceholder} value={draft.reference} invalid={problems.reference} aria-describedby={problems.reference ? 'pay-reference-error' : undefined} onChange={(e) => edit({ reference: e.target.value })} className="num" />
+              {problems.reference && (
+                <p id="pay-reference-error" role="alert" className="mt-1 text-sm font-medium text-danger-ink">
+                  {t.referenceRequired}
+                </p>
+              )}
             </div>
-          </div>
+          )}
           <div>
             <FieldLabel htmlFor="pay-note">{t.note}</FieldLabel>
             <DialogInput id="pay-note" dir="auto" autoComplete="off" value={draft.note} invalid={problems.note} aria-describedby={problems.note ? 'pay-note-error' : undefined} onChange={(e) => edit({ note: e.target.value })} />
@@ -218,14 +219,14 @@ export function CustomerPaymentDialog({
         )}
 
         {after && (
-          <div data-balance-after-preview className="flex items-baseline justify-between gap-3 rounded-[12px] bg-thead px-3 py-2.5">
+          <div data-balance-after-preview className="flex items-baseline justify-between gap-3 rounded-[12px] bg-thead px-3 py-2">
             <span className="font-semibold">{t.balanceAfter}</span>
             <span className="num font-bold">{after.kind === 'owes' ? t.owes(money(after.amount)) : after.kind === 'advance' ? t.advanceAfter(money(after.amount)) : t.clear}</span>
           </div>
         )}
 
         {needsConfirm && (
-          <div data-advance-confirm className="flex flex-col gap-2 rounded-[12px] bg-warn-bg p-3 text-sm text-warn-ink">
+          <div data-advance-confirm className="flex flex-col gap-1 rounded-[12px] bg-warn-bg px-3 py-2 text-sm text-warn-ink">
             <p>{t.advanceExplain(money(extra), name)}</p>
             <label className="flex min-h-11 items-center gap-3 font-semibold">
               <input type="checkbox" className="size-5 accent-[var(--color-accent)]" checked={confirmAdvance} onChange={(e) => setConfirmAdvance(e.target.checked)} />

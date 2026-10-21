@@ -75,7 +75,7 @@ export function CustomerDialog({ api, current, onPick, onClose }: { api: Api; cu
               onChoose={() => onPick(customerFrom(c))}
               title={pickName(c.name_en, c.name_ur, language)}
               sub={`${c.village ?? ''}${c.village ? ' · ' : ''}${c.default_price_type === 'wholesale' ? t.wholesalePrice : t.retailPrice}`}
-              right={t.owes(formatMoney(c.balance, language))}
+              right={c.balance === 0 ? t.clear : c.balance < 0 ? t.advance(formatMoney(-c.balance, language)) : t.owes(formatMoney(c.balance, language))}
               rightSub={c.credit_limit > 0 ? t.limit(formatMoney(c.credit_limit, language)) : t.noLimit}
             />
           </li>

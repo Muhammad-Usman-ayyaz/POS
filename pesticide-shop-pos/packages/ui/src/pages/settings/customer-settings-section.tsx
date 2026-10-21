@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
 import { useI18n } from '../../i18n/index.js';
 import { buildCustomerSettingsRequest, settingsDraftFrom, settingsLimitInvalid, type CustomerSettingsDraft } from '../customers/form/customer-form-requests.js';
+import { groupTyped, tidyPaidText } from '../pos/pos-state.js';
 import { Seg } from './seg.js';
 
 export type SettingsSection = 'shop' | 'customers';
@@ -23,7 +24,7 @@ export function SettingsNav({ section, onSelect, shopLabel, label }: { section: 
     <nav aria-label={label} className="flex w-[216px] shrink-0 flex-col gap-1">
       {items.map((item) =>
         item.key === section ? (
-          <span key={item.key} aria-current="page" className="flex min-h-12 items-center rounded-sm bg-tint px-3.5 text-[15px] font-bold text-accent-dark shadow-[inset_3px_0_0_var(--color-accent)] rtl:shadow-[inset_-3px_0_0_var(--color-accent)]">
+          <span key={item.key} aria-current="page" className="flex min-h-12 items-center rounded-sm border-s-[3px] border-accent bg-tint pe-3.5 ps-[11px] text-[15px] font-bold text-accent-dark">
             {item.text}
           </span>
         ) : (
@@ -109,7 +110,7 @@ export function CustomerSettingsSection({ api }: { api: Api }) {
                 <span aria-hidden className="pointer-events-none absolute inset-y-0 start-4 flex items-center text-muted">
                   {m.customerForm.rs}
                 </span>
-                <Input id="default-credit-limit" name="defaultCreditLimit" inputMode="decimal" invalid={invalid} aria-describedby="default-credit-limit-hint" value={draft.defaultLimit} onChange={(e) => setDraft({ ...draft, defaultLimit: e.target.value })} className="num h-12 rounded-sm ps-12 text-end text-[15px]" />
+                <Input id="default-credit-limit" name="defaultCreditLimit" inputMode="decimal" invalid={invalid} aria-describedby="default-credit-limit-hint" value={draft.defaultLimit} onChange={(e) => setDraft({ ...draft, defaultLimit: groupTyped(e.target.value) })} onBlur={() => setDraft({ ...draft, defaultLimit: tidyPaidText(draft.defaultLimit) })} className="num h-12 rounded-sm ps-12 text-end text-[15px]" />
               </div>
               <p id="default-credit-limit-hint" className={invalid ? 'mt-1.5 text-sm font-medium text-danger-ink' : 'mt-1.5 text-sm text-muted'} role={invalid ? 'alert' : undefined}>
                 {invalid ? s.limitInvalid : s.defaultLimitHint}
