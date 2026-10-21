@@ -544,12 +544,14 @@ describe('with a real shop', () => {
         'khata:exportStatement': [{ customer_id: rashid }, { customer_id: rashid, from: day(-30) }],
       };
       const replies: unknown[] = [];
+      const replyChannels: Channel[] = [];
       const succeeded = new Set<Channel>();
       for (const channel of channels) {
         const payloads: object[] = [...(real[channel] ?? []), SAMPLES[channel](), { surprise: 1 }, {}];
         for (const payload of payloads) {
           const reply = await ipc.invoke(channel, payload);
           replies.push(reply);
+          replyChannels.push(channel);
           if (reply.ok) succeeded.add(channel);
           // `auth:logout` (and a reset) ends the session. Without signing the staff user back in, every channel after it would only answer
           // NOT_SIGNED_IN and this scan would look at nothing (it did, before: only the channels before auth:logout were really exercised).
@@ -559,6 +561,13 @@ describe('with a real shop', () => {
       expect(replies.length).toBeGreaterThan(100);
       const found = replies.flatMap((r, i) => leaks(r).map((l) => `reply #${i} ${JSON.stringify(r).slice(0, 120)} -> ${l}`));
       expect(found).toEqual([]);
+      // The customer, payment, statement and statement-print channels have no business with prices at all: no key named like a price, cost, margin, profit or
+      // purchase, whatever value it holds (a cost leak under another name, with a value that is not the sentinel, would pass the scan above). The one
+      // customer term is default_price_type (a label, not an amount).
+      const PHASE_6 = /^(customers|payments|khata):|^print:(statement|paymentReceipt)$/;
+      const priceLike = replies.flatMap((r, i) => (PHASE_6.test(replyChannels[i]!) ? walk(r).keys.filter((k) => /price|cost|margin|profit|purchase/i.test(k) && k !== 'default_price_type').map((k) => `${replyChannels[i]} key "${k}"`) : []));
+      expect(priceLike).toEqual([]);
+      expect(replies.filter((_, i) => PHASE_6.test(replyChannels[i]!)).length).toBeGreaterThan(30); // the check looked at real replies
       // The calls were real, as STAFF: these channels really answered with data (not NOT_SIGNED_IN, not INVALID_INPUT), so a clean scan means something.
       for (const channel of ['catalogue:list', 'stock:batchesOf', 'sale:create', 'invoices:list', 'invoices:get', 'invoices:receipt', 'print:document', 'printers:list', 'print:getConfig', 'bills:hold', 'bills:list', 'bills:resume', 'bills:discard',
         'customers:list', 'customers:get', 'customers:findDuplicates', 'customers:create', 'customers:update', 'customers:getSettings', 'payments:receive', 'khata:statement', 'print:statement', 'print:paymentReceipt', 'khata:exportStatement'] as const) {

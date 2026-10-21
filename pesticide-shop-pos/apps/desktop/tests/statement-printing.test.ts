@@ -1,9 +1,9 @@
 // Phase 6 M6: printing a customer statement and a payment receipt, and exporting the statement as CSV, through the REAL main-process handlers, a real
 // SQLite database and the REAL bundled fonts. The printer, the PDF maker and the Save-as box are fakes that record what they are given.
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { channels, contract, type Channel } from '@pos/api-contract';
 import { DomainError } from '@pos/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -288,6 +288,33 @@ describe('statement and payment receipt printing, and the CSV', () => {
       expect(t2).not.toMatch(/Rs -|Owes Rs -/);
     });
 
+    it('only a payment received FROM a live CUSTOMER has a receipt: the party type and the direction guards are each checked on their own', async () => {
+      const db = shop.runtime.db;
+      const scope = db.prepare('SELECT shop_id, branch_id, device_id FROM payments LIMIT 1').get() as { shop_id: string; branch_id: string; device_id: string } | undefined
+        ?? (db.prepare('SELECT s.id AS shop_id, b.id AS branch_id, d.id AS device_id FROM shops s, branches b, devices d LIMIT 1').get() as { shop_id: string; branch_id: string; device_id: string });
+      const insert = (id: string, partyType: string, partyId: string, direction: string) =>
+        db.prepare("INSERT INTO payments (id, party_type, party_id, method, amount, direction, created_by, shop_id, branch_id, device_id) VALUES (?, ?, ?, 'cash', 500, ?, ?, ?, ?, ?)")
+          .run(id, partyType, partyId, direction, shop.ownerId, scope.shop_id, scope.branch_id, scope.device_id);
+      // a real supplier payment, the way paying a supplier writes it
+      insert('00000000-0000-4000-8000-0000000a0001', 'supplier', shop.demo.supplierId, 'out');
+      // only the PARTY TYPE is wrong: ids are unique per table only, so a SUPPLIER can carry a customer's id; money IN, from that "supplier"
+      db.prepare('INSERT INTO suppliers (id, name_en, shop_id, branch_id, device_id) VALUES (?, ?, ?, ?, ?)').run(rashid(), 'Same Id Supplier', scope.shop_id, scope.branch_id, scope.device_id);
+      insert('00000000-0000-4000-8000-0000000a0002', 'supplier', rashid(), 'in');
+      // only the DIRECTION is wrong: money paid OUT to a real customer
+      insert('00000000-0000-4000-8000-0000000a0003', 'customer', rashid(), 'out');
+      const audits = shop.count('audit_log');
+      for (const n of [1, 2, 3]) {
+        const reply = await attempt(h()['print:paymentReceipt']({ payment_id: `00000000-0000-4000-8000-0000000a000${n}` }));
+        expect(reply, `payment #${n}`).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+      }
+      expect(printer.state.printed).toHaveLength(0);
+      expect(printer.state.pdfs).toHaveLength(0);
+      expect(shop.count('audit_log')).toBe(audits);
+      // ...and a genuine customer payment still prints
+      const real = await h()['payments:receive']({ customer_id: rashid(), amount: 100, method: 'cash' });
+      expect((await h()['print:paymentReceipt']({ payment_id: real.payment.id })).status).toBe('printed');
+    });
+
     it('an unknown payment is NOT_FOUND', async () => {
       expect(await attempt(h()['print:paymentReceipt']({ payment_id: randomUUID() }))).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
     });
@@ -302,7 +329,55 @@ describe('statement and payment receipt printing, and the CSV', () => {
     });
   });
 
+  describe('a soft-deleted customer', () => {
+    it('has no statement, no CSV and no payment receipt: NOT_FOUND, nothing printed, no Save box, no file, no audit row', async () => {
+      const paid = await history();
+      // sanity: before the delete everything works for this customer
+      await h()['print:paymentReceipt']({ payment_id: paid.payment.id });
+      printer.state.printed.length = 0;
+      printer.state.pdfs.length = 0;
+      const audits = shop.count('audit_log');
+      shop.runtime.db.prepare('UPDATE customers SET deleted_at = ? WHERE id = ?').run('2026-01-02T00:00:00.000Z', rashid());
+      const auditsAfterDelete = shop.count('audit_log');
+      expect(await attempt(h()['print:statement']({ customer_id: rashid(), kind: 'receipt' }))).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+      expect(await attempt(h()['print:statement']({ customer_id: rashid(), kind: 'invoice', language: 'ur', output: 'pdf' }))).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+      expect(await attempt(h()['khata:exportStatement']({ customer_id: rashid() }))).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+      expect(await attempt(h()['print:paymentReceipt']({ payment_id: paid.payment.id }))).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+      expect(printer.state.printed).toHaveLength(0);
+      expect(printer.state.pdfs).toHaveLength(0);
+      expect(saving.state.asked).toHaveLength(0);
+      expect(existsSync(csvPath)).toBe(false);
+      expect(shop.count('audit_log')).toBe(auditsAfterDelete);
+      expect(auditsAfterDelete).toBeGreaterThanOrEqual(audits);
+    });
+  });
+
   describe('khata:exportStatement (CSV)', () => {
+    it('exporting writes no audit row and changes no table; a cancelled save writes no file anywhere (no CSV, no PDF, nothing in the folder)', async () => {
+      await history();
+      const tables = ['audit_log', 'ledger_entries', 'payments', 'customers', 'number_sequences', 'change_log'];
+      const counts = () => tables.map((t) => shop.count(t));
+      const before = counts();
+      expect(await h()['khata:exportStatement']({ customer_id: rashid() })).toEqual({ status: 'saved', path: csvPath });
+      expect(counts()).toEqual(before);
+      expect(readFileSync(csvPath, 'utf8').length).toBeGreaterThan(10);
+
+      // now the person cancels the Save box: no file in the folder they were offered, none in the working folder or the temp folder, no PDF, no rows
+      const folder = dirname(csvPath);
+      rmSync(csvPath);
+      const listings = () => [readdirSync(folder), readdirSync(process.cwd()), readdirSync(tmpdir()).filter((n) => /\.csv$|^Statement/i.test(n))];
+      const listedBefore = listings();
+      const rowsBefore = counts();
+      saving.state.path = null;
+      saving.state.asked.length = 0;
+      expect(await h()['khata:exportStatement']({ customer_id: rashid() })).toEqual({ status: 'cancelled' });
+      expect(saving.state.asked).toHaveLength(1);
+      expect(readdirSync(folder)).toEqual([]);
+      expect(listings()).toEqual(listedBefore);
+      expect(printer.state.pdfs).toHaveLength(0);
+      expect(counts()).toEqual(rowsBefore);
+    });
+
     it('asks the Save box first, then the main process writes the file: BOM, header, the shell\'s rows and totals', async () => {
       await history();
       const reply = await h()['khata:exportStatement']({ customer_id: rashid() });
