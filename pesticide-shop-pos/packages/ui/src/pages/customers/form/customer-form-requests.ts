@@ -3,7 +3,8 @@
 // Money is typed in rupees and sent as whole paisa through the shared `parseRupees`. No user, role or created_by is ever put in a request:
 // the shell takes the user from the session.
 import type { Api, CustomerSettingsView, CustomerSummaryView, DuplicateMatchView } from '@pos/api-contract';
-import { parseRupees, rupeesText } from '../../products/product-form-state.js';
+import { parseRupees } from '../../products/product-form-state.js';
+import { groupedRupeesText } from '../../pos/pos-state.js';
 
 export type SavedCustomer = CustomerSummaryView['customer'];
 export type PriceType = 'retail' | 'wholesale';
@@ -38,7 +39,7 @@ export const newDraft = (defaultLimitPaisa = 0): CustomerDraft => ({
   village: '',
   notes: '',
   priceType: 'retail',
-  creditLimit: rupeesText(defaultLimitPaisa),
+  creditLimit: groupedRupeesText(defaultLimitPaisa),
   fatherName: '',
   cnic: '',
   phone2: '',
@@ -52,7 +53,7 @@ export const draftFromCustomer = (c: SavedCustomer): CustomerDraft => ({
   village: c.village ?? '',
   notes: c.notes ?? '',
   priceType: c.default_price_type,
-  creditLimit: rupeesText(c.credit_limit),
+  creditLimit: groupedRupeesText(c.credit_limit),
   fatherName: c.father_name ?? '',
   cnic: c.cnic ?? '',
   phone2: c.phone2 ?? '',
@@ -162,7 +163,7 @@ export interface CustomerSettingsDraft {
   defaultLimit: string;
   showFarmer: boolean;
 }
-export const settingsDraftFrom = (s: CustomerSettingsView): CustomerSettingsDraft => ({ defaultLimit: rupeesText(s.default_credit_limit), showFarmer: s.show_farmer_fields });
+export const settingsDraftFrom = (s: CustomerSettingsView): CustomerSettingsDraft => ({ defaultLimit: groupedRupeesText(s.default_credit_limit), showFarmer: s.show_farmer_fields });
 export const settingsLimitInvalid = (d: CustomerSettingsDraft): boolean => parseRupees(d.defaultLimit) === null;
 
 /** ONLY the settings that changed. Nothing changed gives {}. */

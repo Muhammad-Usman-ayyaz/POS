@@ -14,12 +14,21 @@ export function CustomerDuplicateDialog({ matches, typedName, busy, onCancel, on
   const f = m.customerForm;
   if (matches === null) return null;
   const nameOf = (row: DuplicateMatchView) => ((language === 'ur' ? (row.name_ur ?? row.name_en) : (row.name_en ?? row.name_ur)) ?? '').trim();
+  // Never "Owes Rs 0" for a clear account, and never a minus sign.
+  const balanceText = (row: DuplicateMatchView) => {
+    const amount = formatMoney(Math.abs(row.balance), language);
+    return row.balance === 0 ? f.clear : balanceKind(row) === 'advance' ? f.advance(amount) : f.owes(amount);
+  };
+  // Two people can share a name: the village and phone (or, failing both, the balance) say which button opens whom.
+  const labelOf = (row: DuplicateMatchView) => {
+    const detail = [row.village, row.phone].filter((part) => part && part !== '').join(' · ') || balanceText(row);
+    return `${nameOf(row)} (${detail})`;
+  };
   const sameName = matches.some((x) => x.same_name);
   return (
     <Dialog open title={sameName ? f.dupTitle(typedName) : f.dupTitlePhone} onClose={onCancel} locked={busy} counter className="max-w-[520px] bg-warn-bg">
       <ul className="flex flex-col gap-2">
         {matches.map((row) => {
-          const amount = formatMoney(Math.abs(row.balance), language);
           return (
             <li key={row.customer_id} data-duplicate-row className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[15px]">
               <span>
@@ -34,7 +43,7 @@ export function CustomerDuplicateDialog({ matches, typedName, busy, onCancel, on
                 ) : null}
               </span>
               <span data-balance className="num text-[13px] font-bold">
-                {balanceKind(row) === 'advance' ? f.advance(amount) : f.owes(amount)}
+                {balanceText(row)}
               </span>
             </li>
           );
@@ -48,7 +57,7 @@ export function CustomerDuplicateDialog({ matches, typedName, busy, onCancel, on
         </Button>
         {matches.map((row) => (
           <Button key={row.customer_id} variant="secondary" size="dialog" className="border-warn-ink" disabled={busy} onClick={() => onOpen(row.customer_id)}>
-            {(openLabel ?? f.dupOpen)(nameOf(row))}
+            {(openLabel ?? f.dupOpen)(labelOf(row))}
           </Button>
         ))}
         <Button size="dialog" disabled={busy} onClick={onSaveNew}>

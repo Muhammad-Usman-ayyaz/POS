@@ -8,6 +8,7 @@ import { Input } from '../../../components/ui/input.js';
 import { SegmentedToggle } from '../../../components/ui/segmented.js';
 import { formatMoney, useI18n } from '../../../i18n/index.js';
 import { cn } from '../../../lib/cn.js';
+import { groupTyped, tidyPaidText } from '../../pos/pos-state.js';
 import { CustomerDuplicateDialog } from './customer-form-duplicate-dialog.js';
 import {
   buildCreateRequest,
@@ -267,7 +268,8 @@ function Form({ api, owner }: { api: Api; owner: boolean }) {
                   value={draft.creditLimit}
                   invalid={problems.creditLimit}
                   aria-describedby={problems.creditLimit ? 'credit-limit-error' : 'credit-limit-hint'}
-                  onChange={(e) => update({ creditLimit: e.target.value })}
+                  onChange={(e) => update({ creditLimit: groupTyped(e.target.value) })}
+                  onBlur={() => update({ creditLimit: tidyPaidText(draft.creditLimit) })}
                   className="num ps-12 text-end"
                 />
               </div>

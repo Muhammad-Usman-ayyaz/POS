@@ -367,7 +367,7 @@ describe('a customer who already exists', () => {
     expect(shell.creates()[0]!.input).not.toHaveProperty('confirm_duplicate');
     expect(shell.of('customers:findDuplicates')).toHaveLength(1);
     expect(dup.querySelectorAll('[data-duplicate-row]')).toHaveLength(2);
-    await userEvent.setup().click(within(dup).getByRole('button', { name: Q.useExisting('Rashid Ali') }));
+    await userEvent.setup().click(within(dup).getByRole('button', { name: Q.useExisting('Rashid Ali (Chak 3)') }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(customerName()).toBe('Rashid Ali');
     expect(screen.getByRole('radio', { name: T.wholesale }).getAttribute('aria-checked')).toBe('true'); // from customers:get
@@ -415,7 +415,7 @@ describe('a customer who already exists', () => {
     await userEvent.setup().click(saveButton(dialog));
     const dup = await screen.findByRole('dialog', { name: ur.customerForm.dupTitle('Rashid') });
     expect([...dup.querySelectorAll('[data-balance]')].map((b) => clean(b.textContent))).toEqual([ur.customerForm.owes('Rs 2,000'), ur.customerForm.advance('Rs 500')]);
-    expect(within(dup).getByRole('button', { name: Q.useExisting('راشد') })).toBeTruthy();
+    expect(within(dup).getByRole('button', { name: Q.useExisting('راشد (Chak 12 · 0300 1112223)') })).toBeTruthy();
   });
 });
 
@@ -539,7 +539,7 @@ describe('the credit-limit line when the shop settings cannot be read', () => {
     const dialog = await openForm('Rashid');
     await userEvent.setup().click(saveButton(dialog));
     const dup = await screen.findByRole('dialog', { name: en.customerForm.dupTitle('Rashid') });
-    await userEvent.setup().click(within(dup).getByRole('button', { name: Q.useExisting('Rashid Ali') }));
+    await userEvent.setup().click(within(dup).getByRole('button', { name: Q.useExisting('Rashid Ali (Chak 3)') }));
     await waitFor(() => expect(within(dup).getByRole('alert').getAttribute('data-code')).toBe('INTERNAL'));
     expect(screen.getByRole('dialog', { name: en.customerForm.dupTitle('Rashid') })).toBe(dup); // still open
     expect(within(dup).getByRole('button', { name: en.customerForm.dupCancel }).hasAttribute('disabled')).toBe(false); // free again
@@ -629,7 +629,7 @@ describe('the dialog cannot be closed while it saves', () => {
     const dialog = await openForm('Rashid');
     await userEvent.setup().click(saveButton(dialog));
     const dup = await screen.findByRole('dialog', { name: en.customerForm.dupTitle('Rashid') });
-    await userEvent.setup().click(within(dup).getByRole('button', { name: Q.useExisting('Rashid Ali') }));
+    await userEvent.setup().click(within(dup).getByRole('button', { name: Q.useExisting('Rashid Ali (Chak 3)') }));
     await waitFor(() => expect(shell.of('customers:get')).toHaveLength(1));
     fireEvent.keyDown(dup, { key: 'Escape' });
     fireEvent.mouseDown(backdropOf(dup));
