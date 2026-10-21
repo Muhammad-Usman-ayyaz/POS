@@ -50,6 +50,9 @@ def ins(table, **vals):
             vals[c] = ctx[c]
     if table == "invoice_items" and "name_en" not in vals and "name_ur" not in vals:
         vals["name_en"] = "Test product"  # every invoice line says what was sold (migration 005)
+    if table == "ledger_entries" and "seq" not in vals:
+        # migration 008: every new ledger row needs a seq (the repository assigns it; raw test SQL takes the next number)
+        vals["seq"] = db.execute("SELECT COALESCE(MAX(seq), 0) + 1 FROM ledger_entries").fetchone()[0]
     names = ", ".join(f'"{k}"' for k in vals)
     marks = ", ".join("?" for _ in vals)
     db.execute(f"INSERT INTO {table} ({names}) VALUES ({marks})", list(vals.values()))
@@ -401,6 +404,38 @@ check("every existing device got a payment sequence from 0", seqs == {"d1": ("RC
 check("the invoice sequence is unchanged", old.execute("SELECT prefix, last_number FROM number_sequences WHERE id='q1'").fetchone()[:] == ("INV-A-", 12))
 pr = old.execute("SELECT amount, note, receipt_no FROM payments WHERE id='p'").fetchone()
 check("an old payment is unchanged and has no receipt_no", (pr["amount"], pr["note"], pr["receipt_no"]) == (5, None, None), tuple(pr))
+
+print("\n--- ledger sequence and farmer fields (migration 008) ---")
+check("ledger_entries has a seq column", "seq" in [r["name"] for r in db.execute("PRAGMA table_info(ledger_entries)")])
+check("customers has land_size and crop", {"land_size", "crop"} <= {r["name"] for r in db.execute("PRAGMA table_info(customers)")})
+seq_cust = ins("customers", name_en="Seq test", land_size="5 acres", crop="Cotton")
+expect_fail("a new ledger row without a seq is refused",
+            lambda: db.execute("INSERT INTO ledger_entries (id, party_type, party_id, entry_type, amount_delta, shop_id, branch_id, device_id) VALUES (?, 'customer', ?, 'adjustment', 5, ?, ?, ?)",
+                               (str(uuid.uuid4()), seq_cust, ctx["shop_id"], ctx["branch_id"], ctx["device_id"])), "seq is required")
+top = one("SELECT MAX(seq) AS m FROM ledger_entries")["m"]
+expect_fail("a duplicate seq is refused", lambda: ins("ledger_entries", party_type="customer", party_id=seq_cust, entry_type="adjustment", amount_delta=5, seq=top), "unique")
+expect_fail("a ledger row still cannot be edited (seq included)", lambda: db.execute("UPDATE ledger_entries SET seq = 999999"), "append-only")
+# a shop migrated from 007: old ledger rows keep a NULL seq and nothing is rewritten
+mig = sqlite3.connect(":memory:", isolation_level=None)
+mig.row_factory = sqlite3.Row
+for name in files:
+    if name < "008":
+        mig.executescript(open(os.path.join(MIGRATIONS, name), encoding="utf8").read())
+mig.executescript("""
+    INSERT INTO shops (id, name) VALUES ('s','S');
+    INSERT INTO branches (id, shop_id, name, code) VALUES ('b','s','Main','A');
+    INSERT INTO devices (id, branch_id, name, device_code) VALUES ('d1','b','PC','A1');
+    INSERT INTO customers (id, name_en, shop_id, branch_id, device_id) VALUES ('c','C','s','b','d1');
+    INSERT INTO ledger_entries (id, party_type, party_id, entry_type, amount_delta, shop_id, branch_id, device_id) VALUES ('l1','customer','c','opening',100,'s','b','d1'), ('l2','customer','c','payment',-40,'s','b','d1');
+""")
+before_rows = [tuple(r) for r in mig.execute("SELECT id, amount_delta, entry_date, created_at, version FROM ledger_entries ORDER BY rowid")]
+for name in files:
+    if name >= "008":
+        mig.executescript(open(os.path.join(MIGRATIONS, name), encoding="utf8").read())
+after_rows = [tuple(r) for r in mig.execute("SELECT id, amount_delta, entry_date, created_at, version FROM ledger_entries ORDER BY rowid")]
+check("migration 008 leaves old ledger rows untouched", before_rows == after_rows, (before_rows, after_rows))
+check("old ledger rows keep a NULL seq", [r[0] for r in mig.execute("SELECT seq FROM ledger_entries")] == [None, None])
+check("old customers have NULL land_size and crop", tuple(mig.execute("SELECT land_size, crop FROM customers").fetchone()) == (None, None))
 
 print("\n--- integrity ---")
 check("PRAGMA integrity_check is ok", one("PRAGMA integrity_check")[0] == "ok")

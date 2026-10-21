@@ -21,6 +21,7 @@ import type {
 import { randomUUID } from 'node:crypto';
 import type { Statement } from 'better-sqlite3';
 import type { Db } from '../connection.js';
+import { LEDGER_ORDER, LEDGER_ORDER_L } from '../ledger-order.js';
 
 // Hand-written repositories for the core ports. This is the only place that talks SQL to the services' data.
 // Rules this file keeps:
@@ -33,6 +34,8 @@ import type { Db } from '../connection.js';
 // repository and replace one method, as the failure injection in the tests does.
 
 const META_COLUMNS = ['created_at', 'updated_at', 'deleted_at', 'version'] as const;
+/** The next ledger sequence number. The partial index (seq IS NOT NULL) makes MAX cheap. */
+const NEXT_LEDGER_SEQ = '(SELECT COALESCE(MAX(seq), 0) + 1 FROM ledger_entries WHERE seq IS NOT NULL)';
 const COLUMN_NAME = /^[a-z][a-z0-9_]*$/;
 
 type InsertableTable =
@@ -79,6 +82,13 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
         throw new Error(`service set ${column} on ${table}: the database owns that column`);
       }
       if (!COLUMN_NAME.test(column)) throw new Error(`bad column name for ${table}: ${column}`);
+    }
+    if (table === 'ledger_entries') {
+      // The ONE place a ledger row gets its sequence number (migration 008): the next one, taken inside the write transaction.
+      if (columns.includes('seq')) throw new Error('service set seq on ledger_entries: the repository owns that column');
+      const sql = `INSERT INTO ledger_entries (${columns.join(', ')}, seq) VALUES (${columns.map(() => '?').join(', ')}, ${NEXT_LEDGER_SEQ})`;
+      stmt(sql).run(...columns.map((c) => row[c]));
+      return;
     }
     const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`;
     stmt(sql).run(...columns.map((c) => row[c]));
@@ -315,7 +325,7 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
       balance: (type, id) =>
         sum('ledger', 'SELECT COALESCE(SUM(amount_delta), 0) AS total FROM ledger_entries WHERE party_type = ? AND party_id = ?', type, id),
       list: (type, id) =>
-        all<LedgerEntry>('ledger', 'SELECT * FROM ledger_entries WHERE party_type = ? AND party_id = ? ORDER BY entry_date, rowid', type, id),
+        all<LedgerEntry>('ledger', 'SELECT * FROM ledger_entries WHERE party_type = ? AND party_id = ? ORDER BY entry_date, ' + LEDGER_ORDER, type, id),
       insert: (row) => insert('ledger_entries', row),
       balancesByParty: (type) => {
         const rows = all<{ party_id: string; total: number }>(
@@ -330,13 +340,13 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
       customerStatementRows: (customerId) => {
         const rows = all<{
           id: string; party_type: LedgerEntry['party_type']; party_id: string; entry_type: LedgerEntry['entry_type']; amount_delta: number; ref_type: string | null; ref_id: string | null;
-          entry_date: string; created_by: string | null; shop_id: string; branch_id: string; device_id: string; created_at: string; version: number;
+          entry_date: string; created_by: string | null; shop_id: string; branch_id: string; device_id: string; created_at: string; version: number; seq: number | null;
           invoice_no: string | null; return_no: string | null; payment_method: string | null; reference_no: string | null; receipt_no: string | null; note: string | null;
         }>(
           'ledger',
           `SELECT l.id AS id, l.party_type AS party_type, l.party_id AS party_id, l.entry_type AS entry_type, l.amount_delta AS amount_delta,
                   l.ref_type AS ref_type, l.ref_id AS ref_id, l.entry_date AS entry_date, l.created_by AS created_by,
-                  l.shop_id AS shop_id, l.branch_id AS branch_id, l.device_id AS device_id, l.created_at AS created_at, l.version AS version,
+                  l.shop_id AS shop_id, l.branch_id AS branch_id, l.device_id AS device_id, l.created_at AS created_at, l.version AS version, l.seq AS seq,
                   i.invoice_no AS invoice_no, r.return_no AS return_no,
                   p.method AS payment_method, p.reference_no AS reference_no, p.receipt_no AS receipt_no, p.note AS note
              FROM ledger_entries l
@@ -344,7 +354,7 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
              LEFT JOIN sales_returns r ON l.ref_type = 'return' AND r.id = l.ref_id
              LEFT JOIN payments p ON l.ref_type = 'payment' AND p.id = l.ref_id
             WHERE l.party_type = 'customer' AND l.party_id = ?
-            ORDER BY l.entry_date, l.rowid`,
+            ORDER BY l.entry_date, ${LEDGER_ORDER_L}`,
           customerId,
         );
         return rows.map(({ invoice_no, return_no, payment_method, reference_no, receipt_no, note, ...entry }): LedgerDisplayRow => ({ entry, invoice_no, return_no, payment_method, reference_no, receipt_no, note }));

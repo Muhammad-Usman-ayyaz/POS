@@ -357,6 +357,8 @@ export function createCustomerDirectoryService(deps: ServiceDeps) {
           cnic: clean(f.cnic),
           phone2: clean(f.phone2),
           guarantor: clean(f.guarantor),
+          land_size: null,
+          crop: null,
           ...deps.scope,
         });
         return summaryOf(tx, id);

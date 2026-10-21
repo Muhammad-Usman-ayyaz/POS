@@ -7,6 +7,7 @@ import { defineCustomerKhataTests } from './customer-khata.js';
 import { defineCustomerTests } from './customers.js';
 import { defineContractTests } from './contract.js';
 import { defineDirectoryTests } from './directory.js';
+import { defineLedgerSeqTests } from './ledger-seq.js';
 import { definePaymentKhataTests } from './payment-khata.js';
 import { definePurchaseTests, defineStockTests } from './purchase-stock.js';
 import { defineSaleTests } from './sale.js';
@@ -32,6 +33,7 @@ export function defineServiceSuites(label: string, make: WorldFactory): void {
     defineCatalogueTests(make);
     defineCatalogueListTests(make);
     defineDirectoryTests(make);
+    defineLedgerSeqTests(make);
     defineAtomicityTests(make);
     defineScenarioTests(make);
   });

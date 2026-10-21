@@ -83,6 +83,8 @@ export const LedgerEntry = z.object({
   ref_id: z.string().nullable(),
   entry_date: IsoDateTime,
   created_by: Id.nullable(),
+  /** Stable ledger sequence (migration 008), assigned by the repository on insert. NULL only on rows made before 008. Order: seq, with NULL first (by rowid). */
+  seq: z.number().int().positive().nullable(),
   ...syncScope,
   ...lineMeta,
 });

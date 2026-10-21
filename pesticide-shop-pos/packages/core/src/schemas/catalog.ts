@@ -45,6 +45,9 @@ export const Customer = z
     cnic: z.string().nullable(),
     phone2: z.string().nullable(),
     guarantor: z.string().nullable(),
+    /** More optional farmer details (migration 008), free text such as '5 acres' and 'Cotton'. Same setting. */
+    land_size: z.string().nullable(),
+    crop: z.string().nullable(),
     ...syncScope,
     ...editableMeta,
   })

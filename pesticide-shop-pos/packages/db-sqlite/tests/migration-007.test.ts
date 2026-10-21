@@ -20,6 +20,7 @@ afterEach(() => {
 });
 
 const upTo6 = () => loadMigrations().slice(0, 6);
+const m7 = { migrations: loadMigrations().slice(0, 7) }; // this file tests 007 alone; 008 has its own test file
 const all = (db: Db, sql: string, ...p: unknown[]) => db.prepare(sql).all(...p) as Row[];
 const one = (db: Db, sql: string, ...p: unknown[]) => db.prepare(sql).get(...p) as Row;
 const tables = (db: Db) => all(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").map((r) => r.name as string);
@@ -65,7 +66,7 @@ describe('migration 007 on a shop that already has payments', () => {
     const db = await shopAtVersion6(join(dir, 'shop.db'));
     const before = Object.fromEntries(tables(db).filter((t) => t !== 'schema_version' && t !== 'number_sequences').map((t) => [t, dump(db, t)]));
     const seqBefore = dump(db, 'number_sequences');
-    const result = await migrate(db);
+    const result = await migrate(db, m7);
     expect(result.applied).toEqual([7]);
     expect(result.backupPath).not.toBeNull();
     expect(currentSchemaVersion(db)).toBe(7);
@@ -92,13 +93,13 @@ describe('migration 007 on a shop that already has payments', () => {
     // the old sequence rows are untouched; only new rows were added
     expect(dump(db, 'number_sequences').slice(0, seqBefore.length)).toEqual(seqBefore);
     expect(checkIntegrity(db)).toEqual({ ok: true, problems: [] });
-    expect((await migrate(db)).applied).toEqual([]);
+    expect((await migrate(db, m7)).applied).toEqual([]);
     expect(dump(db, 'number_sequences')).toHaveLength(seqBefore.length + 3);
   });
 
   it('adds nullable columns', async () => {
     const db = await shopAtVersion6(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, m7);
     for (const [table, names] of [
       ['payments', ['note', 'receipt_no']],
       ['customers', ['father_name', 'cnic', 'phone2', 'guarantor']],
@@ -115,7 +116,7 @@ describe('migration 007 on a shop that already has payments', () => {
 
   it('creates a payment sequence (RCP-, from 0) for every existing device and leaves the invoice ones alone', async () => {
     const db = await shopAtVersion6(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, m7);
     const seq = all(db, "SELECT device_id, prefix, last_number FROM number_sequences WHERE sequence_name = 'payment' ORDER BY device_id");
     expect(seq).toEqual([
       { device_id: 'd1', prefix: 'RCP-A-', last_number: 0 },
@@ -130,7 +131,7 @@ describe('migration 007 on a shop that already has payments', () => {
 
   it('keeps payments append-only (no update, no delete), and an old payment never gets a receipt number', async () => {
     const db = await shopAtVersion6(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, m7);
     expect(failure(() => db.prepare("UPDATE payments SET receipt_no = 'RCP-A-000001' WHERE id = 'p1'").run())).toMatch(/append-only/);
     expect(failure(() => db.prepare("UPDATE payments SET note = 'x' WHERE id = 'p1'").run())).toMatch(/append-only/);
     expect(failure(() => db.prepare('UPDATE payments SET amount = 5 WHERE id = ?').run('p1'))).toMatch(/append-only/);
@@ -140,7 +141,7 @@ describe('migration 007 on a shop that already has payments', () => {
 
   it('receipt_no is unique when set, and many payments may have none', async () => {
     const db = await shopAtVersion6(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, m7);
     insertPayment(db, 'p20', null);
     insertPayment(db, 'p21', null);
     insertPayment(db, 'p22', 'RCP-A-000001', 'cash for seed');
@@ -151,7 +152,7 @@ describe('migration 007 on a shop that already has payments', () => {
 
   it('receipt_no is unique across the whole file: the same number from another device or another customer is refused', async () => {
     const db = await shopAtVersion6(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, m7);
     insertPayment(db, 'p30', 'RCP-A-000009');
     const other = (id: string, party: string, device: string, branch: string) =>
       db.prepare("INSERT INTO payments (id, party_type, party_id, method, amount, direction, created_by, receipt_no, shop_id, branch_id, device_id) VALUES (?, 'customer', ?, 'cash', 100, 'in', 'u1', 'RCP-A-000009', 's1', ?, ?)").run(id, party, branch, device);
@@ -164,7 +165,7 @@ describe('migration 007 on a shop that already has payments', () => {
   it('keeps a payment sequence that already exists (last_number 6) and still migrates', async () => {
     const db = await shopAtVersion6(join(dir, 'shop.db'));
     db.exec("INSERT INTO number_sequences (id, device_id, sequence_name, prefix, last_number) VALUES ('qp1', 'd1', 'payment', 'RCP-A-', 6)");
-    const result = await migrate(db);
+    const result = await migrate(db, m7);
     expect(result.applied).toEqual([7]);
     expect(all(db, "SELECT device_id, prefix, last_number FROM number_sequences WHERE sequence_name = 'payment' ORDER BY device_id")).toEqual([
       { device_id: 'd1', prefix: 'RCP-A-', last_number: 6 },
@@ -177,14 +178,14 @@ describe('migration 007 on a shop that already has payments', () => {
     const db = await shopAtVersion6(join(dir, 'shop.db'));
     db.exec(`INSERT INTO devices (id, branch_id, name, device_code, deleted_at) VALUES ('d4', 'b1', 'Old PC', 'A2', '2026-01-01T00:00:00.000Z');
              INSERT INTO number_sequences (id, device_id, sequence_name, prefix, last_number) VALUES ('q4', 'd4', 'invoice', 'INV-A-', 3);`);
-    await migrate(db);
+    await migrate(db, m7);
     expect(one(db, "SELECT prefix, last_number FROM number_sequences WHERE device_id = 'd4' AND sequence_name = 'payment'")).toEqual({ prefix: 'RCP-A-', last_number: 0 });
     expect(one(db, "SELECT COUNT(*) AS n FROM number_sequences WHERE sequence_name = 'payment'").n).toBe(4);
   });
 
   it('customers keep their data and take the farmer fields on update', async () => {
     const db = await shopAtVersion6(join(dir, 'shop.db'));
-    await migrate(db);
+    await migrate(db, m7);
     db.prepare("UPDATE customers SET father_name = 'Ali', cnic = '35202-1234567-1', phone2 = '0300', guarantor = 'Imran' WHERE id = 'c1'").run();
     const c = one(db, "SELECT name_en, credit_limit, father_name, cnic, phone2, guarantor, version FROM customers WHERE id = 'c1'");
     expect(c).toMatchObject({ name_en: 'Rashid', credit_limit: 500000, father_name: 'Ali', cnic: '35202-1234567-1', phone2: '0300', guarantor: 'Imran', version: 2 });

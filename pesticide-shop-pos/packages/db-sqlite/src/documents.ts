@@ -14,6 +14,7 @@ import type {
   PrintConfig,
 } from '@pos/core';
 import type { Db } from './connection.js';
+import { LEDGER_BEFORE, LEDGER_POSITION_SQL, positionArgs, type LedgerPosition } from './ledger-order.js';
 
 // Reads for the invoice history and for receipts, and the print settings. Every query NAMES its columns: `invoice_items.cost_price` is
 // never selected here, so no cost can reach a receipt, a history row or a staff screen. (The deep-scan test in apps/desktop checks the replies too.)
@@ -130,7 +131,7 @@ export function getInvoiceDetail(db: Db, invoiceId: string): InvoiceDetail | und
 
 /**
  * The customer's balance right after this sale: everything in the ledger BEFORE this invoice's own entry, plus what this sale added (total - paid).
- * Later payments, returns and sales have later rows and do not change it. Ledger rows are append-only, and `rowid` is their order.
+ * Later payments, returns and sales have later rows and do not change it. Ledger rows are append-only, and their order is the stable sequence (`ledger-order.ts`: seq, with pre-008 rows first in rowid order), never rowid alone.
  */
 export function balanceAsOfSale(db: Db, invoiceId: string): number | null {
   const inv = db.prepare('SELECT customer_id, total, paid_amount, created_at FROM invoices WHERE id = ?').get(invoiceId) as
@@ -138,10 +139,10 @@ export function balanceAsOfSale(db: Db, invoiceId: string): number | null {
     | undefined;
   if (!inv || inv.customer_id === null) return null;
   const entry = db
-    .prepare("SELECT rowid AS r FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND ref_type = 'invoice' AND ref_id = ?")
-    .get(inv.customer_id, invoiceId) as { r: number } | undefined;
+    .prepare(`${LEDGER_POSITION_SQL} WHERE party_type = 'customer' AND party_id = ? AND ref_type = 'invoice' AND ref_id = ?`)
+    .get(inv.customer_id, invoiceId) as LedgerPosition | undefined;
   const before = entry
-    ? (db.prepare("SELECT COALESCE(SUM(amount_delta), 0) AS s FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND rowid < ?").get(inv.customer_id, entry.r) as { s: number }).s
+    ? (db.prepare(`SELECT COALESCE(SUM(amount_delta), 0) AS s FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND ${LEDGER_BEFORE}`).get(inv.customer_id, ...positionArgs(entry)) as { s: number }).s
     : (db.prepare("SELECT COALESCE(SUM(amount_delta), 0) AS s FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND created_at < ?").get(inv.customer_id, inv.created_at) as { s: number }).s;
   return before + inv.total - inv.paid_amount;
 }

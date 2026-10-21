@@ -77,6 +77,12 @@ export interface ServiceWorld {
   /** Add a customer directly, the way seed data does (not through the customers service). Returns its id. */
   addCustomer(row?: Row): string;
 
+  /**
+   * Put a ledger row in with an EXPLICIT seq (null: a row from before migration 008), bypassing the repository's own numbering, so a test
+   * can make insertion order (rowid) and sequence order differ. Needs id, party_type, party_id, entry_type, amount_delta; the rest is defaulted.
+   */
+  addLedgerRaw(row: Row, seq: number | null): void;
+
   /** Make the Nth insert (1-based, counted per unit of work) into `table` throw. */
   failOnInsert(table: InsertTable, nth?: number): void;
   clearFailure(): void;
@@ -160,7 +166,7 @@ export function seedData(today: string, options: WorldOptions = {}): SeedData {
   return {
     users: [user(ID.owner, { name: 'Owner', role: 'owner' }), user(ID.staff), user(ID.inactive, { is_active: 0 })],
     suppliers: [{ id: ID.supplier, name_en: 'Agri Dealer', name_ur: null, phone: null, address: null, ...s }],
-    customers: [{ id: ID.customer, name_en: 'Rashid', name_ur: null, phone: null, village: null, credit_limit: 1_000_000, default_price_type: 'retail', notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, ...s }],
+    customers: [{ id: ID.customer, name_en: 'Rashid', name_ur: null, phone: null, village: null, credit_limit: 1_000_000, default_price_type: 'retail', notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, land_size: null, crop: null, ...s }],
     categories: [{ id: ID.catInsecticide, name_en: 'Insecticide', name_ur: null, ...s }, { id: ID.catFertilizer, name_en: 'Fertilizer', name_ur: null, ...s }],
     brands: [{ id: ID.brandX, name_en: 'Brand X', name_ur: null, ...s }],
     // One group per seeded product (each product is a group with a single, unlabelled size).

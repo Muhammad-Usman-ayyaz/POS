@@ -62,8 +62,33 @@ class FakeStore {
     }
     if (table === 'ledger_entries' && row.amount_delta === 0) throw new Error('ledger_entries: amount_delta cannot be 0');
     if (table === 'payments' && (row.amount as number) <= 0) throw new Error('payments: amount must be positive');
+    if (table === 'ledger_entries') {
+      if ('seq' in row) throw new Error('service set seq on ledger_entries: the repository owns that column');
+      // like the SQLite repository: the next number, taken inside the write transaction
+      row = { ...row, seq: this.nextLedgerSeq() };
+    }
     this.writes += 1;
     (this.data[table] as Row[]).push({ ...row, ...meta });
+  }
+
+  nextLedgerSeq(): number {
+    return this.data.ledger_entries.reduce((max, e) => Math.max(max, e.seq ?? 0), 0) + 1;
+  }
+
+  /** The stable ledger order (same rule as the SQLite repository): entry_date, then rows with no seq first (insertion order), then seq. */
+  ledgerOrder(party: (e: LedgerEntry) => boolean): LedgerEntry[] {
+    return this.data.ledger_entries
+      .map((entry, i) => ({ entry, i }))
+      .filter(({ entry }) => party(entry))
+      .sort((a, b) => {
+        if (a.entry.entry_date !== b.entry.entry_date) return a.entry.entry_date < b.entry.entry_date ? -1 : 1;
+        const an = a.entry.seq !== null ? 1 : 0;
+        const bn = b.entry.seq !== null ? 1 : 0;
+        if (an !== bn) return an - bn;
+        if (an === 1 && a.entry.seq !== b.entry.seq) return a.entry.seq! - b.entry.seq!;
+        return a.i - b.i;
+      })
+      .map(({ entry }) => entry);
   }
 
   /** A new customer. Like the database: the farmer columns default to NULL and the meta columns are the database's. */
@@ -75,7 +100,7 @@ class FakeStore {
     if (row.name_en == null && row.name_ur == null) throw new Error('customers: a name is required');
     if ((row.credit_limit as number) < 0) throw new Error('customers: credit_limit cannot be negative');
     this.writes += 1;
-    this.data.customers.push({ father_name: null, cnic: null, phone2: null, guarantor: null, ...row, ...meta } as unknown as Customer);
+    this.data.customers.push({ father_name: null, cnic: null, phone2: null, guarantor: null, land_size: null, crop: null, ...row, ...meta } as unknown as Customer);
   }
 
   /** Changes columns of one row, like an UPDATE. The database owns version and updated_at, so a service may not set them. */
@@ -282,7 +307,7 @@ function createRepositories(store: FakeStore): Repositories {
     payments: { insert: (row) => store.insert('payments', row) },
     ledger: {
       balance: (type, id) => (store.needTx('ledger'), store.data.ledger_entries.filter((e) => e.party_type === type && e.party_id === id).reduce((s, e) => s + e.amount_delta, 0)),
-      list: (type, id) => (store.needTx('ledger'), store.data.ledger_entries.filter((e) => e.party_type === type && e.party_id === id)),
+      list: (type, id) => (store.needTx('ledger'), store.ledgerOrder((e) => e.party_type === type && e.party_id === id)),
       insert: (row) => store.insert('ledger_entries', row),
       balancesByParty: (type) => {
         store.needTx('ledger');
@@ -293,11 +318,9 @@ function createRepositories(store: FakeStore): Repositories {
       customerStatementRows: (customerId) => {
         store.needTx('ledger');
         const d = store.data;
-        return d.ledger_entries
-          .map((entry, i) => ({ entry, i }))
-          .filter(({ entry }) => entry.party_type === 'customer' && entry.party_id === customerId)
-          .sort((a, b) => (a.entry.entry_date < b.entry.entry_date ? -1 : a.entry.entry_date > b.entry.entry_date ? 1 : a.i - b.i))
-          .map(({ entry }) => {
+        return store
+          .ledgerOrder((entry) => entry.party_type === 'customer' && entry.party_id === customerId)
+          .map((entry) => {
             const invoice = entry.ref_type === 'invoice' ? d.invoices.find((x) => x.id === entry.ref_id) : undefined;
             const ret = entry.ref_type === 'return' ? d.sales_returns.find((x) => x.id === entry.ref_id) : undefined;
             const pay = entry.ref_type === 'payment' ? d.payments.find((x) => x.id === entry.ref_id) : undefined;
@@ -398,8 +421,12 @@ export function createFakeWorld(options: WorldOptions = {}): ServiceWorld {
     addCustomer: (row = {}) => {
       const id = (row.id as string | undefined) ?? uuid(7000 + store.data.customers.length);
       store.writes += 1;
-      store.data.customers.push({ id, name_en: 'Customer', name_ur: null, phone: null, village: null, credit_limit: 0, default_price_type: 'retail', notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, ...SCOPE, ...meta, ...row } as unknown as Customer);
+      store.data.customers.push({ id, name_en: 'Customer', name_ur: null, phone: null, village: null, credit_limit: 0, default_price_type: 'retail', notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, land_size: null, crop: null, ...SCOPE, ...meta, ...row } as unknown as Customer);
       return id;
+    },
+    addLedgerRaw: (row, seq) => {
+      store.writes += 1;
+      store.data.ledger_entries.push({ entry_date: STAMP, ref_type: null, ref_id: null, created_by: null, ...SCOPE, ...meta, ...row, seq } as unknown as LedgerEntry);
     },
     failOnInsert: (table, nth) => probe.failOnInsert(table, nth),
     clearFailure: () => probe.clearFailure(),

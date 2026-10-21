@@ -50,15 +50,15 @@ describe('Batch and Customer', () => {
   });
 
   it('Customer credit limit cannot be negative', () => {
-    const customer = { id: randomUUID(), name_en: 'Rashid', name_ur: null, phone: null, village: 'Kot', credit_limit: 1_000_000, default_price_type: 'retail' as const, notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, ...scope(), ...meta() };
+    const customer = { id: randomUUID(), name_en: 'Rashid', name_ur: null, phone: null, village: 'Kot', credit_limit: 1_000_000, default_price_type: 'retail' as const, notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, land_size: null, crop: null, ...scope(), ...meta() };
     expect(Customer.safeParse(customer).success).toBe(true);
     expect(Customer.safeParse({ ...customer, credit_limit: -1 }).success).toBe(false);
   });
 });
 
-describe('Customer farmer fields (migration 007) are nullable, never undefined', () => {
-  const customer = () => ({ id: randomUUID(), name_en: 'Rashid', name_ur: null, phone: null, village: 'Kot', credit_limit: 0, default_price_type: 'retail' as const, notes: null, father_name: 'Ali', cnic: '35202-1234567-1', phone2: '0300', guarantor: 'Imran', ...scope(), ...meta() });
-  it.each(['father_name', 'cnic', 'phone2', 'guarantor'] as const)('%s exists, accepts a string and null, and rejects undefined', (field) => {
+describe('Customer farmer fields (migrations 007 and 008) are nullable, never undefined', () => {
+  const customer = () => ({ id: randomUUID(), name_en: 'Rashid', name_ur: null, phone: null, village: 'Kot', credit_limit: 0, default_price_type: 'retail' as const, notes: null, father_name: 'Ali', cnic: '35202-1234567-1', phone2: '0300', guarantor: 'Imran', land_size: '5 acres', crop: 'Cotton', ...scope(), ...meta() });
+  it.each(['father_name', 'cnic', 'phone2', 'guarantor', 'land_size', 'crop'] as const)('%s exists, accepts a string and null, and rejects undefined', (field) => {
     expect(Customer.safeParse(customer()).success).toBe(true);
     expect(Customer.safeParse({ ...customer(), [field]: null }).success).toBe(true);
     const missing: Record<string, unknown> = { ...customer() };
