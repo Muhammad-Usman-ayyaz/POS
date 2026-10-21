@@ -89,7 +89,7 @@ describe('boot', () => {
     await screen.findByRole('heading', { name: 'لاگ ان', level: 2 });
     expect(root().getAttribute('dir')).toBe('rtl');
     expect(root().getAttribute('lang')).toBe('ur');
-    expect(document.documentElement.getAttribute('dir')).toBe('rtl');
+    await waitFor(() => expect(document.documentElement.getAttribute('dir')).toBe('rtl')); // set by an effect, a moment after the first paint
   });
 });
 
@@ -104,7 +104,7 @@ describe('language', () => {
     await user().click(screen.getByRole('radio', { name: 'اردو' }));
     expect(root().getAttribute('dir')).toBe('rtl');
     expect(root().getAttribute('lang')).toBe('ur');
-    expect(document.documentElement.getAttribute('lang')).toBe('ur');
+    await waitFor(() => expect(document.documentElement.getAttribute('lang')).toBe('ur'));
     expect(screen.getByRole('heading', { name: 'لاگ ان', level: 2 })).toBeTruthy();
 
     await user().click(screen.getByRole('radio', { name: 'EN' }));
