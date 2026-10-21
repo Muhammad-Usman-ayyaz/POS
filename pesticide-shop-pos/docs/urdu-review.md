@@ -352,3 +352,9 @@ Written by the developer, not yet checked by a native speaker. The keys are `set
 | `statement.*` (screen) | Customer statement / Back to customer / Dates / From / To / Quick ranges / This month / Last 30 days / All / Current balance / Credit left / No limit / Closing balance | کسٹمر کھاتے کی تفصیل / کسٹمر کے صفحے پر واپس / تاریخیں / سے / تک / فوری مدت / اس مہینے / پچھلے 30 دن / سب / موجودہ بقایا / باقی ادھار / کوئی حد نہیں / اختتامی بقایا | |
 | `statement.*` (buttons, notices) | Print statement / Print A4 / Save PDF / Export CSV / CSV saved / Not saved | کھاتہ پرنٹ کریں / A4 پرنٹ / PDF محفوظ کریں / CSV بنائیں / CSV محفوظ ہو گئی / محفوظ نہیں ہوئی | |
 | `paymentReceipt.*` | Print receipt / Save receipt as PDF | رسید پرنٹ کریں / رسید PDF میں محفوظ کریں | |
+
+### UI hardening pass (Phase 6; the developer's Urdu, not reviewed)
+
+| Key | English | Urdu | Reviewed? |
+|---|---|---|---|
+| `quickAdd.limitUnknown` | Could not read the shop's credit limit | دکان کی ادھار کی حد پڑھی نہیں جا سکی | |

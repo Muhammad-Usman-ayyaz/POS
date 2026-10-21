@@ -228,3 +228,15 @@ A test scans `packages/ui/src`: the browser date input appears only in `date-fie
 - **Save:** `customers:create` with `{ fields: { name_en | name_ur, phone?, village? } }` and nothing else (no limit, price type, `created_by`, role or `privileged`). The new customer goes onto the bill at once by the same path as picking from the list, with the price type from the reply; lines already on the bill stay; held bills are untouched. Double submit is guarded; a failure shows `ErrorNotice` and keeps what was typed; the next attempt clears it.
 - **Already exists:** the customer form's duplicate dialog (reused) lists the matches ("Owes Rs X" or "Advance Rs X", never a minus). "Use existing <name>" puts that customer on the bill (price type read with `customers:get`); "Save as new" sends the same request again with `confirm_duplicate: true`; Cancel returns to the form.
 - **Buttons and fields** are 48px (never under 44). Logical classes only; English and Urdu texts are in the `quickAdd` block of the messages.
+
+- **Credit line when the limit cannot be read:** if `customers:getSettings` fails, the line is replaced by a calm grey notice, "Could not read the shop's credit limit" (Urdu: دکان کی ادھار کی حد پڑھی نہیں جا سکی). It never says "No limit" (an unknown limit is not an unlimited one). Saving is still allowed: the shell applies the shop default.
+- **A name of only spaces** (or tabs, line breaks, zero-width marks) is no name: the name is asked for, nothing is sent (`isBlankName`, shared with the customer form).
+- **While it saves** the whole dialog is locked (see "Dialog `locked`" below): Escape and a click outside do nothing and Back is disabled until the answer is in. A failed `customers:get` after "Use existing" keeps the warning open and shows the error inside it.
+
+## Dialog `locked`
+
+`<Dialog locked>` (optional, default false) ignores Escape and a click on the backdrop while true, and sets `aria-busy`. It is for a dialog whose save is in flight: without it Escape closes the box before the answer is shown (a customer created but not put on the bill, a payment saved but its receipt number never seen). It is used by the POS quick-add (through the picker), Receive payment, Opening balance and the duplicate warning (while "Use existing" or "Save as new" is running). The buttons that would close the dialog (Cancel, Back) must be disabled by the caller in the same state. A dialog that does not pass `locked` behaves as before.
+
+## The UI clock
+
+`packages/ui/src/lib/clock.ts` is the ONE place the UI reads the wall clock: `uiNow(): Date`. Tests pin it with `setUiClock(() => new Date(...))` (and `setUiClock()` restores it). The statement page uses it for "This month" and "Last 30 days" (`todayIn(timeZone, uiNow())` has no default `new Date()` argument). Older screens still read the clock themselves (`pos-page.tsx` `utcToday`, `pos-state.ts` `newRequestId`, `receive-state.ts` `todayText`) and should move to `uiNow()` when they are next touched.
