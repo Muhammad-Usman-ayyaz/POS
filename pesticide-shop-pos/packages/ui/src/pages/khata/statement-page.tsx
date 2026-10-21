@@ -12,6 +12,7 @@ import { useI18n, type Messages } from '../../i18n/index.js';
 import { displayName } from '../customers/list/customer-list-state.js';
 import { SHOP_TIME_ZONE } from '../invoices/time-zone.js';
 import { StatementPrintActions } from './print-actions.js';
+import { uiNow } from '../../lib/clock.js';
 import { buildStatementRequest, last30Range, thisMonthRange, todayIn } from './statement-requests.js';
 
 type Line = StatementView['lines'][number];
@@ -80,7 +81,7 @@ export function StatementPage({ api }: { api: Api; user: SessionUser }) {
 
   const quick = useCallback(
     (which: 'month' | '30' | 'all') => {
-      const today = todayIn(SHOP_TIME_ZONE);
+      const today = todayIn(SHOP_TIME_ZONE, uiNow());
       const r = which === 'month' ? thisMonthRange(today) : which === '30' ? last30Range(today) : { from: '', to: '' };
       setFrom(r.from);
       setTo(r.to);

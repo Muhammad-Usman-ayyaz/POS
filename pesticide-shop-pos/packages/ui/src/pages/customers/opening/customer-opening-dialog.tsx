@@ -90,7 +90,7 @@ export function CustomerOpeningDialog({
 
   if (step === 'confirm' && paisa !== null) {
     return (
-      <Dialog counter open title={t.confirmTitle} onClose={onClose} className="max-w-[460px]">
+      <Dialog counter open title={t.confirmTitle} onClose={onClose} locked={saving} className="max-w-[460px]">
         <p data-opening-confirm className="text-[15px]">
           {direction === 'they_owe_us' ? t.confirmTheyOwe(name, money(paisa)) : t.confirmWeOwe(name, money(paisa))}
         </p>
@@ -113,7 +113,7 @@ export function CustomerOpeningDialog({
     { value: 'we_owe_them', label: t.weOweThem },
   ];
   return (
-    <Dialog counter eyebrow={t.ownerOnly} title={t.title} lead={t.lead} onClose={onClose} open className="max-w-[460px]">
+    <Dialog counter eyebrow={t.ownerOnly} title={t.title} lead={t.lead} onClose={onClose} locked={saving} open className="max-w-[460px]">
       <form
         noValidate
         data-opening-form

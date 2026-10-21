@@ -17,6 +17,7 @@ export function Dialog({
   eyebrow,
   lead,
   counter = false,
+  locked = false,
 }: {
   open: boolean;
   title: string;
@@ -33,6 +34,11 @@ export function Dialog({
    * title and a 14px grey lead. The ordinary dialog (the default) is left as it was.
    */
   counter?: boolean;
+  /**
+   * True while something is being saved: Escape, a click on the backdrop and the close button are ignored, so the dialog cannot vanish before the
+   * answer is shown (a customer created but not put on the bill, a payment saved but the receipt number never seen). Default false.
+   */
+  locked?: boolean;
 }) {
   const titleId = useId();
   const box = useRef<HTMLDivElement>(null);
@@ -50,10 +56,13 @@ export function Dialog({
 
   if (!open) return null;
 
+  const close = () => {
+    if (!locked) onClose();
+  };
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.stopPropagation();
-      onClose();
+      close();
       return;
     }
     if (event.key !== 'Tab' || !box.current) return;
@@ -72,11 +81,12 @@ export function Dialog({
 
   if (counter) {
     return (
-      <div className="fixed inset-0 z-50 grid place-items-center bg-ink/55 p-6" onKeyDown={onKeyDown} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="fixed inset-0 z-50 grid place-items-center bg-ink/55 p-6" onKeyDown={onKeyDown} onMouseDown={(e) => e.target === e.currentTarget && close()}>
         <div
           ref={box}
           role="dialog"
           aria-modal="true"
+          aria-busy={locked || undefined}
           aria-labelledby={titleId}
           data-counter-dialog
           className={cn('pop-once flex max-h-full w-full max-w-[420px] flex-col gap-3.5 overflow-y-auto rounded-2xl bg-card p-6 shadow-[0_14px_40px_rgba(23,38,30,0.18)]', className)}
@@ -95,8 +105,8 @@ export function Dialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/55 p-6" onKeyDown={onKeyDown} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={box} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cn('pop-once w-full max-w-[560px] rounded-xl bg-card p-6 shadow-card', className)}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/55 p-6" onKeyDown={onKeyDown} onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <div ref={box} role="dialog" aria-modal="true" aria-busy={locked || undefined} aria-labelledby={titleId} className={cn('pop-once w-full max-w-[560px] rounded-xl bg-card p-6 shadow-card', className)}>
         <div className="flex items-start gap-4">
           {icon}
           <h2 id={titleId} className="min-w-0 text-2xl font-bold leading-snug">

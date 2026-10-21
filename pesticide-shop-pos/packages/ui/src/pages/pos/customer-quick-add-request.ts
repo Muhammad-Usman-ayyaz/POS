@@ -3,7 +3,7 @@
 // the owner is signed in. So the request never carries a credit limit, a price type, farmer details, created_by or a role: the shell applies the shop's
 // default credit limit and the retail price type (plan D2), and the owner sets terms on the customer page.
 import type { Api } from '@pos/api-contract';
-import { buildCreateRequest, buildDuplicatesRequest, newDraft, type CustomerDraft, type SavedCustomer } from '../customers/form/customer-form-requests.js';
+import { buildCreateRequest, buildDuplicatesRequest, isBlankName, newDraft, type CustomerDraft, type SavedCustomer } from '../customers/form/customer-form-requests.js';
 import type { Customer } from './pos-state.js';
 
 type CreateInput = Parameters<Api['customers']['create']>[0];
@@ -27,11 +27,11 @@ const looksLikePhone = (text: string): boolean => /^\+?[\d\s-]{5,}$/.test(text.t
 export const startForm = (typed: string): QuickAddForm => (looksLikePhone(typed) ? { name: '', phone: typed.trim(), village: '' } : { name: typed.trim(), phone: '', village: '' });
 
 export const quickAddDraft = (form: QuickAddForm): CustomerDraft => {
-  const name = form.name.trim();
+  const name = isBlankName(form.name) ? '' : form.name.trim();
   return { ...newDraft(), nameEn: name && !hasUrduScript(name) ? name : '', nameUr: name && hasUrduScript(name) ? name : '', phone: form.phone, village: form.village };
 };
 
-export const quickAddNameMissing = (form: QuickAddForm): boolean => form.name.trim() === '';
+export const quickAddNameMissing = (form: QuickAddForm): boolean => isBlankName(form.name);
 
 /** The create request: contact fields only (never `owner: true`), plus confirm_duplicate on "Save as new". */
 export const buildQuickAddRequest = (form: QuickAddForm, confirmDuplicate = false): CreateInput => buildCreateRequest(quickAddDraft(form), { owner: false, showFarmer: false, confirmDuplicate });

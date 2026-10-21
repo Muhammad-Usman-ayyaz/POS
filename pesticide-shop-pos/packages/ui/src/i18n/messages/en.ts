@@ -567,6 +567,7 @@ export const en = {
     nameRequired: 'Write a name in English or Urdu',
     limitNone: 'Credit limit: No limit (set by the owner)',
     limitIs: (amount: string) => `Credit limit: ${amount} (set by the owner)`,
+    limitUnknown: "Could not read the shop's credit limit",
     back: 'Back to search',
     save: 'Save and use',
     saving: 'Saving…',

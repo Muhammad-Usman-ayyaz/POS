@@ -13,11 +13,12 @@ import type { Customer } from './pos-state.js';
  * dialog button row). Contact fields only: no credit field for anyone, because the shell applies the shop's default limit and the retail price type
  * and the owner sets terms on the customer page. A line under the form says what limit the new customer will have, so unlimited credit is never a surprise.
  */
-export function CustomerQuickAdd({ api, start, onBack, onCreated }: { api: Api; start: QuickAddForm; onBack: () => void; onCreated: (customer: Customer) => void }) {
+export function CustomerQuickAdd({ api, start, onBack, onCreated, onBusyChange }: { api: Api; start: QuickAddForm; onBack: () => void; onCreated: (customer: Customer) => void; onBusyChange?: (busy: boolean) => void }) {
   const { m, language } = useI18n();
   const t = m.quickAdd;
   const [form, setForm] = useState<QuickAddForm>(start);
   const [defaultLimit, setDefaultLimit] = useState<number | null>(null);
+  const [limitUnknown, setLimitUnknown] = useState(false); // the shop's limit could not be read: say so, never show "No limit"
   const [nameMissing, setNameMissing] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [matches, setMatches] = useState<DuplicateMatchView[] | null>(null);
@@ -29,12 +30,16 @@ export function CustomerQuickAdd({ api, start, onBack, onCreated }: { api: Api; 
     let alive = true;
     api.customers.getSettings().then(
       (s) => alive && setDefaultLimit(s.default_credit_limit),
-      (e: unknown) => alive && setError(e),
+      () => alive && setLimitUnknown(true),
     );
     return () => {
       alive = false;
     };
   }, [api]);
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
 
   const set = (key: keyof QuickAddForm, value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -88,8 +93,7 @@ export function CustomerQuickAdd({ api, start, onBack, onCreated }: { api: Api; 
       finish(billCustomerFrom(found.customer));
       return;
     } catch (e) {
-      setMatches(null);
-      setError(e);
+      setError(e); // the duplicate warning stays open, and the error is shown inside it
     }
     working.current = false;
     setBusy(false);
@@ -140,7 +144,12 @@ export function CustomerQuickAdd({ api, start, onBack, onCreated }: { api: Api; 
             {defaultLimit > 0 ? t.limitIs(formatMoney(defaultLimit, language)) : t.limitNone}
           </p>
         )}
-        {error != null && <ErrorNotice error={error} />}
+        {limitUnknown && (
+          <p data-limit-unknown role="status" className="rounded-md bg-thead px-3 py-2.5 text-[13px] font-semibold text-ink-mid">
+            {t.limitUnknown}
+          </p>
+        )}
+        {error != null && matches === null && <ErrorNotice error={error} />}
         <Actions>
           <Button type="button" variant="secondary" size="dialog" onClick={onBack} disabled={busy}>
             {t.back}
@@ -154,6 +163,7 @@ export function CustomerQuickAdd({ api, start, onBack, onCreated }: { api: Api; 
         matches={matches}
         typedName={typedName}
         busy={busy}
+        error={matches !== null ? error : null}
         openLabel={t.useExisting}
         onCancel={() => setMatches(null)}
         onOpen={(id) => void useExisting(id)}

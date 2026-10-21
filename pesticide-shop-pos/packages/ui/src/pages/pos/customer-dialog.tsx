@@ -20,6 +20,7 @@ export function CustomerDialog({ api, current, onPick, onClose }: { api: Api; cu
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<string | 'walk-in'>(current?.id ?? 'walk-in');
   const [adding, setAdding] = useState<QuickAddForm | null>(null); // the quick-add form, in this same dialog
+  const [saving, setSaving] = useState(false); // the quick-add is saving: the dialog cannot be closed until the answer is in
   const run = useCallback((q: string) => api.customers.search({ query: q, limit: RESULTS }), [api]);
   const search = useDebouncedSearch(run, query);
   const matches = search.data ?? [];
@@ -36,8 +37,8 @@ export function CustomerDialog({ api, current, onPick, onClose }: { api: Api; cu
 
   if (adding) {
     return (
-      <Dialog counter open title={m.quickAdd.title} lead={m.quickAdd.lead} onClose={onClose}>
-        <CustomerQuickAdd api={api} start={adding} onBack={() => setAdding(null)} onCreated={onPick} />
+      <Dialog counter open title={m.quickAdd.title} lead={m.quickAdd.lead} onClose={onClose} locked={saving}>
+        <CustomerQuickAdd api={api} start={adding} onBack={() => setAdding(null)} onCreated={onPick} onBusyChange={setSaving} />
       </Dialog>
     );
   }

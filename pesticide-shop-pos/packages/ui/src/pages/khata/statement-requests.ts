@@ -24,7 +24,7 @@ export const buildPrintReceiptRequest = (paymentId: string, output: PrintOutput)
 export const buildExportRequest = (customerId: string, from: string, to: string): ExportInput => ({ customer_id: customerId, ...range(from, to) });
 
 /** The shop's calendar day today (`YYYY-MM-DD`) in a time zone. */
-export function todayIn(timeZone: string, now: Date = new Date()): string {
+export function todayIn(timeZone: string, now: Date): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
   const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
   return `${get('year')}-${get('month')}-${get('day')}`;

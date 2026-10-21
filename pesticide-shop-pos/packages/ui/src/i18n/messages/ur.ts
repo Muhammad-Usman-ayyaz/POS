@@ -568,6 +568,7 @@ export const ur: Messages = {
     nameRequired: 'انگریزی یا اردو میں نام لکھیں',
     limitNone: 'ادھار کی حد: کوئی حد نہیں (مالک طے کرتا ہے)',
     limitIs: (amount: string) => `ادھار کی حد: ${amount} (مالک طے کرتا ہے)`,
+    limitUnknown: 'دکان کی ادھار کی حد پڑھی نہیں جا سکی',
     back: 'تلاش پر واپس',
     save: 'محفوظ کریں اور استعمال کریں',
     saving: 'محفوظ ہو رہا ہے…',
