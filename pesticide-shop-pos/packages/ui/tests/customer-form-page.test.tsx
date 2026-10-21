@@ -6,7 +6,7 @@ import { buildApi, type Channel, type Language, type SessionUser } from '@pos/ap
 import { cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { I18nProvider, ToastProvider } from '../src/index.js';
 import { formatMoney } from '../src/i18n/index.js';
@@ -436,6 +436,381 @@ describe('validation', () => {
 });
 
 // ---------- Urdu, direction, cost ----------
+
+// ---------- hardening ----------
+
+function gate() {
+  let release: () => void = () => undefined;
+  const wait = new Promise<void>((r) => (release = r));
+  return { wait, release };
+}
+
+describe('a name with nothing in it', () => {
+  it.each([
+    ['spaces', '   ', ''],
+    ['spaces in both boxes', '  ', '  '],
+    ['a zero-width space', '​', ''],
+    ['a tab and a line break', '\t\n', ' '],
+  ])('%s is no name: the message shows and nothing is sent', async (_label, english, urdu) => {
+    const shell = await newForm();
+    set(nameEn(), english);
+    set(screen.getByLabelText(f.nameUr), urdu);
+    click(saveBtn());
+    expect(await screen.findByText(f.problems.name)).toBeTruthy();
+    expect(shell.of('customers:create')).toHaveLength(0);
+  });
+
+  it('blank English with a real Urdu name saves the Urdu name only', async () => {
+    const shell = await newForm();
+    set(nameEn(), '   ');
+    set(screen.getByLabelText(f.nameUr), ' راشد ');
+    click(saveBtn());
+    await screen.findByText('the customer page cNew');
+    expect(shell.of('customers:create')[0]!.input.fields).toEqual({ name_ur: 'راشد', credit_limit: 0, default_price_type: 'retail' });
+  });
+});
+
+describe('what staff can and cannot send', () => {
+  it('a staff edit never calls setTerms, even for a customer whose limit the form cannot show as an amount', async () => {
+    // 10^11 paisa is more digits than the limit box accepts: an owner-style terms check would see a change and send one
+    const shell = fakeShell({ stored: { credit_limit: 100_000_000_000 } });
+    await editForm(shell, STAFF);
+    set(screen.getByLabelText(f.village), 'Chak 13');
+    click(saveBtn());
+    await screen.findByText('the customer page c1');
+    expect(shell.of('customers:update')).toHaveLength(1);
+    expect(shell.of('customers:setTerms')).toHaveLength(0);
+    expect(JSON.stringify(shell.of('customers:update')[0]!.input)).not.toMatch(/credit_limit|price_type/);
+  });
+
+  it('a staff create carries no terms, farmer details or confirm flag', async () => {
+    const shell = await newForm(fakeShell({ settings: { default_credit_limit: 500_000, show_farmer_fields: true } }), STAFF);
+    set(nameEn(), 'Imran');
+    click(saveBtn());
+    await screen.findByText('the customer page cNew');
+    expect(shell.of('customers:create')[0]!.input).toEqual({ fields: { name_en: 'Imran' } });
+    expect(shell.of('customers:setTerms')).toHaveLength(0);
+  });
+});
+
+describe('edit: what is sent, and what happens when only half is saved', () => {
+  it('when the update works and setTerms fails, the form stays, reloads what is saved and says so', async () => {
+    const shell = fakeShell({ override: { 'customers:setTerms': () => fail('INTERNAL') } });
+    await editForm(shell);
+    set(screen.getByLabelText(f.village), 'Chak 99');
+    set(screen.getByLabelText(f.creditLimit), '2500');
+    click(saveBtn());
+    expect(await screen.findByText(f.partial)).toBeTruthy();
+    expect(document.querySelector('[data-code=INTERNAL]')).toBeTruthy();
+    expect(shell.of('customers:update')).toHaveLength(1);
+    expect(shell.of('customers:get').length).toBeGreaterThanOrEqual(2); // loaded again
+    expect(screen.queryByText('the customer page c1')).toBeNull(); // did not leave the form
+    await waitFor(() => expect((screen.getByLabelText(f.village) as HTMLInputElement).value).toBe('Chak 99')); // what was saved
+    expect((screen.getByLabelText(f.creditLimit) as HTMLInputElement).value).toBe('10000'); // the terms were not saved
+  });
+
+  it('a failed update alone (nothing written) is not called partial', async () => {
+    const shell = fakeShell({ override: { 'customers:update': () => fail('INTERNAL') } });
+    await editForm(shell);
+    set(screen.getByLabelText(f.village), 'Chak 99');
+    click(saveBtn());
+    await screen.findByRole('alert');
+    expect(screen.queryByText(f.partial)).toBeNull();
+    expect(shell.of('customers:setTerms')).toHaveLength(0);
+  });
+
+  it('setTerms is sent with the version from the update reply, not a guess', async () => {
+    const shell = fakeShell({
+      override: {
+        'customers:update': () => ({ ok: true, data: summary(customer({ village: 'Chak 13', version: 9 })) }),
+      },
+    });
+    await editForm(shell);
+    set(screen.getByLabelText(f.village), 'Chak 13');
+    set(screen.getByLabelText(f.creditLimit), '2500');
+    click(saveBtn());
+    await screen.findByText('the customer page c1');
+    expect(shell.of('customers:setTerms')[0]!.input.expected_version).toBe(9);
+  });
+
+  it('notes are sent on update (and null when cleared)', async () => {
+    const shell = await editForm();
+    set(screen.getByLabelText(f.notes), '  Pays on Friday ');
+    click(saveBtn());
+    await screen.findByText('the customer page c1');
+    expect(shell.of('customers:update')[0]!.input).toEqual({ customer_id: 'c1', fields: { notes: 'Pays on Friday' }, expected_version: 3 });
+    cleanup();
+    const second = await editForm();
+    set(screen.getByLabelText(f.notes), '');
+    click(saveBtn());
+    await screen.findByText('the customer page c1');
+    expect(second.of('customers:update')[0]!.input.fields).toEqual({ notes: null });
+  });
+
+  it('a price-type-only change sends setTerms (with the limit unchanged) and no update', async () => {
+    const shell = await editForm();
+    click(screen.getByRole('radio', { name: f.retail }));
+    click(saveBtn());
+    await screen.findByText('the customer page c1');
+    expect(shell.of('customers:update')).toHaveLength(0);
+    expect(shell.of('customers:setTerms')[0]!.input).toEqual({ customer_id: 'c1', credit_limit: 1_000_000, default_price_type: 'retail', expected_version: 3 });
+  });
+
+  it('nothing changed sends nothing at all', async () => {
+    const shell = await editForm();
+    click(saveBtn());
+    await screen.findByText('the customer page c1');
+    expect(shell.of('customers:update')).toHaveLength(0);
+    expect(shell.of('customers:setTerms')).toHaveLength(0);
+  });
+});
+
+describe('saving safely', () => {
+  it('a double submit creates one customer; Save is disabled and says Saving… while it runs', async () => {
+    const g = gate();
+    const shell = fakeShell({ override: { 'customers:create': async () => (await g.wait, { ok: true, data: summary(customer({ id: 'cNew' })) }) } });
+    await newForm(shell);
+    set(nameEn(), 'Imran');
+    const form = document.querySelector('form')!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    click(screen.getByRole('button', { name: f.saving }));
+    await waitFor(() => expect((screen.getByRole('button', { name: f.saving }) as HTMLButtonElement).disabled).toBe(true));
+    g.release();
+    await screen.findByText('the customer page cNew');
+    expect(shell.of('customers:create')).toHaveLength(1);
+  });
+
+  it('"Save as new" closes the warning at once and sends the request again once', async () => {
+    const g = gate();
+    let calls = 0;
+    const shell = fakeShell({
+      override: {
+        'customers:create': async () => {
+          calls += 1;
+          if (calls === 1) return fail('DUPLICATE_CUSTOMER', { count: 1 });
+          await g.wait;
+          return { ok: true, data: summary(customer({ id: 'cNew' })) };
+        },
+      },
+    });
+    await newForm(shell);
+    set(nameEn(), 'Rashid Ali');
+    click(saveBtn());
+    const dialog = await screen.findByRole('dialog');
+    click(within(dialog).getByRole('button', { name: f.dupSaveNew }));
+    await waitFor(() => expect(shell.of('customers:create')).toHaveLength(2));
+    expect(screen.queryByRole('dialog')).toBeNull(); // the matches are cleared while it saves
+    g.release();
+    await screen.findByText('the customer page cNew');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(shell.of('customers:create')).toHaveLength(2);
+  });
+});
+
+describe('farmer details: the toggle and the trimming', () => {
+  const farmerShell = () => fakeShell({ settings: { show_farmer_fields: true } });
+
+  it('the button opens and closes the block; what was typed is kept while it is closed', async () => {
+    await newForm(farmerShell());
+    const toggle = () => screen.getByRole('button', { name: new RegExp(`^(${f.addFarmer}|${f.hideFarmer})$`) });
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(toggle().textContent).toBe(f.addFarmer);
+    click(toggle());
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(toggle().textContent).toBe(f.hideFarmer);
+    set(screen.getByLabelText(f.fatherName), 'Muhammad Ali');
+    click(toggle());
+    expect(screen.queryByLabelText(f.fatherName)).toBeNull();
+    click(toggle());
+    expect((screen.getByLabelText(f.fatherName) as HTMLInputElement).value).toBe('Muhammad Ali');
+  });
+
+  it('create: blank farmer boxes are not sent, typed ones are trimmed', async () => {
+    const shell = await newForm(farmerShell());
+    click(screen.getByRole('button', { name: f.addFarmer }));
+    set(screen.getByLabelText(f.fatherName), '   ');
+    set(screen.getByLabelText(f.cnic), '  35202-1234567-1  ');
+    set(screen.getByLabelText(f.phone2), ' ');
+    set(screen.getByLabelText(f.guarantor), '\t');
+    set(nameEn(), 'Ali');
+    click(saveBtn());
+    await screen.findByText('the customer page cNew');
+    expect(shell.of('customers:create')[0]!.input.fields).toEqual({ name_en: 'Ali', credit_limit: 0, default_price_type: 'retail', cnic: '35202-1234567-1' });
+  });
+
+  it('edit: whitespace typed into an empty farmer box is no change (nothing is sent)', async () => {
+    const shell = await editForm(farmerShell());
+    click(screen.getByRole('button', { name: f.addFarmer }));
+    set(screen.getByLabelText(f.fatherName), '   ');
+    set(screen.getByLabelText(f.cnic), ' ');
+    click(saveBtn());
+    await screen.findByText('the customer page c1');
+    expect(shell.of('customers:setTerms')).toHaveLength(0);
+    expect(shell.of('customers:update')).toHaveLength(0);
+  });
+
+  it('edit: a CNIC with spaces round it is sent trimmed', async () => {
+    const shell = await editForm(farmerShell());
+    click(screen.getByRole('button', { name: f.addFarmer }));
+    set(screen.getByLabelText(f.cnic), '  35202-1  ');
+    click(saveBtn());
+    await screen.findByText('the customer page c1');
+    expect(shell.of('customers:setTerms')[0]!.input).toMatchObject({ cnic: '35202-1' });
+  });
+});
+
+describe('one form per customer', () => {
+  function Nav({ to }: { to: string }) {
+    const go = useNavigate();
+    return (
+      <button type="button" onClick={() => go(to)}>
+        go {to}
+      </button>
+    );
+  }
+  const other = (id: string) => (id === 'c2' ? customer({ id: 'c2', name_en: 'Zahid', name_ur: null, phone: null, village: 'Kot', notes: null, credit_limit: 300_000, default_price_type: 'retail' }) : customer());
+  function Harness({ shell, start }: { shell: ReturnType<typeof fakeShell>; start: string }) {
+    return (
+      <MemoryRouter initialEntries={[start]}>
+        <I18nProvider language="en" onLanguageChange={() => undefined}>
+          <ToastProvider>
+            <Routes>
+              <Route path="/customers/new" element={<><Nav to="/customers/c2/edit" /><CustomerFormPage api={shell.api} user={OWNER} /></>} />
+              <Route path="/customers/:id/edit" element={<><Nav to="/customers/c2/edit" /><Nav to="/customers/new" /><CustomerFormPage api={shell.api} user={OWNER} /></>} />
+            </Routes>
+          </ToastProvider>
+        </I18nProvider>
+      </MemoryRouter>
+    );
+  }
+  const shellFor = () => fakeShell({ override: { 'customers:get': (input: { customer_id: string }) => ({ ok: true, data: summary(other(input.customer_id) as ReturnType<typeof customer>) }) } });
+
+  it('going from one customer to another shows the other customer and nothing that was typed', async () => {
+    const shell = shellFor();
+    render(<Harness shell={shell} start="/customers/c1/edit" />);
+    await screen.findByDisplayValue('Rashid Ali');
+    set(screen.getByLabelText(f.village), 'typed but not saved');
+    set(screen.getByLabelText(f.notes), 'typed notes');
+    click(screen.getByRole('button', { name: 'go /customers/c2/edit' }));
+    await screen.findByDisplayValue('Zahid');
+    expect((screen.getByLabelText(f.village) as HTMLInputElement).value).toBe('Kot');
+    expect((screen.getByLabelText(f.notes) as HTMLTextAreaElement).value).toBe('');
+    expect((screen.getByLabelText(f.creditLimit) as HTMLInputElement).value).toBe('3000');
+    expect(document.body.textContent).not.toContain('typed');
+  });
+
+  it('the other customer does not inherit the first one\'s error message', async () => {
+    const shell = fakeShell({ override: { 'customers:get': (input: { customer_id: string }) => ({ ok: true, data: summary(other(input.customer_id) as ReturnType<typeof customer>) }), 'customers:update': () => fail('INTERNAL') } });
+    render(<Harness shell={shell} start="/customers/c1/edit" />);
+    await screen.findByDisplayValue('Rashid Ali');
+    set(screen.getByLabelText(f.village), 'x');
+    click(saveBtn());
+    await waitFor(() => expect(document.querySelector('[data-code=INTERNAL]')).toBeTruthy());
+    click(screen.getByRole('button', { name: 'go /customers/c2/edit' }));
+    await screen.findByDisplayValue('Zahid');
+    expect(document.querySelector('[data-code=INTERNAL]')).toBeNull();
+  });
+
+  it('going from an edit to Add starts a blank form', async () => {
+    const shell = shellFor();
+    render(<Harness shell={shell} start="/customers/c1/edit" />);
+    await screen.findByDisplayValue('Rashid Ali');
+    click(screen.getByRole('button', { name: 'go /customers/new' }));
+    await waitFor(() => expect(nameEn().value).toBe(''));
+    expect((screen.getByLabelText(f.phone) as HTMLInputElement).value).toBe('');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(f.addTitle);
+  });
+});
+
+describe('Settings, Customers section: the edges', () => {
+  const s = en.customerSettings;
+  const printCfg = { 'print:getConfig': () => ({ ok: true, data: { shop_name: 'S', print_format: '80mm', receipt_footer: '', printer_name: null, receipt_language: 'en', invoice_language: 'en', shop_name_ur: null, shop_address: null, shop_phone: null } }), 'printers:list': () => ({ ok: true, data: [] }) };
+  const openSection = async (shell: ReturnType<typeof fakeShell>) => {
+    show(shell, '/settings', OWNER, 'en');
+    click(await screen.findByRole('button', { name: s.sectionLabel }));
+    return (await screen.findByLabelText(s.defaultLimit)) as HTMLInputElement;
+  };
+  const saveButton = () => screen.getByRole('button', { name: new RegExp(`^(${s.save}|${s.saving})$`) }) as HTMLButtonElement;
+
+  it('Save is off when nothing changed and when the limit is invalid, and a forced submit sends nothing', async () => {
+    const shell = fakeShell({ settings: { default_credit_limit: 500_000 }, override: printCfg });
+    const limit = await openSection(shell);
+    expect(saveButton().disabled).toBe(true);
+    fireEvent.submit(document.querySelector('[data-section=customers]')!);
+    set(limit, 'abc');
+    expect(saveButton().disabled).toBe(true);
+    fireEvent.submit(document.querySelector('[data-section=customers]')!);
+    set(limit, '5000'); // back to what it was: unchanged again
+    expect(saveButton().disabled).toBe(true);
+    expect(screen.getByText(s.nothingChanged)).toBeTruthy();
+    expect(shell.of('customers:setSettings')).toHaveLength(0);
+  });
+
+  it('while saving: Save is off, says Saving…, and a second submit sends nothing', async () => {
+    const g = gate();
+    const shell = fakeShell({ settings: { default_credit_limit: 500_000 }, override: { ...printCfg, 'customers:setSettings': async (input: object) => (await g.wait, { ok: true, data: { default_credit_limit: 750_000, show_farmer_fields: false, ...input } }) } });
+    const limit = await openSection(shell);
+    set(limit, '7500');
+    click(saveButton());
+    await waitFor(() => expect(saveButton().textContent).toBe(s.saving));
+    expect(saveButton().disabled).toBe(true);
+    fireEvent.submit(document.querySelector('[data-section=customers]')!);
+    g.release();
+    await screen.findByText(s.saved);
+    expect(shell.of('customers:setSettings')).toHaveLength(1);
+  });
+
+  it('after a save the boxes show what the shell replied, not what was typed', async () => {
+    const shell = fakeShell({ settings: { default_credit_limit: 500_000 }, override: { ...printCfg, 'customers:setSettings': () => ({ ok: true, data: { default_credit_limit: 800_000, show_farmer_fields: true } }) } });
+    const limit = await openSection(shell);
+    set(limit, '7500');
+    click(saveButton());
+    await screen.findByText(s.saved);
+    expect(limit.value).toBe('8000');
+    expect(screen.getByRole('radio', { name: s.on }).getAttribute('aria-checked')).toBe('true');
+    expect(saveButton().disabled).toBe(true); // nothing differs from the reply now
+  });
+
+  it('On and Off are not swapped: a shop with the farmer details on shows On, and Off sends false', async () => {
+    const shell = fakeShell({ settings: { show_farmer_fields: true }, override: printCfg });
+    await openSection(shell);
+    expect(screen.getByRole('radio', { name: s.on }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: s.off }).getAttribute('aria-checked')).toBe('false');
+    click(screen.getByRole('radio', { name: s.off }));
+    expect(screen.getByRole('radio', { name: s.off }).getAttribute('aria-checked')).toBe('true');
+    click(saveButton());
+    await screen.findByText(s.saved);
+    expect(shell.of('customers:setSettings')[0]!.input).toEqual({ show_farmer_fields: false });
+  });
+
+  it('a failed save shows its error, and the next successful save removes it', async () => {
+    let calls = 0;
+    const shell = fakeShell({ settings: { default_credit_limit: 500_000 }, override: { ...printCfg, 'customers:setSettings': (input: object) => (++calls === 1 ? fail('INTERNAL') : { ok: true, data: { default_credit_limit: 750_000, show_farmer_fields: false, ...input } }) } });
+    const limit = await openSection(shell);
+    set(limit, '7500');
+    click(saveButton());
+    await waitFor(() => expect(document.querySelector('[data-section=customers] [data-code=INTERNAL]')).toBeTruthy());
+    expect(limit.value).toBe('7500'); // what was typed stays
+    click(saveButton());
+    await screen.findByText(s.saved);
+    expect(document.querySelector('[data-section=customers] [data-code=INTERNAL]')).toBeNull();
+  });
+
+  it('a failed load shows the error with Try again, and Try again loads the section', async () => {
+    let calls = 0;
+    const shell = fakeShell({ override: { ...printCfg, 'customers:getSettings': () => (++calls === 1 ? fail('INTERNAL') : { ok: true, data: { default_credit_limit: 500_000, show_farmer_fields: false } }) } });
+    show(shell, '/settings', OWNER, 'en');
+    click(await screen.findByRole('button', { name: s.sectionLabel }));
+    const retry = await screen.findByRole('button', { name: s.retry });
+    expect(document.querySelector('[data-section=customers] [data-code=INTERNAL]')).toBeTruthy();
+    expect(screen.queryByLabelText(s.defaultLimit)).toBeNull();
+    click(retry);
+    expect(((await screen.findByLabelText(s.defaultLimit)) as HTMLInputElement).value).toBe('5000');
+    expect(document.querySelector('[data-section=customers] [data-code=INTERNAL]')).toBeNull();
+    expect(screen.queryByRole('button', { name: s.retry })).toBeNull();
+  });
+});
 
 describe('Urdu and style', () => {
   it('Urdu: the Urdu words, the Urdu name box is right to left, the phone box stays left to right', async () => {

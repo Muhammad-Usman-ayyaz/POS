@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The POS billing screen, driven the way a cashier drives it, against a fake shell built with the real client code.
 import { buildApi, type Channel, type Language, type SessionUser } from '@pos/api-contract';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -234,6 +234,17 @@ async function priced(total: string) {
   await waitFor(() => expect(completeButton().disabled).toBe(false));
 }
 
+// The whole suite runs in parallel with very heavy files: a wait on a real condition may need more than the 1 s default on a busy machine.
+configure({ asyncUtilTimeout: 5000 });
+
+/** The bill has been priced for what is on the screen now (its total box is no longer greyed out as "checking"). */
+const billSettled = () => waitFor(() => expect(document.querySelector('[data-total]')!.closest('[aria-busy]')!.getAttribute('aria-busy')).toBe('false'));
+/** Lets everything that is already waiting on a promise run (no timer, no sleep): the handlers of a key press are synchronous or one promise deep. */
+const flush = () =>
+  act(async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  });
+
 beforeEach(() => localStorage.clear());
 afterEach(cleanup);
 
@@ -418,7 +429,7 @@ describe('the owner approves at the counter', () => {
     await userEvent.setup().click(completeButton());
     expect(await screen.findByRole('dialog', { name: T.approval.title })).toBeTruthy();
     expect(screen.getByText(T.approval.actions.discount_override)).toBeTruthy();
-    await new Promise((r) => setTimeout(r, 200));
+    await billSettled();
     expect(shell.sales()).toHaveLength(1);
     expect(shell.approvals()).toHaveLength(0);
   });
@@ -525,7 +536,7 @@ describe('the credit limit', () => {
     await creditSale(shell, STAFF);
     await userEvent.setup().click(completeButton());
     expect(await screen.findByRole('dialog', { name: T.over.title })).toBeTruthy();
-    await new Promise((r) => setTimeout(r, 200));
+    await billSettled();
     expect(shell.sales()).toHaveLength(1);
   });
 
@@ -740,8 +751,13 @@ describe('the amount paid and the money after the sale', () => {
     await userEvent.setup().click(screen.getByRole('radio', { name: T.bill.methods.bank }));
     await typePaid('800');
     await waitFor(() => expect(shell.of('sale:quote').at(-1)!.input.paid_amount).toBe(80_000));
-    await new Promise((r) => setTimeout(r, 400)); // a follow-up "paid in full" quote, if the screen wrongly sent one, would be here by now
-    expect(shell.of('sale:quote').filter((c) => c.input.payment_method === 'bank').every((c) => c.input.paid_amount === 80_000)).toBe(true);
+    // The bill has been priced for what is on the screen. A follow-up "paid in full" quote, if the screen wrongly sent one, is sent BEFORE that answer is shown:
+    // so from the first 800-rupee quote on, every bank quote must still be the 800-rupee one (the quotes for the half-typed "8" and "80" come before it).
+    await billSettled();
+    const bankQuotes = shell.of('sale:quote').filter((c) => c.input.payment_method === 'bank');
+    const firstFull = bankQuotes.findIndex((c) => c.input.paid_amount === 80_000);
+    expect(firstFull).toBeGreaterThanOrEqual(0);
+    expect(bankQuotes.slice(firstFull).every((c) => c.input.paid_amount === 80_000)).toBe(true);
     expect(document.querySelector('[data-change]')).toBeNull();
     expect(completeButton().disabled).toBe(true);
     fireEvent.keyDown(window, { key: 'F12' });
@@ -929,7 +945,7 @@ describe('held bills in detail', () => {
     await priced('Rs 500');
     await hold();
     await waitFor(() => expect(shell.of('bills:hold')).toHaveLength(1));
-    await new Promise((r) => setTimeout(r, 50));
+    await screen.findByText(errorText('INTERNAL', {}, 'en').title); // the failure has been reported: everything after it has run
     expect(document.querySelector('[data-line=p1l]')).toBeTruthy(); // not cleared
     expect(screen.queryByText(T.held.held)).toBeNull(); // and not reported as held
     expect(localStorage.length).toBe(0);
@@ -1203,8 +1219,11 @@ describe('design: the Paid now field', () => {
     const before = shell.of('sale:quote').length;
     paidBox().focus();
     paidBox().blur();
-    await new Promise((r) => setTimeout(r, 300));
-    expect(shell.of('sale:quote')).toHaveLength(before);
+    // Quotes are sent in order: type a digit (a real change, so a real quote) and see that the first quote after the blur is THAT one, not a quote for the tidied text.
+    await userEvent.setup().type(paidBox(), '0');
+    await waitFor(() => expect(shell.of('sale:quote').length).toBeGreaterThan(before));
+    await billSettled();
+    expect(shell.of('sale:quote')[before]!.input.paid_amount).toBe(0); // the quote for the typed 0, not one for the tidied 800
   });
 
   it('in Urdu the field is still left to right: "Rs" first, then the amount, so it is never "1,000Rs"', async () => {
@@ -1714,7 +1733,7 @@ describe('gaps found by the test review', () => {
     await priced('Rs 450');
     await userEvent.setup().click(screen.getByRole('button', { name: T.bill.hold }));
     await waitFor(() => expect(document.querySelector('[data-line]')).toBeNull());
-    await new Promise((r) => setTimeout(r, 400)); // let any quote of the empty / walk-in screen finish
+    await screen.findByText(T.held.held); // the bill is held and the screen is empty: nothing else is going to be priced
     const before = shell.of('sale:quote').length;
     fireEvent.keyDown(window, { key: 'F6' });
     const held = await screen.findByRole('dialog', { name: T.held.title });
@@ -1735,7 +1754,7 @@ describe('gaps found by the test review', () => {
       fireEvent.keyDown(window, { key: 'F4' });
       await screen.findByRole('dialog', { name: T.customer.dialogTitle });
       expect(fireEvent.keyDown(window, { key: 'F12' })).toBe(true); // left alone
-      await new Promise((r) => setTimeout(r, 100));
+      await flush();
       expect(shell.sales()).toHaveLength(0);
       expect(screen.queryByRole('dialog', { name: T.done.title })).toBeNull();
       expect(screen.getByRole('dialog', { name: T.customer.dialogTitle })).toBeTruthy();
@@ -1749,7 +1768,7 @@ describe('gaps found by the test review', () => {
       fireEvent.keyDown(window, { key: 'F4' });
       await screen.findByRole('dialog', { name: T.customer.dialogTitle });
       expect(fireEvent.keyDown(window, { key: 'F8' })).toBe(true);
-      await new Promise((r) => setTimeout(r, 50));
+      await flush();
       expect(screen.getAllByRole('dialog')).toHaveLength(1);
       expect(screen.getByRole('dialog', { name: T.customer.dialogTitle })).toBeTruthy();
       expect(screen.queryByLabelText(T.line.discount)).toBeNull();

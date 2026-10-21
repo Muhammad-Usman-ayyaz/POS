@@ -6,7 +6,7 @@ import { cleanup, configure, fireEvent, render, screen, waitFor, within } from '
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ComponentProps } from 'react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { I18nProvider, ToastProvider } from '../src/index.js';
 import { en } from '../src/i18n/messages/en.js';
@@ -587,6 +587,161 @@ describe('Opening balance', () => {
     expect(signedOpening('they_owe_us', 100)).toBe(100);
     expect(signedOpening('we_owe_them', 100)).toBe(-100);
     expect(buildOpeningRequest('c1', 'we_owe_them', '2.50')).toEqual({ customer_id: 'c1', amount: -250 });
+  });
+});
+
+// ---------- hardening: dialogs that cannot be closed while saving, and the page's edges ----------
+
+function gate() {
+  let release: () => void = () => undefined;
+  const wait = new Promise<void>((r) => (release = r));
+  return { wait, release };
+}
+const backdropOf = (dialog: HTMLElement) => dialog.parentElement!;
+
+describe('Receive payment cannot be closed while it saves', () => {
+  it('Escape, the backdrop and Cancel do nothing in flight; the receipt number is then shown, and Escape closes the saved box', async () => {
+    const g = gate();
+    const shell = fakeShell({ 'payments:receive': async () => (await g.wait, ok(reply({ receipt_no: 'RCP-A-000099' }))) });
+    const dialog = await openPayment(shell);
+    set(amountBox(), '100');
+    click(saveBtn());
+    await waitFor(() => expect(shell.of('payments:receive')).toHaveLength(1));
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.mouseDown(backdropOf(dialog));
+    expect((within(dialog).getByRole('button', { name: p.cancel }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    g.release();
+    await screen.findByText(p.savedTitle);
+    expect(document.querySelector('[data-receipt-no]')!.textContent).toBe('RCP-A-000099');
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' }); // nothing is in flight now
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('after a failed save the dialog closes with Escape again', async () => {
+    const dialog = await openPayment(fakeShell({ 'payments:receive': () => fail('INTERNAL') }));
+    set(amountBox(), '100');
+    click(saveBtn());
+    await waitFor(() => expect(within(dialog).getByRole('alert')).toBeTruthy());
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('Opening balance cannot be closed while it saves', () => {
+  it('Escape and the backdrop do nothing in flight; the box closes by itself when the answer is in', async () => {
+    const g = gate();
+    const shell = fakeShell({ 'khata:setOpeningBalance': async () => (await g.wait, ok(null)) });
+    await openOpening(shell);
+    set(openAmount(), '100');
+    click(screen.getByRole('button', { name: o.save }));
+    click(screen.getByRole('button', { name: o.confirm }));
+    await waitFor(() => expect(shell.of('khata:setOpeningBalance')).toHaveLength(1));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.mouseDown(backdropOf(dialog));
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    g.release();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('on the confirm step with nothing in flight, Escape still closes', async () => {
+    await openOpening();
+    set(openAmount(), '100');
+    click(screen.getByRole('button', { name: o.save }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('the customer page: the edges', () => {
+  /** A page that can change user, and a button to go to another customer. */
+  function Harness({ shell, user }: { shell: ReturnType<typeof fakeShell>; user: SessionUser }) {
+    return (
+      <MemoryRouter initialEntries={['/customers/c1']}>
+        <I18nProvider language="en" onLanguageChange={() => undefined}>
+          <ToastProvider>
+            <Routes>
+              <Route path="/customers/:id" element={<><GoTo /><CustomerDetailPage api={shell.api} user={user} /></>} />
+            </Routes>
+          </ToastProvider>
+        </I18nProvider>
+      </MemoryRouter>
+    );
+  }
+  function GoTo() {
+    const go = useNavigate();
+    return (
+      <button type="button" onClick={() => go('/customers/c2')}>
+        go to c2
+      </button>
+    );
+  }
+  const two = (over: Partial<Record<Channel, Handler>> = {}) =>
+    fakeShell({
+      'customers:get': ({ customer_id }) => ok(customer_id === 'c2' ? summary({ balance: 0 }, customer({ id: 'c2', name_en: 'Zahid', name_ur: null, village: 'Kot' })) : summary()),
+      ...over,
+    });
+
+  it('the opening-balance box is never there for staff, and disappears when the user turns out to be staff', async () => {
+    const shell = fakeShell();
+    const { rerender } = render(<Harness shell={shell} user={OWNER} />);
+    await loaded();
+    click(screen.getByRole('button', { name: t.openingBalance }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    rerender(<Harness shell={shell} user={STAFF} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: t.openingBalance })).toBeNull();
+    cleanup();
+    show(fakeShell(), STAFF);
+    await loaded();
+    expect(document.querySelector('[data-action="opening-balance"]')).toBeNull();
+    click(screen.getByRole('button', { name: t.receivePayment }));
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('dialog').textContent).not.toContain(o.ownerOnly);
+  });
+
+  it('NOT_FOUND has no Try again button (retrying cannot help), other errors have one that works', async () => {
+    show(fakeShell({ 'customers:get': () => fail('NOT_FOUND') }));
+    await screen.findByText(t.notFound);
+    expect(screen.queryByRole('button', { name: t.retry })).toBeNull();
+  });
+
+  it('going to another customer keeps nothing of the first: not the open box, not the name, not the figures', async () => {
+    const shell = two();
+    render(<Harness shell={shell} user={OWNER} />);
+    await loaded();
+    click(screen.getByRole('button', { name: t.receivePayment }));
+    set(amountBox(), '123');
+    click(screen.getByRole('button', { name: 'go to c2' }));
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Zahid'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.body.textContent).not.toContain('Rashid');
+    expect(document.querySelector('[data-card="balance"]')!.textContent).toContain('Clear');
+    expect(shell.of('customers:get').map((c) => c.input.customer_id)).toEqual(['c1', 'c2']);
+    click(screen.getByRole('button', { name: t.receivePayment }));
+    expect(amountBox().value).toBe(''); // a fresh box
+  });
+
+  it('the payment box gets the SIGNED balance: for a customer with an advance, paying more is an advance on top, not "owed"', async () => {
+    const shell = fakeShell({}, { summary: summary({ balance: -100_000, credit_left: 1_000_000 }) });
+    await openPayment(shell);
+    set(amountBox(), '10');
+    expect(document.querySelector('[data-balance-after-preview]')!.textContent).toContain('Rs 1,010 advance');
+    expect(document.querySelector('[data-advance-confirm]')).not.toBeNull();
+    expect(saveBtn().disabled).toBe(true);
+  });
+
+  it('a reload that fails after a saved payment shows its error on the page, and the saved box stays', async () => {
+    let gets = 0;
+    const shell = fakeShell({ 'customers:get': () => (++gets === 1 ? ok(summary()) : fail('INTERNAL')) });
+    await openPayment(shell);
+    set(amountBox(), '100');
+    click(saveBtn());
+    await screen.findByText(p.savedTitle);
+    await waitFor(() => expect(document.querySelectorAll('[role=alert][data-code=INTERNAL]').length).toBeGreaterThan(0));
+    expect(document.querySelector('[data-receipt-no]')).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rashid'); // the page keeps the figures it had
   });
 });
 

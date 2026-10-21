@@ -325,6 +325,98 @@ describe('Customers list: states', () => {
   });
 });
 
+describe('Customers list: edges', () => {
+  const EMPTY = { rows: [], totals: { total_outstanding: 0, overdue_total: 0, count: 0 } };
+
+  it('nothing at all says "No customers yet" with its own hint; a narrowed list says "Nothing matches" with the other hint', async () => {
+    const shell = fakeShell({ 'customers:list': () => ok(EMPTY) });
+    show(shell);
+    expect(await screen.findByText(T.emptyTitle)).toBeTruthy();
+    expect(screen.getByText(T.emptyHint)).toBeTruthy();
+    expect(screen.queryByText(T.noMatchHint)).toBeNull();
+    expect(screen.queryByRole('button', { name: T.clearFilters })).toBeNull();
+    await userEvent.setup().click(screen.getByRole('button', { name: T.filterOwes })); // a filter alone narrows too
+    expect(await screen.findByText(T.noMatchTitle)).toBeTruthy();
+    expect(screen.getByText(T.noMatchHint)).toBeTruthy();
+    expect(screen.queryByText(T.emptyHint)).toBeNull();
+    expect(screen.getByRole('button', { name: T.clearFilters })).toBeTruthy();
+  });
+
+  it('a query of only spaces is not sent and does not count as a search', async () => {
+    const shell = fakeShell({ 'customers:list': () => ok(EMPTY) });
+    show(shell);
+    await screen.findByText(T.emptyTitle);
+    await userEvent.setup().type(screen.getByRole('searchbox', { name: T.searchLabel }), '   ');
+    await waitFor(() => expect(shell.lists().length).toBeGreaterThan(1));
+    expect(shell.lists().at(-1)!.input).toEqual({ sort: 'name', name_language: 'en', limit: PAGE_SIZE, offset: 0 });
+    expect(screen.getByText(T.emptyTitle)).toBeTruthy(); // still "No customers yet", not "Nothing matches"
+    expect(screen.queryByText(T.noMatchTitle)).toBeNull();
+  });
+
+  it('"Clear search and filter" resets the search, the filter and the page', async () => {
+    const shell = fakeShell({ 'customers:list': (input) => ok(input.offset > 0 ? { rows: [], totals: { ...TOTALS, count: 60 } } : { rows: ROWS, totals: { ...TOTALS, count: 60 } }) });
+    show(shell);
+    await loaded();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: T.filterOwes }));
+    await user.type(screen.getByRole('searchbox', { name: T.searchLabel }), 'ra');
+    await waitFor(() => expect(shell.lists().at(-1)!.input).toMatchObject({ query: 'ra', filter: 'owes', offset: 0 }));
+    await user.click(await screen.findByRole('button', { name: T.next }));
+    await waitFor(() => expect(shell.lists().at(-1)!.input.offset).toBe(PAGE_SIZE));
+    await user.click(await screen.findByRole('button', { name: T.clearFilters }));
+    await waitFor(() => expect(shell.lists().at(-1)!.input).toEqual({ sort: 'name', name_language: 'en', limit: PAGE_SIZE, offset: 0 }));
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('');
+    expect(screen.getByRole('button', { name: T.filterAll }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: T.filterOwes }).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('a clear balance is plain "Rs 0": never "Owes Rs 0", never "Advance"', async () => {
+    show(fakeShell());
+    await loaded();
+    const text = rowEl('c5').querySelector('[data-balance]')!;
+    expect(text.getAttribute('data-balance')).toBe('clear');
+    expect(text.textContent).toBe('Rs 0');
+    expect(rowEl('c5').textContent).not.toMatch(/Owes|Advance/);
+  });
+
+  it('credit left of exactly 0 (not over the limit) reads "Rs 0 left", not "No limit" and not "Over limit"', async () => {
+    const shell = fakeShell({ 'customers:list': () => ok({ rows: [row(ROWS[0]!.customer, { balance: 1_000_000, credit_left: 0 })], totals: { ...TOTALS, count: 1 } }) });
+    show(shell);
+    await screen.findByText('Rashid');
+    const chip = rowEl('c1').querySelector('[data-chip]')!;
+    expect(chip.getAttribute('data-chip')).toBe('credit-left');
+    expect(chip.textContent).toBe('Rs 0 left');
+    expect(rowEl('c1').textContent).not.toMatch(/No limit|Over limit/);
+  });
+
+  it('the count is the shell\'s total, not the number of rows on this page', async () => {
+    show(fakeShell({ 'customers:list': () => ok({ rows: ROWS, totals: { ...TOTALS, count: 60 } }) }));
+    await loaded();
+    expect(document.querySelector('[data-count]')!.textContent).toBe('60 customers');
+    expect(document.querySelector('[data-range]')!.textContent).toBe('1–5 of 60');
+  });
+
+  it('1 is singular and 0 is plural: "1 customer", "0 customers", "1 day"', async () => {
+    const one = fakeShell({ 'customers:list': () => ok({ rows: [row(ROWS[1]!.customer, { balance: 100, overdue_amount: 100, overdue_days: 1 })], totals: { ...TOTALS, count: 1 } }) });
+    show(one);
+    await screen.findByText('Imran');
+    expect(document.querySelector('[data-count]')!.textContent).toBe('1 customer');
+    expect(rowEl('c2').querySelector('[data-chip="overdue"]')!.textContent).toBe('Overdue Rs 1 · 1 day');
+    cleanup();
+    show(fakeShell({ 'customers:list': () => ok(EMPTY) }));
+    await screen.findByText(T.emptyTitle);
+    expect(document.querySelector('[data-count]')!.textContent).toBe('0 customers');
+  });
+
+  it('when the first load fails there are no placeholder rows, only the error and Try again', async () => {
+    show(fakeShell({ 'customers:list': () => fail('INTERNAL') }));
+    await screen.findByRole('alert');
+    expect(document.querySelector('[data-skeleton]')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: T.retry })).toBeTruthy();
+  });
+});
+
 describe('Customers list: Urdu and right to left', () => {
   it('uses Urdu words, the layout is right to left, and numbers, amounts and dates stay left to right', async () => {
     show(fakeShell(), STAFF, 'ur');

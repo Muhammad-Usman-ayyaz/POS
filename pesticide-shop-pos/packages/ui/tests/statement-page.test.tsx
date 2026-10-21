@@ -14,6 +14,7 @@ import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
 import { PaymentReceiptActions, StatementPage, StatementPrintActions } from '../src/pages/khata/index.js';
 import { last30Range, thisMonthRange, todayIn } from '../src/pages/khata/statement-requests.js';
+import { setUiClock, uiNow } from '../src/lib/clock.js';
 import { scanSource } from './source-scan.js';
 
 const STAFF: SessionUser = { id: 'u2', name: 'Salesman', username: 'staff', role: 'staff' };
@@ -172,13 +173,41 @@ describe('Statement screen: the date range', () => {
     show(shell);
     await loaded();
     const user = userEvent.setup();
-    const today = todayIn('Asia/Karachi');
+    const today = todayIn('Asia/Karachi', uiNow());
     await user.click(screen.getByRole('button', { name: T.last30 }));
     await waitFor(() => expect(shell.of('khata:statement').at(-1)!.input).toEqual({ customer_id: 'c1', ...last30Range(today) }));
     await user.click(screen.getByRole('button', { name: T.thisMonth }));
     await waitFor(() => expect(shell.of('khata:statement').at(-1)!.input).toEqual({ customer_id: 'c1', ...thisMonthRange(today) }));
     await user.click(screen.getByRole('button', { name: T.all }));
     await waitFor(() => expect(shell.of('khata:statement').at(-1)!.input).toEqual({ customer_id: 'c1' }));
+  });
+
+  describe('the quick ranges follow the shop clock (pinned with setUiClock)', () => {
+    afterEach(() => setUiClock());
+    const pressed = async (at: string, name: string) => {
+      setUiClock(() => new Date(at));
+      const shell = fakeShell();
+      show(shell);
+      await loaded();
+      await userEvent.setup().click(screen.getByRole('button', { name }));
+      await waitFor(() => expect(shell.of('khata:statement').length).toBeGreaterThan(1));
+      return shell.of('khata:statement').at(-1)!.input;
+    };
+
+    it('on the 1st of a month, This month is that one day', async () => {
+      expect(await pressed('2026-03-01T09:00:00+05:00', T.thisMonth)).toEqual({ customer_id: 'c1', from: '2026-03-01', to: '2026-03-01' });
+    });
+    it('on the 1st, Last 30 days reaches back into the month before (29 days)', async () => {
+      expect(await pressed('2026-03-01T09:00:00+05:00', T.last30)).toEqual({ customer_id: 'c1', from: '2026-01-31', to: '2026-03-01' });
+    });
+    it('just after midnight in Karachi it is already the next day even though UTC is still the day before', async () => {
+      // 00:30 on 1 April in Karachi is 19:30 on 31 March UTC
+      expect(await pressed('2026-03-31T19:30:00Z', T.thisMonth)).toEqual({ customer_id: 'c1', from: '2026-04-01', to: '2026-04-01' });
+    });
+    it('just before midnight in Karachi it is still the same day', async () => {
+      // 23:59 on 31 March in Karachi is 18:59 UTC
+      expect(await pressed('2026-03-31T18:59:00Z', T.last30)).toEqual({ customer_id: 'c1', from: '2026-03-02', to: '2026-03-31' });
+    });
   });
 
   it('the quick ranges are plain calendar maths', () => {

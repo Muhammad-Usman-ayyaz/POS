@@ -129,7 +129,7 @@ export function CustomerPaymentDialog({
 
   const amountMsg = problems.amount ? t.amountInvalid : undefined;
   return (
-    <Dialog counter open title={t.title} lead={t.lead} onClose={onClose} className="max-w-[460px]">
+    <Dialog counter open title={t.title} lead={t.lead} onClose={onClose} locked={saving} className="max-w-[460px]">
       <form
         noValidate
         data-payment-form
@@ -237,7 +237,7 @@ export function CustomerPaymentDialog({
         {error != null && <ErrorNotice error={error} />}
 
         <Actions>
-          <Button type="button" variant="secondary" size="dialog" onClick={onClose}>
+          <Button type="button" variant="secondary" size="dialog" disabled={saving} onClick={onClose}>
             {t.cancel}
           </Button>
           <Button type="submit" size="dialog" disabled={saving || (needsConfirm && !confirmAdvance)}>

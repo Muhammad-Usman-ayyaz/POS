@@ -59,6 +59,9 @@ export const draftFromCustomer = (c: SavedCustomer): CustomerDraft => ({
   guarantor: c.guarantor ?? '',
 });
 
+/** Nothing but spaces, tabs, line breaks or invisible marks (zero-width space, direction marks): no name. */
+export const isBlankName = (text: string): boolean => text.replace(/[\s\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, '') === '';
+
 export interface CustomerProblems {
   /** Neither name was written. */
   name: boolean;
@@ -69,7 +72,7 @@ export interface CustomerProblems {
 /** Staff have no credit limit box, so it is never a problem for them. */
 export function checkDraft(draft: CustomerDraft, owner: boolean): CustomerProblems {
   return {
-    name: draft.nameEn.trim() === '' && draft.nameUr.trim() === '',
+    name: isBlankName(draft.nameEn) && isBlankName(draft.nameUr),
     creditLimit: owner && parseRupees(draft.creditLimit) === null,
   };
 }
