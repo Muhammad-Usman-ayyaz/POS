@@ -24,6 +24,20 @@ export function defineCustomerTests(make: WorldFactory): void {
     const creditSale = (customer: string, packs: number, extra: object = {}) =>
       s.sale.create({ customer_id: customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: ID.bottle, qty: packs * 1000 }], ...extra });
     const owes = (customer: string, amount: number) => s.khata.setOpeningBalance({ customer_id: customer, amount, created_by: ID.owner });
+    /** Runs `fn` with the machine time zone set to `zone` (and checks it took effect), then puts the old zone back. */
+    const withTimeZone = (zone: string, fn: () => void) => {
+      const saved = process.env.TZ;
+      process.env.TZ = zone;
+      try {
+        const evening = new Date('2026-03-10T23:30:00.000Z');
+        const early = new Date('2026-03-11T00:30:00.000Z');
+        expect(evening.getDate() !== evening.getUTCDate() || early.getDate() !== early.getUTCDate(), `${zone} is in effect`).toBe(true);
+        fn();
+      } finally {
+        if (saved === undefined) delete process.env.TZ;
+        else process.env.TZ = saved;
+      }
+    };
     const expectUnchanged = (action: () => unknown, code: string) => {
       const before = w.snapshot();
       expect(codeOf(action)).toBe(code);
@@ -57,6 +71,24 @@ export function defineCustomerTests(make: WorldFactory): void {
         expect(staffCreate({ name_en: 'Back to zero' }).customer.credit_limit).toBe(0);
         w.setSetting('default_credit_limit', '-5');
         expect(staffCreate({ name_en: 'Never negative' }).customer.credit_limit).toBe(0);
+      });
+
+      it('the owner who sends a limit of 0 gets 0 (no limit) even when the shop default is not 0; staff and an owner who sends none get the default', () => {
+        w.setSetting('default_credit_limit', '500000');
+        const zero = ownerCreate({ name_en: 'Owner Zero', credit_limit: 0 });
+        expect(zero.customer.credit_limit).toBe(0);
+        expect(zero).toMatchObject({ no_limit: true, credit_left: null });
+        expect(row(zero.customer.id).credit_limit).toBe(0);
+        expect(ownerCreate({ name_en: 'Owner Default' }).customer.credit_limit).toBe(500_000);
+        expect(ownerCreate({ name_en: 'Owner Own', credit_limit: 70_000 }).customer.credit_limit).toBe(70_000);
+        expect(staffCreate({ name_en: 'Staff Default' }).customer.credit_limit).toBe(500_000);
+      });
+
+      it('village, notes and phone are tidied at create (spaces collapsed, blank becomes null), like the names', () => {
+        const made = staffCreate({ name_en: 'Tidy', village: '  Kot   Addu ', notes: '  pays   on  harvest  ', phone: '  0300-1  ' });
+        expect(made.customer).toMatchObject({ village: 'Kot Addu', notes: 'pays on harvest', phone: '0300-1' });
+        expect(row(made.customer.id)).toMatchObject({ village: 'Kot Addu', notes: 'pays on harvest' });
+        expect(staffCreate({ name_en: 'Blank', village: '   ', notes: '' }).customer).toMatchObject({ village: null, notes: null });
       });
 
       it('a staff create that carries a credit limit, price type or farmer field is REFUSED, not quietly dropped', () => {
@@ -141,6 +173,36 @@ export function defineCustomerTests(make: WorldFactory): void {
         expect(staffCreate({ name_en: 'Another', phone: '0300 7654321' }).customer.name_en).toBe('Another');
       });
 
+      it('the same name with a DIFFERENT phone is still a duplicate (the name alone is enough)', () => {
+        existing();
+        const e = errorOf(() => staffCreate({ name_en: 'Rashid Ali', phone: '0345 9999999' }));
+        expect(e.code).toBe('DUPLICATE_CUSTOMER');
+        expect(JSON.parse(String(e.params.matches))[0]).toMatchObject({ same_name: true, same_phone: false });
+        expect(s.customers.findDuplicates({ name_en: 'Rashid Ali', phone: '0345 9999999' })).toEqual([expect.objectContaining({ same_name: true, same_phone: false })]);
+      });
+
+      it('a match on the SECOND phone alone is a duplicate', () => {
+        const farmer = ownerCreate({ name_en: 'Two Phones', phone: '0300-1111111', phone2: '0333-5556677' });
+        const e = errorOf(() => staffCreate({ name_en: 'Different Person', phone: '+92 333 5556677' }));
+        expect(e.code).toBe('DUPLICATE_CUSTOMER');
+        expect(JSON.parse(String(e.params.matches))).toEqual([expect.objectContaining({ customer_id: farmer.customer.id, same_phone: true, same_name: false })]);
+        expect(s.customers.findDuplicates({ phone: '03335556677' })).toEqual([expect.objectContaining({ customer_id: farmer.customer.id, same_phone: true })]);
+      });
+
+      it('the owner is refused too without confirm_duplicate, and can confirm', () => {
+        existing();
+        expectUnchanged(() => ownerCreate({ name_en: 'Rashid Ali' }), 'DUPLICATE_CUSTOMER');
+        expectUnchanged(() => ownerCreate({ name_en: 'Other', phone: '03001234567', credit_limit: 5 }), 'DUPLICATE_CUSTOMER');
+        expect(ownerCreate({ name_en: 'Rashid Ali' }, { confirm_duplicate: true }).customer.name_en).toBe('Rashid Ali');
+      });
+
+      it('alef with hamza and plain alef read as the same Urdu name', () => {
+        const first = staffCreate({ name_ur: 'أحمد' });
+        expect(errorOf(() => staffCreate({ name_ur: 'احمد' })).code).toBe('DUPLICATE_CUSTOMER');
+        expect(s.customers.findDuplicates({ name_ur: 'احمد' }).map((m) => m.customer_id)).toEqual([first.customer.id]);
+        expect(s.customers.findDuplicates({ name_ur: 'إحمد' }).map((m) => m.customer_id)).toEqual([first.customer.id]);
+      });
+
       it('two customers with no phone are not duplicates of each other on phone', () => {
         staffCreate({ name_en: 'No Phone One' });
         expect(staffCreate({ name_en: 'No Phone Two' }).customer.name_en).toBe('No Phone Two');
@@ -216,6 +278,22 @@ export function defineCustomerTests(make: WorldFactory): void {
         expectUnchanged(() => s.customers.update({ customer_id: id, fields: { name_ur: '  ' }, expected_version: 3, actor: ID.staff }), 'INVALID_INPUT');
       });
 
+      it('village and notes are tidied at update too, and a blank clears them', () => {
+        const made = staffCreate({ name_en: 'Aslam', village: 'Kot', notes: 'x' });
+        const done = s.customers.update({ customer_id: made.customer.id, fields: { village: '  Chak   5  ', notes: ' new   note ' }, expected_version: 1, actor: ID.staff });
+        expect(done.customer).toMatchObject({ village: 'Chak 5', notes: 'new note', version: 2 });
+        expect(row(made.customer.id)).toMatchObject({ village: 'Chak 5', notes: 'new note' });
+        expect(s.customers.update({ customer_id: made.customer.id, fields: { village: '   ', notes: '' }, expected_version: 2, actor: ID.staff }).customer).toMatchObject({ village: null, notes: null, version: 3 });
+      });
+
+      it('an expected_version exactly one AHEAD of the current one is refused too (it must match, not just be new enough)', () => {
+        const made = ownerCreate({ name_en: 'Aslam' });
+        const id = made.customer.id;
+        expectUnchanged(() => s.customers.update({ customer_id: id, fields: { village: 'A' }, expected_version: 2, actor: ID.staff }), 'VERSION_CONFLICT');
+        expectUnchanged(() => s.customers.setTerms({ customer_id: id, credit_limit: 5, default_price_type: 'retail', expected_version: 2, actor: ID.owner }), 'VERSION_CONFLICT');
+        expect(version(id)).toBe(1);
+      });
+
       it('a change that changes nothing writes nothing (the version stays)', () => {
         const made = staffCreate({ name_en: 'Aslam', village: 'Kot' });
         const again = s.customers.update({ customer_id: made.customer.id, fields: { name_en: ' Aslam ', village: 'Kot' }, expected_version: 1, actor: ID.staff });
@@ -246,6 +324,8 @@ export function defineCustomerTests(make: WorldFactory): void {
         expect(details.before).toMatchObject({ credit_limit: 0, default_price_type: 'retail', father_name: null });
         expect(details.after).toMatchObject({ credit_limit: 500_000, default_price_type: 'wholesale', father_name: 'Haji' });
         expect(details.fields.sort()).toEqual(done.changed.sort());
+        expect(details.customer_id).toBe(made.customer.id);
+        expect(details).not.toHaveProperty('below_balance');
       });
 
       it('lists only the fields that really changed', () => {
@@ -279,7 +359,7 @@ export function defineCustomerTests(make: WorldFactory): void {
         const a = s.customers.setTerms(terms(made.customer.id, { credit_limit: 200_000 }));
         expect(a.below_balance).toBe(true);
         expect(a.customer).toMatchObject({ balance: 300_000, credit_left: 0, over_limit: true });
-        expect(JSON.parse(w.rows('audit_log').find((r) => r.action === 'customer_terms_changed')!.details as string)).toMatchObject({ below_balance: true });
+        expect(JSON.parse(w.rows('audit_log').find((r) => r.action === 'customer_terms_changed')!.details as string)).toMatchObject({ below_balance: true, balance: 300_000, customer_id: made.customer.id });
         // exactly the balance is not below it; raising it is not
         expect(s.customers.setTerms(terms(made.customer.id, { credit_limit: 300_000, expected_version: 2 })).below_balance).toBe(false);
         expect(s.customers.setTerms(terms(made.customer.id, { credit_limit: 400_000, expected_version: 3 })).below_balance).toBe(false);
@@ -403,6 +483,99 @@ export function defineCustomerTests(make: WorldFactory): void {
       });
     });
 
+    describe('overdue edges, ties and the opening balance', () => {
+      const fresh = () => w.addCustomer({ name_en: 'Edge', credit_limit: 0 });
+      const overdueIds = () => s.customers.list({ filter: 'overdue' }).rows.map((r) => r.customer.id);
+
+      it('due today is NOT overdue (all day, to the last millisecond); one day later it is overdue by 1 day, in get, khata.overdue, the filter and the card', () => {
+        const id = fresh();
+        w.setNow(w.at(0));
+        creditSale(id, 2, { due_date: w.day(5) });
+        for (const moment of [w.at(4), w.at(5, '00:00:00.000'), w.at(5, '23:59:59.999')]) {
+          w.setNow(moment);
+          expect(s.customers.get(id), moment).toMatchObject({ overdue_amount: 0, overdue_days: 0, next_due: w.day(5) });
+          expect(s.khata.overdue(id), moment).toEqual([]);
+          expect(overdueIds(), moment).not.toContain(id);
+          expect(s.customers.list().totals.overdue_total, moment).toBe(0);
+        }
+        w.setNow(w.at(6, '00:00:00.000'));
+        expect(s.customers.get(id)).toMatchObject({ overdue_amount: 100_000, overdue_days: 1, next_due: w.day(5) });
+        expect(s.khata.overdue(id)).toEqual([expect.objectContaining({ due_date: w.day(5), days_overdue: 1, outstanding: 100_000 })]);
+        expect(overdueIds()).toContain(id);
+        expect(s.customers.list().totals.overdue_total).toBe(100_000);
+      });
+
+      it('the "overdue" filter follows overdue_amount: an invoice one day late is listed, one that is not late yet is not', () => {
+        const late = fresh();
+        const notYet = fresh();
+        w.setNow(w.at(0));
+        creditSale(late, 1, { due_date: w.day(4) });
+        creditSale(notYet, 1, { due_date: w.day(5) });
+        w.setNow(w.at(5));
+        expect(overdueIds()).toEqual([late]);
+        expect(s.customers.list({ filter: 'owes' }).rows.map((r) => r.customer.id).sort()).toEqual([late, notYet].sort());
+      });
+
+      it('"today" for overdue is the UTC day, whatever the machine time zone is', () => {
+        const id = fresh();
+        w.setNow(w.at(0));
+        creditSale(id, 1, { due_date: w.day(5) });
+        for (const zone of ['Asia/Karachi', 'America/Los_Angeles', 'Pacific/Auckland']) {
+          withTimeZone(zone, () => {
+            w.setNow(w.at(5, '23:30:00.000')); // already the next day in Karachi and Auckland
+            expect(s.customers.get(id), zone).toMatchObject({ overdue_amount: 0, overdue_days: 0 });
+            w.setNow(w.at(6, '00:30:00.000')); // still the previous day in Los Angeles
+            expect(s.customers.get(id), zone).toMatchObject({ overdue_amount: 50_000, overdue_days: 1 });
+          });
+        }
+      });
+
+      it('two invoices written at the same moment: the one written first is the oldest, in ledger.list and in who is paid first', () => {
+        const id = fresh();
+        w.setNow(w.at(0));
+        const first = creditSale(id, 2, { due_date: w.day(9) }); // 100,000
+        const second = creditSale(id, 1, { due_date: w.day(3) }); // 50,000, the very same moment
+        const entries = w.deps.uow.run((tx) => tx.ledger.list('customer', id));
+        expect(entries.map((e) => e.ref_id)).toEqual([first.invoice.id, second.invoice.id]);
+        expect(entries[0]!.entry_date).toBe(entries[1]!.entry_date);
+        s.payment.receiveFromCustomer({ party_id: id, amount: 100_000, method: 'cash', created_by: ID.staff });
+        // the money pays the first-written invoice (100,000); what is left is the second, due on day 3
+        w.setNow(w.at(10));
+        expect(s.customers.get(id)).toMatchObject({ balance: 50_000, next_due: w.day(3), overdue_amount: 50_000, overdue_days: 7 });
+        expect(s.khata.overdue(id)).toEqual([expect.objectContaining({ invoice_id: second.invoice.id, outstanding: 50_000 })]);
+      });
+
+      it('an opening balance recorded AFTER an invoice is the newer debt: payments go to the invoice first, and the opening balance is never overdue', () => {
+        const id = fresh();
+        w.setNow(w.at(0));
+        creditSale(id, 2, { due_date: w.day(5) }); // 100,000
+        w.setNow(w.at(1));
+        owes(id, 20_000);
+        w.setNow(w.at(2));
+        s.payment.receiveFromCustomer({ party_id: id, amount: 40_000, method: 'cash', created_by: ID.staff });
+        w.setNow(w.at(10));
+        // balance 80,000 = invoice 60,000 + opening 20,000; only the invoice can be overdue
+        expect(s.customers.get(id)).toMatchObject({ balance: 80_000, overdue_amount: 60_000, overdue_days: 5, next_due: w.day(5) });
+        expect(s.customers.list().totals).toMatchObject({ overdue_total: 60_000, total_outstanding: 80_000 + s.customers.get(ID.customer).balance });
+        // paying the whole invoice leaves only the opening balance: nothing is overdue
+        s.payment.receiveFromCustomer({ party_id: id, amount: 60_000, method: 'cash', created_by: ID.staff });
+        expect(s.customers.get(id)).toMatchObject({ balance: 20_000, overdue_amount: 0, overdue_days: 0, next_due: null });
+        expect(overdueIds()).not.toContain(id);
+      });
+
+      it('an opening balance recorded BEFORE an invoice is paid first, so the invoice stays overdue for the rest', () => {
+        const id = fresh();
+        w.setNow(w.at(-1));
+        owes(id, 20_000);
+        w.setNow(w.at(0));
+        creditSale(id, 2, { due_date: w.day(5) });
+        w.setNow(w.at(1));
+        s.payment.receiveFromCustomer({ party_id: id, amount: 30_000, method: 'cash', created_by: ID.staff });
+        w.setNow(w.at(10));
+        expect(s.customers.get(id)).toMatchObject({ balance: 90_000, overdue_amount: 90_000, overdue_days: 5 });
+      });
+    });
+
     describe('list', () => {
       // A small shop. Rashid (the seeded customer) starts at 0 with a Rs 10,000 limit.
       function shop() {
@@ -437,6 +610,22 @@ export function defineCustomerTests(make: WorldFactory): void {
         expect(s.customers.list({ filter: 'owes' }).totals.total_outstanding).toBe(180_000); // shop-wide figures do not move with the filter
       });
 
+      it('the two cards are shop-wide under the overdue filter and under a search; only count follows the filter', () => {
+        shop();
+        const shopWide = { total_outstanding: 180_000, overdue_total: 100_000 };
+        expect(s.customers.list({ filter: 'overdue' }).totals).toEqual({ ...shopWide, count: 1 });
+        expect(s.customers.list({ filter: 'advance' }).totals).toEqual({ ...shopWide, count: 1 });
+        expect(s.customers.list({ query: 'bravo' }).totals).toEqual({ ...shopWide, count: 1 });
+        expect(s.customers.list({ query: 'bravo', filter: 'overdue' }).totals).toEqual({ ...shopWide, count: 0 });
+        expect(s.customers.list({ query: 'kot', limit: 1 }).totals).toEqual({ ...shopWide, count: 2 });
+      });
+
+      it('an advance customer present does not reduce total_outstanding (it counts positive balances only)', () => {
+        const { d } = shop();
+        expect(s.customers.get(d).balance).toBe(-70_000);
+        expect(s.customers.list().totals.total_outstanding).toBe(180_000);
+      });
+
       it('filters: owes, overdue, advance', () => {
         const { a, b, c, d } = shop();
         const ids = (filter: 'all' | 'owes' | 'overdue' | 'advance') => s.customers.list({ filter }).rows.map((r) => r.customer.id).sort();
@@ -467,11 +656,22 @@ export function defineCustomerTests(make: WorldFactory): void {
         expect([a, b, c]).toHaveLength(3);
       });
 
-      it('sorts by the displayed language: Urdu names first when asked, falling back to the English name', () => {
-        shop();
-        const first = s.customers.list({ sort: 'name', name_language: 'ur' }).rows.map((r) => r.customer.name_en);
-        expect(first).toHaveLength(5);
-        expect(new Set(first).size).toBe(5);
+      it('sorts by the displayed language: differing English and Urdu orders, the other name as a fallback, equal names by id', () => {
+        // English order Aaa < Bbb < Ccc; Urdu order (alef < zay < yeh) is the REVERSE: Ccc, Bbb, Aaa
+        const aaa = w.addCustomer({ id: uuid(7501), name_en: 'Aaa', name_ur: 'یاسین' });
+        const bbb = w.addCustomer({ id: uuid(7502), name_en: 'Bbb', name_ur: 'زاہد' });
+        const ccc = w.addCustomer({ id: uuid(7503), name_en: 'Ccc', name_ur: 'احمد' });
+        const onlyEn = w.addCustomer({ id: uuid(7504), name_en: 'Mmm', name_ur: null }); // Latin letters sort before Arabic ones
+        const onlyUr = w.addCustomer({ id: uuid(7505), name_en: null, name_ur: 'بابا' });
+        const twinHigh = w.addCustomer({ id: uuid(7599), name_en: 'Twin' }); // inserted first, but the higher id
+        const twinLow = w.addCustomer({ id: uuid(7550), name_en: 'Twin' });
+        const label: Record<string, string> = { [aaa]: 'aaa', [bbb]: 'bbb', [ccc]: 'ccc', [onlyEn]: 'mmm', [onlyUr]: 'baba', [twinHigh]: 'twin-high', [twinLow]: 'twin-low', [ID.customer]: 'rashid' };
+        const order = (name_language: 'en' | 'ur') => s.customers.list({ sort: 'name', name_language }).rows.map((r) => label[r.customer.id]);
+        // English: the English name, else the Urdu one (which sorts after every Latin name)
+        expect(order('en')).toEqual(['aaa', 'bbb', 'ccc', 'mmm', 'rashid', 'twin-low', 'twin-high', 'baba']);
+        // Urdu: the Urdu name, else the English one (Latin sorts before Arabic letters)
+        expect(order('ur')).toEqual(['mmm', 'rashid', 'twin-low', 'twin-high', 'ccc', 'baba', 'bbb', 'aaa']);
+        expect(s.customers.list().rows.map((r) => label[r.customer.id])).toEqual(order('en')); // English is the default
       });
 
       it('leaves out soft-deleted customers from rows and totals', () => {
@@ -487,6 +687,23 @@ export function defineCustomerTests(make: WorldFactory): void {
         expect(codeOf(() => s.customers.list({ sort: 'size' as never }))).toBe('INVALID_INPUT');
         expect(codeOf(() => s.customers.list({ limit: 0 }))).toBe('INVALID_INPUT');
         expect(codeOf(() => s.customers.list({ offset: -1 }))).toBe('INVALID_INPUT');
+      });
+    });
+
+    describe('balances are the CUSTOMER\'s: a supplier with the same id never leaks in (search, list, get)', () => {
+      it('search, list rows, list totals and get all use the customer ledger only', () => {
+        const id = w.addCustomer({ name_en: 'Shared Id', credit_limit: 0 });
+        owes(id, 40_000);
+        // ids are unique per table only: a supplier row with the same id, owed 777,777 by the shop
+        w.deps.uow.run((tx) => {
+          tx.suppliers.insert({ id, name_en: 'Same Id Supplier', name_ur: null, phone: null, address: null, ...w.deps.scope });
+          tx.ledger.insert({ id: uuid(61_001), party_type: 'supplier', party_id: id, entry_type: 'purchase', amount_delta: 777_777, ref_type: null, ref_id: null, entry_date: w.at(0), created_by: ID.owner, ...w.deps.scope });
+        });
+        expect(s.customers.search({ query: 'shared id' })).toEqual([expect.objectContaining({ id, balance: 40_000 })]);
+        expect(s.customers.list({ query: 'shared id' }).rows[0]).toMatchObject({ balance: 40_000 });
+        expect(s.customers.list().totals.total_outstanding).toBe(40_000);
+        expect(s.customers.get(id).balance).toBe(40_000);
+        expect(s.customers.findDuplicates({ name_en: 'shared id' })).toEqual([expect.objectContaining({ customer_id: id, balance: 40_000 })]);
       });
     });
 
@@ -542,6 +759,34 @@ export function defineCustomerTests(make: WorldFactory): void {
           { field: 'show_farmer_fields', from: 0, to: 1 },
         ]);
         expect(rows.every((r) => r.user_id === ID.owner)).toBe(true);
+        // each row says which setting it is about: the table and the setting key
+        expect(rows.map((r) => [r.table_name, r.row_id])).toEqual([
+          ['settings', 'default_credit_limit'],
+          ['settings', 'default_credit_limit'],
+          ['settings', 'customers.show_farmer_fields'],
+        ]);
+      });
+
+      it('a setting left out is not touched: sending only the farmer switch keeps the default limit', () => {
+        s.customerSettings.set({ default_credit_limit: 640_000, actor_id: ID.owner });
+        s.customerSettings.set({ show_farmer_fields: true, actor_id: ID.owner });
+        expect(s.customerSettings.get()).toEqual({ default_credit_limit: 640_000, show_farmer_fields: true });
+        s.customerSettings.set({ actor_id: ID.owner });
+        expect(s.customerSettings.get()).toEqual({ default_credit_limit: 640_000, show_farmer_fields: true });
+      });
+
+      it('a stored value is read the way parseInt reads it: "12abc" is 12, text with no number and a negative one fall back to the default', () => {
+        w.setSetting('default_credit_limit', '12abc');
+        expect(s.customerSettings.get().default_credit_limit).toBe(12);
+        expect(staffCreate({ name_en: 'Twelve' }).customer.credit_limit).toBe(12);
+        for (const value of ['abc', '', '-5', '-1']) {
+          w.setSetting('default_credit_limit', value);
+          expect(s.customerSettings.get().default_credit_limit, value).toBe(0);
+        }
+        w.setSetting('customers.show_farmer_fields', '12abc');
+        expect(s.customerSettings.get().show_farmer_fields).toBe(false); // only exactly 1 turns it on
+        w.setSetting('customers.show_farmer_fields', '1');
+        expect(s.customerSettings.get().show_farmer_fields).toBe(true);
       });
 
       it('is the owner\'s: staff and inactive users are refused, nothing changes', () => {

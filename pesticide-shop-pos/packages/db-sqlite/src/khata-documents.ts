@@ -109,7 +109,8 @@ export function paymentReceiptData(db: Db, paymentId: string): PaymentReceiptDat
     )
     .get(paymentId) as PaymentRow | undefined;
   if (!p) return undefined;
-  const c = db.prepare('SELECT name_en, name_ur, village, phone FROM customers WHERE id = ?').get(p.party_id) as { name_en: string | null; name_ur: string | null; village: string | null; phone: string | null } | undefined;
+  // A soft-deleted customer is gone everywhere (like the statement, which uses the same live-customer rule): no receipt for their payments either.
+  const c = db.prepare('SELECT name_en, name_ur, village, phone FROM customers WHERE id = ? AND deleted_at IS NULL').get(p.party_id) as { name_en: string | null; name_ur: string | null; village: string | null; phone: string | null } | undefined;
   if (!c) return undefined;
   const copies = paymentReceiptCopies(db, paymentId);
   return {

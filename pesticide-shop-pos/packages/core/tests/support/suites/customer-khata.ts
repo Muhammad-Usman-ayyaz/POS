@@ -36,8 +36,20 @@ export function defineCustomerKhataTests(make: WorldFactory): void {
         expect(done).toMatchObject({ receipt_no: 'RCP-A-000001', balance_after: 80_000, advance: false });
         expect(done.payment).toMatchObject({ party_type: 'customer', party_id: ID.customer, method: 'jazzcash', reference_no: 'JC-5', note: 'for the wheat', amount: 120_000, direction: 'in', receipt_no: 'RCP-A-000001', created_by: ID.staff });
         expect(w.rows('payments')).toEqual([expect.objectContaining({ id: done.payment.id, receipt_no: 'RCP-A-000001', note: 'for the wheat', paid_at: `${w.today}T15:30:00.000Z` })]);
-        expect(w.rows('ledger_entries').at(-1)).toMatchObject({ entry_type: 'payment', amount_delta: -120_000, ref_type: 'payment', ref_id: done.payment.id, entry_date: `${w.today}T15:30:00.000Z` });
-        expect(s.khata.balance(ID.customer)).toBe(80_000);
+        expect(w.rows('ledger_entries').at(-1)).toMatchObject({ entry_type: 'payment', amount_delta: -120_000, ref_type: 'payment', ref_id: done.payment.id, entry_date: `${w.today}T15:30:00.000Z`, created_by: ID.staff, party_type: 'customer', party_id: ID.customer });
+        // and by the owner when the owner takes it: the ledger row and the payment row both carry the signed-in user
+        const byOwner = pay(1000, { created_by: ID.owner });
+        expect(w.rows('ledger_entries').at(-1)!.created_by).toBe(ID.owner);
+        expect(byOwner.payment.created_by).toBe(ID.owner);
+        expect(w.rows('payments').at(-1)!.created_by).toBe(ID.owner);
+        expect(s.khata.balance(ID.customer)).toBe(79_000);
+      });
+
+      it('a SUPPLIER id is not a customer: the payment is refused with NOT_FOUND and nothing is written', () => {
+        creditSale(1);
+        const before = w.snapshot();
+        expect(codeOf(() => pay(1000, { party_id: ID.supplier, confirm_advance: true }))).toBe('NOT_FOUND');
+        expect(w.snapshot()).toEqual(before);
       });
 
       it('the ledger row is a MINUS (the customer owes less)', () => {
@@ -148,6 +160,12 @@ export function defineCustomerKhataTests(make: WorldFactory): void {
           const done = pay(80_000, { confirm_advance: true });
           expect(done).toMatchObject({ balance_after: -30_000, advance: true });
           expect(s.khata.balance(ID.customer)).toBe(-30_000);
+        });
+
+        it('exactly the balance needs no confirmation; one paisa more does', () => {
+          creditSale(1);
+          expect(codeOf(() => pay(50_001))).toBe('ADVANCE_NOT_CONFIRMED');
+          expect(pay(50_000)).toMatchObject({ balance_after: 0, advance: false });
         });
 
         it('paying exactly what is owed needs no confirmation and is not an advance', () => {
@@ -332,6 +350,53 @@ export function defineCustomerKhataTests(make: WorldFactory): void {
         expect(st.lines.some((l) => l.amount_delta === 777_777)).toBe(false);
         expect(st.closing_balance).toBe(26_234);
         expect(st.closing_balance).toBe(s.khata.balance(ID.customer));
+      });
+
+      it('the customer block carries the village and phone, and from and to are echoed back when given', () => {
+        const id = w.addCustomer({ name_en: 'Village Man', name_ur: 'گاؤں', phone: '0300-1112223', village: 'Kot Addu', credit_limit: 0 });
+        const st = s.khata.statement({ customer_id: id, from: w.day(-4), to: w.day(3) });
+        expect(st.customer).toEqual({ id, name_en: 'Village Man', name_ur: 'گاؤں', phone: '0300-1112223', village: 'Kot Addu' });
+        expect(st.from).toBe(w.day(-4));
+        expect(st.to).toBe(w.day(3));
+        const onlyFrom = s.khata.statement({ customer_id: id, from: w.day(-4) });
+        expect([onlyFrom.from, onlyFrom.to]).toEqual([w.day(-4), null]);
+        const onlyTo = s.khata.statement({ customer_id: id, to: w.day(3) });
+        expect([onlyTo.from, onlyTo.to]).toEqual([null, w.day(3)]);
+      });
+
+      it('a cash payment\'s note and method show on its statement line (not only a wallet payment\'s)', () => {
+        creditSale(1);
+        pay(10_000, { note: 'for the seed' });
+        pay(5000);
+        const [, noted, plain] = s.khata.statement({ customer_id: ID.customer }).lines;
+        expect(noted).toMatchObject({ payment_method: 'cash', note: 'for the seed', receipt_no: 'RCP-A-000001', reference_no: null });
+        expect(plain).toMatchObject({ payment_method: 'cash', note: null, receipt_no: 'RCP-A-000002' });
+      });
+
+      it.each(['UTC', 'Asia/Karachi', 'America/Los_Angeles', 'Pacific/Auckland'])('range days are UTC days whatever the machine time zone is (%s)', (zone) => {
+        const saved = process.env.TZ;
+        process.env.TZ = zone;
+        try {
+          if (zone !== 'UTC') {
+            const evening = new Date('2026-03-10T23:30:00.000Z');
+            const early = new Date('2026-03-11T00:30:00.000Z');
+            expect(evening.getDate() !== evening.getUTCDate() || early.getDate() !== early.getUTCDate(), `${zone} is in effect`).toBe(true);
+          }
+          rawLedger({ entry_type: 'adjustment', amount_delta: 100, entry_date: `${w.day(-3)}T23:30:00.000Z` });
+          rawLedger({ entry_type: 'adjustment', amount_delta: 10, entry_date: `${w.day(-2)}T00:30:00.000Z` });
+          const from = s.khata.statement({ customer_id: ID.customer, from: w.day(-2) });
+          expect(from.brought_forward).toBe(100);
+          expect(from.lines.map((l) => [l.label, l.amount_delta])).toEqual([['brought_forward', 100], ['adjustment', 10]]);
+          const to = s.khata.statement({ customer_id: ID.customer, to: w.day(-3) });
+          expect(to.lines.map((l) => l.amount_delta)).toEqual([100]);
+          expect(to.closing_balance).toBe(100);
+          const one = s.khata.statement({ customer_id: ID.customer, from: w.day(-3), to: w.day(-3) });
+          expect(one.lines.map((l) => l.amount_delta)).toEqual([0, 100]);
+          expect(one.closing_balance).toBe(100);
+        } finally {
+          if (saved === undefined) delete process.env.TZ;
+          else process.env.TZ = saved;
+        }
       });
 
       it('a customer with no history has an empty statement', () => {

@@ -468,7 +468,178 @@ describe('the statement', () => {
   });
 });
 
+describe('a soft-deleted customer is gone for every channel', () => {
+  it('get, update, setTerms, payments:receive and khata:statement say NOT_FOUND, and nothing is written', async () => {
+    await shop.signInAs('owner');
+    const id = rashid();
+    const mine = await h()['customers:get']({ customer_id: id });
+    sql('UPDATE customers SET deleted_at = ? WHERE id = ?').run('2026-01-02T00:00:00.000Z', id);
+    const v = mine.customer.version + 1; // the soft delete moved the version
+    const before = footprint();
+    const calls: [string, () => Promise<unknown>][] = [
+      ['customers:get', () => h()['customers:get']({ customer_id: id })],
+      ['customers:update', () => h()['customers:update']({ customer_id: id, fields: { village: 'Ghost' }, expected_version: v })],
+      ['customers:setTerms', () => h()['customers:setTerms']({ customer_id: id, credit_limit: 5_000, default_price_type: 'wholesale', expected_version: v })],
+      ['payments:receive', () => h()['payments:receive']({ customer_id: id, amount: 100, method: 'cash', confirm_advance: true })],
+      ['khata:statement', () => h()['khata:statement']({ customer_id: id })],
+    ];
+    for (const [name, call] of calls) expect((await failureOf(call())).code, name).toBe('NOT_FOUND');
+    expect(footprint()).toEqual(before);
+    expect((await h()['customers:list']({})).rows.map((r) => r.customer.id)).not.toContain(id);
+  });
+
+  it('the same for staff', async () => {
+    await shop.signInAs('staff');
+    sql('UPDATE customers SET deleted_at = ? WHERE id = ?').run('2026-01-02T00:00:00.000Z', rashid());
+    expect((await failureOf(h()['payments:receive']({ customer_id: rashid(), amount: 100, method: 'cash', confirm_advance: true }))).code).toBe('NOT_FOUND');
+    expect((await failureOf(h()['khata:statement']({ customer_id: rashid() }))).code).toBe('NOT_FOUND');
+  });
+});
+
+describe('the error envelope (through the registered ipc handler)', () => {
+  it('keeps the params and a message for VERSION_CONFLICT, DUPLICATE_CUSTOMER and ADVANCE_NOT_CONFIRMED', async () => {
+    await shop.signInAs('staff');
+    const ipc = fakeIpc(shop);
+    const v = (await h()['customers:get']({ customer_id: rashid() })).customer.version;
+
+    const stale = await ipc('customers:update', { customer_id: rashid(), fields: { village: 'x' }, expected_version: v + 3 });
+    expect(stale).toMatchObject({ ok: false, error: { code: 'VERSION_CONFLICT', params: { expected_version: v + 3, current_version: v } } });
+
+    const dup = await ipc('customers:create', { fields: { name_en: 'Rashid' } });
+    expect(dup).toMatchObject({ ok: false, error: { code: 'DUPLICATE_CUSTOMER', params: { count: 1 } } });
+    expect(JSON.parse(String(dup.error!.params['matches']))).toEqual([expect.objectContaining({ customer_id: rashid(), balance: 200_000, same_name: true })]);
+
+    const advance = await ipc('payments:receive', { customer_id: rashid(), amount: 300_000, method: 'cash' });
+    expect(advance).toMatchObject({ ok: false, error: { code: 'ADVANCE_NOT_CONFIRMED', params: { amount: 300_000, balance: 200_000 } } });
+
+    const reference = await ipc('payments:receive', { customer_id: rashid(), amount: 1_000, method: 'bank' });
+    expect(reference).toMatchObject({ ok: false, error: { code: 'REFERENCE_REQUIRED', params: { method: 'bank' } } });
+
+    for (const reply of [stale, dup, advance, reference]) {
+      expect(typeof reply.error!.message).toBe('string');
+      expect(reply.error!.message.length).toBeGreaterThan(5);
+      expect(reply.error!.message).not.toMatch(/undefined|\[object/);
+    }
+  });
+});
+
+describe('more payment, terms and settings rules through the handlers', () => {
+  it('a payment of exactly the balance needs no confirmation; one paisa more does', async () => {
+    await shop.signInAs('staff');
+    const error = await failureOf(h()['payments:receive']({ customer_id: rashid(), amount: 200_001, method: 'cash' }));
+    expect(error.code).toBe('ADVANCE_NOT_CONFIRMED');
+    expect(error.params).toEqual({ amount: 200_001, balance: 200_000 });
+    const done = await h()['payments:receive']({ customer_id: rashid(), amount: 200_000, method: 'cash' });
+    expect(done).toMatchObject({ balance_after: 0, advance: false });
+    expect(viewBalance(rashid())).toBe(0);
+  });
+
+  it('the payment note and the reference are trimmed (what is stored is what the reply says)', async () => {
+    await shop.signInAs('staff');
+    const done = await h()['payments:receive']({ customer_id: rashid(), amount: 1_000, method: 'bank', reference_no: '  TRX-5  ', note: '  half now  ' });
+    expect(done.payment).toMatchObject({ note: 'half now', reference_no: 'TRX-5' });
+    expect(sql('SELECT note, reference_no FROM payments WHERE id = ?').get(done.payment.id)).toEqual({ note: 'half now', reference_no: 'TRX-5' });
+  });
+
+  it('a payment for a supplier id is NOT_FOUND and writes nothing', async () => {
+    await shop.signInAs('staff');
+    const before = footprint();
+    expect((await failureOf(h()['payments:receive']({ customer_id: shop.demo.supplierId, amount: 100, method: 'cash', confirm_advance: true }))).code).toBe('NOT_FOUND');
+    expect(footprint()).toEqual(before);
+  });
+
+  it('an update that changes nothing writes nothing and leaves the version alone', async () => {
+    await shop.signInAs('staff');
+    const mine = await h()['customers:get']({ customer_id: rashid() });
+    const before = footprint();
+    const again = await h()['customers:update']({ customer_id: rashid(), fields: { name_en: mine.customer.name_en, phone: mine.customer.phone, village: mine.customer.village }, expected_version: mine.customer.version });
+    expect(again.customer.version).toBe(mine.customer.version);
+    expect(footprint()).toEqual(before);
+    expect((sql('SELECT version FROM customers WHERE id = ?').get(rashid()) as { version: number }).version).toBe(mine.customer.version);
+  });
+
+  it('below_balance is false when the new limit equals the balance and when the new limit is 0 (no limit)', async () => {
+    await shop.signInAs('owner');
+    const v1 = (await h()['customers:get']({ customer_id: rashid() })).customer.version; // owes Rs 2,000
+    const equal = await h()['customers:setTerms']({ customer_id: rashid(), credit_limit: 200_000, default_price_type: 'retail', expected_version: v1 });
+    expect(equal.below_balance).toBe(false);
+    expect(equal.customer).toMatchObject({ credit_left: 0, over_limit: false });
+    const none = await h()['customers:setTerms']({ customer_id: rashid(), credit_limit: 0, default_price_type: 'retail', expected_version: equal.customer.customer.version });
+    expect(none.below_balance).toBe(false);
+    expect(none.customer).toMatchObject({ no_limit: true, credit_left: null });
+    const one = await h()['customers:setTerms']({ customer_id: rashid(), credit_limit: 199_999, default_price_type: 'retail', expected_version: none.customer.customer.version });
+    expect(one.below_balance).toBe(true);
+  });
+
+  it('setSettings with the default limit left out does not reset it; the farmer switch alone changes only itself', async () => {
+    await shop.signInAs('owner');
+    await h()['customers:setSettings']({ default_credit_limit: 750_000 });
+    const set = await h()['customers:setSettings']({ show_farmer_fields: true });
+    expect(set).toEqual({ default_credit_limit: 750_000, show_farmer_fields: true });
+    expect(await h()['customers:setSettings']({})).toEqual(set);
+    expect(audits('customer_setting_changed').map((r) => JSON.parse(r.details).field)).toEqual(['default_credit_limit', 'show_farmer_fields']);
+  });
+
+  it('a negative default limit sitting in the settings table never leaks: it reads as 0, and a staff-added customer gets no limit', async () => {
+    await shop.signInAs('owner');
+    await h()['customers:setSettings']({ default_credit_limit: 5 });
+    sql('UPDATE settings SET value = ? WHERE "key" = ?').run('-500', 'default_credit_limit');
+    expect((await h()['customers:getSettings']({})).default_credit_limit).toBe(0);
+    await shop.signOut();
+    await shop.signInAs('staff');
+    const made = await h()['customers:create']({ fields: { name_en: 'After Bad Setting' } });
+    expect(made.customer.credit_limit).toBe(0);
+    expect(made).toMatchObject({ no_limit: true, credit_left: null });
+  });
+
+  it('total_outstanding adds only the positive balances: an advance customer does not lower it', async () => {
+    await shop.signInAs('staff');
+    const before = (await h()['customers:list']({})).totals;
+    await h()['payments:receive']({ customer_id: sajid(), amount: 25_000, method: 'cash', confirm_advance: true }); // sajid owed nothing: now Rs 250 in credit
+    expect(await h()['customers:get']({ customer_id: sajid() })).toMatchObject({ balance: -25_000 });
+    const after = (await h()['customers:list']({})).totals;
+    expect(after.total_outstanding).toBe(before.total_outstanding);
+    expect(after).toEqual(before);
+    expect((await h()['customers:list']({ filter: 'advance' })).rows.map((r) => r.customer.id)).toEqual([sajid()]);
+  });
+});
+
 describe('what staff are told', () => {
+  it('payments:receive answers with exactly these fields, and nothing internal besides', async () => {
+    await shop.signInAs('staff');
+    const done = await h()['payments:receive']({ customer_id: rashid(), amount: 1_000, method: 'bank', reference_no: 'TRX-1', note: 'n' });
+    expect(Object.keys(done).sort()).toEqual(['advance', 'balance_after', 'payment', 'receipt_no']);
+    expect(Object.keys(done.payment).sort()).toEqual([
+      'amount', 'branch_id', 'created_by', 'device_id', 'direction', 'id', 'method', 'note', 'paid_at', 'party_id', 'party_type', 'receipt_no', 'reference_no', 'shop_id',
+    ]);
+    expect(done.payment).toEqual({
+      id: done.payment.id, party_type: 'customer', party_id: rashid(), method: 'bank', reference_no: 'TRX-1', amount: 1_000, direction: 'in', paid_at: done.payment.paid_at,
+      created_by: shop.staffId, note: 'n', receipt_no: done.receipt_no, shop_id: done.payment.shop_id, branch_id: done.payment.branch_id, device_id: done.payment.device_id,
+    });
+  });
+
+  it('no key in any reply of the customer channels looks like a price, cost, margin, profit or purchase (default_price_type is the one customer term)', async () => {
+    await shop.signInAs('owner');
+    await h()['sale:create']({ customer_id: rashid(), paid_amount: 0, lines: [{ product_id: shop.demo.products['insecticide1l']!, qty: 1000 }] });
+    await shop.signOut();
+    await shop.signInAs('staff');
+    const keysOf = (value: unknown, out: string[] = []): string[] => {
+      if (value !== null && typeof value === 'object') for (const [k, v] of Object.entries(value)) (out.push(k), keysOf(v, out));
+      return out;
+    };
+    const replies = [
+      await h()['customers:list']({}),
+      await h()['customers:get']({ customer_id: rashid() }),
+      await h()['customers:getSettings']({}),
+      await h()['customers:findDuplicates']({ name_en: 'Rashid' }),
+      await h()['khata:statement']({ customer_id: rashid() }),
+      await h()['payments:receive']({ customer_id: rashid(), amount: 1_000, method: 'cash' }),
+    ];
+    const suspicious = keysOf(replies).filter((k) => /price|cost|margin|profit|purchase/i.test(k) && k !== 'default_price_type');
+    expect(suspicious).toEqual([]);
+    expect(keysOf(replies)).toContain('default_price_type'); // the check really looks at the customer fields
+  });
+
   it('no reply to a staff session on these channels holds a cost, margin or profit word', async () => {
     await shop.signInAs('owner');
     await h()['sale:create']({ customer_id: rashid(), paid_amount: 0, lines: [{ product_id: shop.demo.products['insecticide1l']!, qty: 1000 }] });

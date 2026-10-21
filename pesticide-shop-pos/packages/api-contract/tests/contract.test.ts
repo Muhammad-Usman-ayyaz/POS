@@ -405,6 +405,86 @@ describe('Phase 6 M2: customers, payments, statement', () => {
     }
   });
 
+  it('free text is TRIMMED: phone, village, notes (create and update), and the payment reference and note', () => {
+    const made = create.parse({ fields: { phone: '  0300 1  ', village: '  Kot  ', notes: '  late  ', father_name: ' F ', cnic: ' 35202 ', phone2: ' 0301 ', guarantor: ' G ' } });
+    expect(made.fields).toMatchObject({ phone: '0300 1', village: 'Kot', notes: 'late', father_name: 'F', cnic: '35202', phone2: '0301', guarantor: 'G' });
+    const edited = update.parse({ customer_id: id(), fields: { phone: ' 1 ', village: ' v ', notes: ' n ', name_ur: ' ن ' }, expected_version: 1 });
+    expect(edited.fields).toMatchObject({ phone: '1', village: 'v', notes: 'n', name_ur: 'ن' });
+    const paid = pay.parse({ customer_id: id(), amount: 5, method: 'bank', reference_no: '  TX-1  ', note: '  half  ' });
+    expect(paid).toMatchObject({ reference_no: 'TX-1', note: 'half' });
+    const setTerms = terms.parse({ customer_id: id(), credit_limit: 1, default_price_type: 'retail', expected_version: 1, father_name: ' A ', guarantor: ' B ' });
+    expect(setTerms).toMatchObject({ father_name: 'A', guarantor: 'B' });
+    // the duplicate probe is trimmed as well
+    expect(contract['customers:findDuplicates'].input.parse({ name_en: ' Ali ', phone: ' 03 ' })).toMatchObject({ name_en: 'Ali', phone: '03' });
+  });
+
+  it('a null clears a contact field on update (phone, village, notes, names), and a field may be left out', () => {
+    for (const key of ['phone', 'village', 'notes', 'name_en', 'name_ur']) {
+      expect(update.safeParse({ customer_id: id(), fields: { [key]: null }, expected_version: 1 }).success, key).toBe(true);
+    }
+    expect(update.safeParse({ customer_id: id(), fields: {}, expected_version: 1 }).success).toBe(true);
+    expect(update.safeParse({ customer_id: id(), expected_version: 1 }).success).toBe(false); // fields itself is required
+    expect(update.parse({ customer_id: id(), fields: { phone: null }, expected_version: 1 }).fields.phone).toBeNull();
+  });
+
+  it('update refuses a credit limit and a price type even with a perfectly VALID value', () => {
+    for (const fields of [{ credit_limit: 9_000_000 }, { credit_limit: 0 }, { default_price_type: 'wholesale' }, { default_price_type: 'retail' }, { name_en: 'A', credit_limit: 9_000_000 }]) {
+      expect(update.safeParse({ customer_id: id(), fields, expected_version: 1 }).success, JSON.stringify(fields)).toBe(false);
+    }
+  });
+
+  it('farmer fields: father_name and guarantor 120, cnic and phone2 30; null is fine (create and setTerms)', () => {
+    const farmer = (fields: Record<string, unknown>) => create.safeParse({ fields: { name_en: 'A', ...fields } }).success;
+    const farmerTerms = (extra: Record<string, unknown>) => terms.safeParse({ customer_id: id(), credit_limit: 0, default_price_type: 'retail', expected_version: 1, ...extra }).success;
+    for (const [key, max] of [['father_name', 120], ['guarantor', 120], ['cnic', 30], ['phone2', 30]] as const) {
+      expect(farmer({ [key]: 'x'.repeat(max) }), `create ${key} ${max}`).toBe(true);
+      expect(farmer({ [key]: 'x'.repeat(max + 1) }), `create ${key} ${max + 1}`).toBe(false);
+      expect(farmer({ [key]: null }), `create ${key} null`).toBe(true);
+      expect(farmerTerms({ [key]: 'x'.repeat(max) }), `terms ${key} ${max}`).toBe(true);
+      expect(farmerTerms({ [key]: 'x'.repeat(max + 1) }), `terms ${key} ${max + 1}`).toBe(false);
+      expect(farmerTerms({ [key]: null }), `terms ${key} null`).toBe(true);
+      expect(farmerTerms({ [key]: 5 }), `terms ${key} number`).toBe(false);
+    }
+  });
+
+  it('expected_version is a whole number from 1 to 2,000,000,000 on update and setTerms', () => {
+    for (const version of [1, 2, 2_000_000_000]) {
+      expect(update.safeParse({ customer_id: id(), fields: { phone: '1' }, expected_version: version }).success, `update ${version}`).toBe(true);
+      expect(terms.safeParse({ customer_id: id(), credit_limit: 0, default_price_type: 'retail', expected_version: version }).success, `terms ${version}`).toBe(true);
+    }
+    for (const version of [0, -1, 2_000_000_001, 1.5, '3', null, Number.NaN]) {
+      expect(update.safeParse({ customer_id: id(), fields: { phone: '1' }, expected_version: version }).success, `update ${String(version)}`).toBe(false);
+      expect(terms.safeParse({ customer_id: id(), credit_limit: 0, default_price_type: 'retail', expected_version: version }).success, `terms ${String(version)}`).toBe(false);
+    }
+  });
+
+  it('setTerms needs the credit limit itself (a missing one is not "no limit"), and a limit of exactly the maximum is fine', () => {
+    const { credit_limit: _gone, ...without } = { customer_id: id(), credit_limit: 5, default_price_type: 'retail' as const, expected_version: 1 };
+    expect(terms.safeParse(without).success).toBe(false);
+    expect(terms.safeParse({ ...without, credit_limit: undefined }).success).toBe(false);
+    expect(terms.safeParse({ ...without, credit_limit: null }).success).toBe(false);
+    expect(terms.safeParse({ ...without, credit_limit: 1_000_000_000_000 }).success).toBe(true);
+  });
+
+  it('customers:get takes exactly one customer id, a real UUID, and nothing else', () => {
+    const get = contract['customers:get'].input;
+    expect(get.safeParse({ customer_id: id() }).success).toBe(true);
+    for (const bad of [{}, { customer_id: 'rashid' }, { customer_id: '123' }, { customer_id: '' }, { customer_id: 5 }, { customer_id: null }, { id: id() }, { customer_id: id(), extra: 1 }, { customer_id: `${id()} ` }]) {
+      expect(get.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('the list accepts every filter, sort and language, and the page limit runs from 1 to 500 whole numbers', () => {
+    for (const filter of ['all', 'owes', 'overdue', 'advance']) expect(list.safeParse({ filter }).success, filter).toBe(true);
+    for (const sort of ['name', 'balance', 'overdue', 'next_due']) expect(list.safeParse({ sort }).success, sort).toBe(true);
+    for (const name_language of ['en', 'ur']) expect(list.safeParse({ name_language }).success, name_language).toBe(true);
+    for (const limit of [1, 2, 499, 500]) expect(list.safeParse({ limit }).success, `limit ${limit}`).toBe(true);
+    for (const limit of [0, 501, 500.5, 1.5, -1, '5', Number.NaN]) expect(list.safeParse({ limit }).success, `limit ${String(limit)}`).toBe(false);
+    for (const offset of [0, 1, 1000]) expect(list.safeParse({ offset }).success, `offset ${offset}`).toBe(true);
+    for (const offset of [-1, 0.5, 2.5, '1', Number.NaN]) expect(list.safeParse({ offset }).success, `offset ${String(offset)}`).toBe(false);
+    expect(list.safeParse({ query: 'x'.repeat(100) }).success).toBe(true);
+  });
+
   it('the list takes bounded paging and only known filters and sorts', () => {
     expect(list.safeParse({}).success).toBe(true);
     for (const bad of [{ filter: 'rich' }, { sort: 'cost' }, { name_language: 'fr' }, { limit: 0 }, { limit: 501 }, { offset: -1 }, { query: 'x'.repeat(101) }]) {

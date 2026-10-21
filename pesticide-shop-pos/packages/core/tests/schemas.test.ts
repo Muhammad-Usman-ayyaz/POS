@@ -56,6 +56,21 @@ describe('Batch and Customer', () => {
   });
 });
 
+describe('Customer farmer fields (migration 007) are nullable, never undefined', () => {
+  const customer = () => ({ id: randomUUID(), name_en: 'Rashid', name_ur: null, phone: null, village: 'Kot', credit_limit: 0, default_price_type: 'retail' as const, notes: null, father_name: 'Ali', cnic: '35202-1234567-1', phone2: '0300', guarantor: 'Imran', ...scope(), ...meta() });
+  it.each(['father_name', 'cnic', 'phone2', 'guarantor'] as const)('%s exists, accepts a string and null, and rejects undefined', (field) => {
+    expect(Customer.safeParse(customer()).success).toBe(true);
+    expect(Customer.safeParse({ ...customer(), [field]: null }).success).toBe(true);
+    const missing: Record<string, unknown> = { ...customer() };
+    delete missing[field];
+    expect(Customer.safeParse(missing).success).toBe(false);
+    expect(Customer.safeParse({ ...customer(), [field]: undefined }).success).toBe(false);
+    expect(Customer.safeParse({ ...customer(), [field]: 5 }).success).toBe(false);
+    const parsed = Customer.parse({ ...customer(), [field]: 'kept' }) as Record<string, unknown>;
+    expect(parsed[field]).toBe('kept');
+  });
+});
+
 describe('Invoice (same rules as the table CHECKs)', () => {
   it('accepts a part-paid credit invoice', () => {
     expect(Invoice.safeParse(invoice()).success).toBe(true);

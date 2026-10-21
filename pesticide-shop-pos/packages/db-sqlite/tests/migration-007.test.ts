@@ -149,6 +149,39 @@ describe('migration 007 on a shop that already has payments', () => {
     expect(one(db, "SELECT COUNT(*) AS n FROM change_log WHERE table_name = 'payments' AND row_id = 'p22'").n).toBe(1);
   });
 
+  it('receipt_no is unique across the whole file: the same number from another device or another customer is refused', async () => {
+    const db = await shopAtVersion6(join(dir, 'shop.db'));
+    await migrate(db);
+    insertPayment(db, 'p30', 'RCP-A-000009');
+    const other = (id: string, party: string, device: string, branch: string) =>
+      db.prepare("INSERT INTO payments (id, party_type, party_id, method, amount, direction, created_by, receipt_no, shop_id, branch_id, device_id) VALUES (?, 'customer', ?, 'cash', 100, 'in', 'u1', 'RCP-A-000009', 's1', ?, ?)").run(id, party, branch, device);
+    expect(failure(() => other('p31', 'c1', 'd2', 'b2')), 'another device').toMatch(/UNIQUE/i);
+    expect(failure(() => other('p32', 'c2', 'd1', 'b1')), 'another customer').toMatch(/UNIQUE/i);
+    expect(failure(() => other('p33', 'c2', 'd2', 'b2')), 'another device and customer').toMatch(/UNIQUE/i);
+    expect(one(db, "SELECT COUNT(*) AS n FROM payments WHERE receipt_no = 'RCP-A-000009'").n).toBe(1);
+  });
+
+  it('keeps a payment sequence that already exists (last_number 6) and still migrates', async () => {
+    const db = await shopAtVersion6(join(dir, 'shop.db'));
+    db.exec("INSERT INTO number_sequences (id, device_id, sequence_name, prefix, last_number) VALUES ('qp1', 'd1', 'payment', 'RCP-A-', 6)");
+    const result = await migrate(db);
+    expect(result.applied).toEqual([7]);
+    expect(all(db, "SELECT device_id, prefix, last_number FROM number_sequences WHERE sequence_name = 'payment' ORDER BY device_id")).toEqual([
+      { device_id: 'd1', prefix: 'RCP-A-', last_number: 6 },
+      { device_id: 'd2', prefix: 'RCP-B-', last_number: 0 },
+      { device_id: 'd3', prefix: 'RCP-B-', last_number: 0 },
+    ]);
+  });
+
+  it('rule: every device gets a payment sequence, a deleted device too (nothing is hidden by deleted_at)', async () => {
+    const db = await shopAtVersion6(join(dir, 'shop.db'));
+    db.exec(`INSERT INTO devices (id, branch_id, name, device_code, deleted_at) VALUES ('d4', 'b1', 'Old PC', 'A2', '2026-01-01T00:00:00.000Z');
+             INSERT INTO number_sequences (id, device_id, sequence_name, prefix, last_number) VALUES ('q4', 'd4', 'invoice', 'INV-A-', 3);`);
+    await migrate(db);
+    expect(one(db, "SELECT prefix, last_number FROM number_sequences WHERE device_id = 'd4' AND sequence_name = 'payment'")).toEqual({ prefix: 'RCP-A-', last_number: 0 });
+    expect(one(db, "SELECT COUNT(*) AS n FROM number_sequences WHERE sequence_name = 'payment'").n).toBe(4);
+  });
+
   it('customers keep their data and take the farmer fields on update', async () => {
     const db = await shopAtVersion6(join(dir, 'shop.db'));
     await migrate(db);
