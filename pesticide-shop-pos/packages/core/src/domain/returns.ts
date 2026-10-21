@@ -15,6 +15,8 @@ export interface SoldLine {
   qty_returned: number;
   /** Base units per pack, if known: lets an error say how many packs. */
   pack_size?: number;
+  /** The stored unit, so an error can say the quantity in kg, L or pieces. */
+  base_unit?: string;
 }
 
 export interface ReturnRequestLine {
@@ -89,6 +91,7 @@ export function planReturn(args: {
         returnable: returnableQty(sold),
         requested: r.qty,
         ...(sold.pack_size !== undefined ? { packSize: sold.pack_size } : {}),
+        ...(sold.base_unit !== undefined ? { unit: sold.base_unit } : {}),
       });
     }
     return {

@@ -3,9 +3,9 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/button.js';
 import { Badge, Num } from '../../components/ui/primitives.js';
-import { formatDate, formatMoney, formatQty, useI18n, type Messages } from '../../i18n/index.js';
+import { formatDate, formatMoney, legacyText, packText, qtyText, stockText, useI18n, type Messages } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
-import { dash, formatRange, withoutIsolates, formatTaxRate, formatTotal, minInPacks } from './catalogue-format.js';
+import { dash, formatRange, withoutIsolates, formatTaxRate } from './catalogue-format.js';
 
 type Group = CatalogueList['hits'][number];
 type Size = Group['sizes'][number];
@@ -84,16 +84,16 @@ function Words({ children }: { children: string }) {
 }
 
 /** The name in the current language first, the other language small underneath. */
-function pick(language: 'en' | 'ur', en: string | null, ur: string | null): { main: string; other: string | null } {
+function pick(language: 'en' | 'ur', en: string | null, ur: string | null, tidy: (text: string) => string = (text) => text): { main: string; other: string | null } {
   const main = language === 'ur' ? (ur ?? en) : (en ?? ur);
   const other = language === 'ur' ? (ur ? en : null) : en ? ur : null;
-  return { main: main ?? dash, other };
+  return { main: main === null ? dash : tidy(main), other: other === null ? null : tidy(other) };
 }
 
 function GroupRow({ entry, open, onToggle, isOwner, priceColumns, category }: { entry: Group; open: boolean; onToggle: (id: string) => void; isOwner: boolean; priceColumns: number; category: ListedCategory | undefined }) {
   const { m, language } = useI18n();
   const { group, summary } = entry;
-  const name = pick(language, group.name_en, group.name_ur);
+  const name = pick(language, group.name_en, group.name_ur, (text) => legacyText(m, text));
   const categoryName = category ? pick(language, category.name_en, category.name_ur).main : dash;
   const Chevron = open ? ChevronDown : ChevronRight;
   return (
@@ -120,7 +120,7 @@ function GroupRow({ entry, open, onToggle, isOwner, priceColumns, category }: { 
       </td>
       <td className={cn(td, 'break-words')}>{categoryName}</td>
       <td className={cn(td, 'font-bold')}>
-        <Words>{formatTotal(summary.stock_total, summary.base_unit, m.products)}</Words>
+        <Words>{withoutIsolates(summary.base_unit ? qtyText(m, language, summary.base_unit, summary.stock_total) : String(summary.stock_total))}</Words>
       </td>
       <td className={cn(td, 'text-end')} colSpan={priceColumns}>
         <span className="block text-xs font-medium text-muted">{m.products.retailRange}</span>
@@ -153,11 +153,11 @@ function SizeRow({ size, isOwner }: { size: Size; isOwner: boolean }) {
     <tr data-size={size.id} className="bg-page/60">
       <td className={td} />
       <td className={cn(td, 'min-w-0')}>
-        <span dir="auto" className="block break-words border-s-[3px] border-tint ps-3 text-lg font-semibold">{size.pack_label === '' ? m.products.singleSize : size.pack_label}</span>
+        <span dir="auto" className="block break-words border-s-[3px] border-tint ps-3 text-lg font-semibold">{packText(m, language, size.base_unit, size.pack_size) || m.products.singleSize}</span>
       </td>
       <td className={td} />
       <td className={cn(td, 'font-semibold')}>
-        <Words>{withoutIsolates(formatQty(size.stock_total, size.pack_size, language))}</Words>
+        <Words>{withoutIsolates(stockText(m, language, size.base_unit, size.pack_size, size.stock_total))}</Words>
       </td>
       {isOwner && <td className={cn(td, 'text-end')}>{size.cost_price == null ? dash : money(size.cost_price)}</td>}
       <td className={cn(td, 'text-end')}>{money(size.retail_price)}</td>
@@ -175,6 +175,7 @@ function SizeRow({ size, isOwner }: { size: Size; isOwner: boolean }) {
 }
 
 function SizeBadges({ size, m }: { size: Size; m: Messages }) {
+  const { language } = useI18n();
   const { flags } = size;
   if (!flags.low && !flags.near_expiry && !flags.expired) return null;
   return (
@@ -182,7 +183,7 @@ function SizeBadges({ size, m }: { size: Size; m: Messages }) {
       {flags.expired && <Badge tone="danger">{m.products.badgeExpired}</Badge>}
       {flags.low && (
         <Badge tone="warning" pulse>
-          {m.products.badgeLow(minInPacks(size.min_stock, size.pack_size))}
+          {m.products.badgeLow(stockText(m, language, size.base_unit, size.pack_size, size.min_stock))}
         </Badge>
       )}
       {flags.near_expiry && <Badge tone="warning">{m.products.badgeNearExpiry}</Badge>}

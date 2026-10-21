@@ -1,9 +1,9 @@
-import { taxIncludedIn } from '@pos/core';
+import { baseUnitOf, taxIncludedIn } from '@pos/core';
 import { Lock } from 'lucide-react';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
 import { Badge } from '../../components/ui/primitives.js';
-import { formatMoney, useI18n } from '../../i18n/index.js';
+import { formatMoney, unitName, useI18n } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
 import { isLocked, parseRupees, parseTaxPercent, type DraftProblems, type SizeDraft, type Unit } from './product-form-state.js';
 
@@ -46,10 +46,10 @@ export function SizeCard({ size, number, unit, problems, onChange, onRemove, onL
   const id = (name: string) => `${size.key}-${name}`;
   const locked = isLocked(size);
   const isNew = size.id === null;
-  const unitText = f.unitShort[unit];
+  const unitText = unitName(m, baseUnitOf(unit), 2);
   const err = (key: keyof NonNullable<typeof problems>) => {
     const problem = problems?.[key];
-    return problem ? (problem === 'labelRequired' ? f.problems.labelRequired : f.problems[problem]) : undefined;
+    return problem ? f.problems[problem] : undefined;
   };
 
   // "Rs 118 includes Rs 18 tax": the price the customer pays already holds the tax. Nothing is added to it.
@@ -90,12 +90,8 @@ export function SizeCard({ size, number, unit, problems, onChange, onRemove, onL
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <FieldBox id={id('label')} label={f.sizeLabel} error={err('label')}>
-          <Input id={id('label')} name="label" dir="auto" value={size.label} invalid={!!problems?.label} aria-describedby={problems?.label ? `${id('label')}-error` : undefined} onChange={(e) => onChange({ label: e.target.value })} />
-        </FieldBox>
-
-        <FieldBox id={id('pack')} label={f.packSize} error={err('packSize')}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <FieldBox id={id('pack')} label={f.packSizeIn(unitText)} error={err('packSize')}>
           {locked ? (
             <button
               type="button"
@@ -114,7 +110,7 @@ export function SizeCard({ size, number, unit, problems, onChange, onRemove, onL
             </button>
           ) : (
             <div className="flex items-center gap-2">
-              <Input id={id('pack')} name="packSize" inputMode="numeric" value={size.packSize} invalid={!!problems?.packSize} aria-describedby={problems?.packSize ? `${id('pack')}-error` : undefined} onChange={(e) => onChange({ packSize: e.target.value })} className="num min-w-0" />
+              <Input id={id('pack')} name="packSize" inputMode="decimal" value={size.packSize} invalid={!!problems?.packSize} aria-describedby={problems?.packSize ? `${id('pack')}-error` : undefined} onChange={(e) => onChange({ packSize: e.target.value })} className="num min-w-0" />
               <span className="shrink-0 text-base text-muted">{unitText}</span>
             </div>
           )}

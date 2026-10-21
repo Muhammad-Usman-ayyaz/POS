@@ -1,6 +1,7 @@
 import { addDays } from '../clock.js';
 import type { SizeStatus, SizeWithStock } from '../ports/types.js';
 import type { Product, ProductGroup } from '../schemas/index.js';
+import { storedPackLabel } from '../units.js';
 
 // Pure catalogue rules: how a size is named, and how a typed search is matched. No clock, no database.
 
@@ -152,7 +153,7 @@ export function buildCatalogueIndex<S extends Product>(all: readonly GroupOf<S>[
         sortKey: glueNumberAndUnit(core(group.name_en ?? group.name_ur ?? '')),
         rows: sizes.map((size) => ({
           size,
-          hay: glueNumberAndUnit([...names, core(size.pack_label)].filter((t) => t !== '').join(' ')),
+          hay: glueNumberAndUnit([...names, core(size.pack_label), core(storedPackLabel(size.base_unit, size.pack_size))].filter((t) => t !== '').join(' ')),
           codes: [size.barcode, size.sku].filter(present).map(normalizeSearchText),
         })),
       };

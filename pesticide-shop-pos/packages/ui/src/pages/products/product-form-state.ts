@@ -2,8 +2,10 @@
 // the shell. Kept pure so the rules that matter (rupees to paisa, percent to basis points, packs to base units, the pack-size lock)
 // can be tested on their own.
 import type { CatalogueList } from '@pos/api-contract';
+import { baseUnitOf, displayUnitOf, formatNumber, parseQuantity, quantityLabel, storedPackLabel, type BaseUnitCode, type DisplayUnit } from '@pos/core';
 
-export type Unit = 'ml' | 'g' | 'piece';
+/** The unit the person chooses first: kg, L or piece. What is stored (g, ml, piece) comes from the units module. */
+export type Unit = DisplayUnit;
 type ListedGroup = CatalogueList['hits'][number];
 export type SavedSize = ListedGroup['sizes'][number];
 
@@ -13,8 +15,7 @@ export interface SizeDraft {
   key: string;
   /** The product id of a saved size; null for one that is not saved yet. */
   id: string | null;
-  label: string;
-  /** Base units per pack, as text. */
+  /** The pack size as typed, in the product's unit: "0.25" for 0.25 kg, "1" for 1 L, "10" for 10 pieces. */
   packSize: string;
   sku: string;
   barcode: string;
@@ -81,10 +82,10 @@ export function taxPercentText(basisPoints: number): string {
   return text === '' ? '0' : text;
 }
 
-export function parsePackSize(text: string): number | null {
-  const match = /^\d{1,9}$/.exec(text.trim());
-  const n = match ? Number(match[0]) : NaN;
-  return n > 0 ? n : null;
+/** A pack size typed in kg, L or pieces, as the base-unit integer to store; null when it is not acceptable (the units module reads it strictly). */
+export function parsePackSize(text: string, unit: Unit): number | null {
+  const parsed = parseQuantity(baseUnitOf(unit), text);
+  return parsed.ok ? parsed.value : null;
 }
 
 /** The alert typed in packs ("5", "0.5"), as base units: 5 packs of 250 ml is 1250 ml. Empty is 0. Null when it is not a count of packs or does not come to whole base units. */
@@ -108,15 +109,14 @@ let counter = 0;
 const nextKey = (): string => `size-${(counter += 1)}`;
 
 export function blankSize(): SizeDraft {
-  return { key: nextKey(), id: null, label: '', packSize: '', sku: '', barcode: '', retail: '', wholesale: '', taxPct: '0', minPacks: '', allowLoose: false, active: true, batchCount: 0, stockTotal: 0, saved: null };
+  return { key: nextKey(), id: null, packSize: '', sku: '', barcode: '', retail: '', wholesale: '', taxPct: '0', minPacks: '', allowLoose: false, active: true, batchCount: 0, stockTotal: 0, saved: null };
 }
 
 export function sizeFromSaved(size: SavedSize): SizeDraft {
   return {
     key: size.id,
     id: size.id,
-    label: size.pack_label,
-    packSize: String(size.pack_size),
+    packSize: formatNumber(size.base_unit, size.pack_size),
     sku: size.sku ?? '',
     barcode: size.barcode ?? '',
     retail: rupeesText(size.retail_price),
@@ -132,7 +132,7 @@ export function sizeFromSaved(size: SavedSize): SizeDraft {
 }
 
 export function newDraft(): ProductDraft {
-  return { nameEn: '', nameUr: '', categoryId: '', brandId: '', unit: 'ml', sizes: [blankSize()] };
+  return { nameEn: '', nameUr: '', categoryId: '', brandId: '', unit: 'L', sizes: [blankSize()] };
 }
 
 export function draftFromSaved(saved: SavedGroup): ProductDraft {
@@ -141,7 +141,7 @@ export function draftFromSaved(saved: SavedGroup): ProductDraft {
     nameUr: saved.group.name_ur ?? '',
     categoryId: saved.group.category_id ?? '',
     brandId: saved.group.brand_id ?? '',
-    unit: saved.sizes[0]?.base_unit ?? 'ml',
+    unit: displayUnitOf(saved.sizes[0]?.base_unit ?? 'ml'),
     sizes: saved.sizes.map(sizeFromSaved),
   };
 }
@@ -157,20 +157,18 @@ export function unitEditable(draft: ProductDraft): boolean {
 
 // ---------- checking ----------
 
-export type FieldProblem = 'labelRequired' | 'packInvalid' | 'retailInvalid' | 'wholesaleInvalid' | 'taxInvalid' | 'minInvalid';
+export type FieldProblem = 'packInvalid' | 'retailInvalid' | 'wholesaleInvalid' | 'taxInvalid' | 'minInvalid';
 export interface DraftProblems {
   name: boolean;
-  sizes: Record<string, Partial<Record<'label' | 'packSize' | 'retail' | 'wholesale' | 'tax' | 'minPacks', FieldProblem>>>;
+  sizes: Record<string, Partial<Record<'packSize' | 'retail' | 'wholesale' | 'tax' | 'minPacks', FieldProblem>>>;
 }
 
 /** What is wrong with the form before it is sent. (The shell checks everything again; this is so the person sees it next to the field.) */
 export function checkDraft(draft: ProductDraft): DraftProblems {
   const problems: DraftProblems = { name: draft.nameEn.trim() === '' && draft.nameUr.trim() === '', sizes: {} };
-  const several = draft.sizes.length > 1;
   for (const size of draft.sizes) {
     const p: DraftProblems['sizes'][string] = {};
-    if (several && size.label.trim() === '') p.label = 'labelRequired';
-    const pack = parsePackSize(size.packSize);
+    const pack = parsePackSize(size.packSize, draft.unit);
     if (pack === null) p.packSize = 'packInvalid';
     if (parseRupees(size.retail) === null) p.retail = 'retailInvalid';
     if (parseRupees(size.wholesale) === null) p.wholesale = 'wholesaleInvalid';
@@ -186,10 +184,11 @@ export const hasProblems = (p: DraftProblems): boolean => p.name || Object.keys(
 // ---------- the calls ----------
 
 export interface SizePayload {
+  /** Derived from the pack size and unit by the units module ("0.5 L"); never typed. Old sizes keep the text they have. */
   pack_label: string;
   sku: string | null;
   barcode: string | null;
-  base_unit: Unit;
+  base_unit: BaseUnitCode;
   pack_size: number;
   allow_loose: 0 | 1;
   retail_price: number;
@@ -198,17 +197,30 @@ export interface SizePayload {
   min_stock: number;
 }
 
-/** A size as the shell wants it. Call only after checkDraft found nothing. */
-export function sizePayload(size: SizeDraft, unit: Unit): SizePayload {
-  const pack = parsePackSize(size.packSize) as number;
+/**
+ * The text stored in `pack_label`. A saved size whose pack size and unit did not change keeps the text it has (rows are never rewritten);
+ * every other size gets the label derived by the units module ("0.5 L"). One size on its own has none when it is a single piece; with
+ * several sizes every size needs one, so a single piece is "1 piece" there.
+ */
+export function labelFor(size: SizeDraft, base: BaseUnitCode, pack: number, several: boolean): string {
+  const was = size.saved;
+  if (was && was.pack_size === pack && was.base_unit === base && (was.pack_label !== '' || !several)) return was.pack_label;
+  const derived = storedPackLabel(base, pack);
+  return derived === '' && several ? quantityLabel(base, pack) : derived;
+}
+
+/** A size as the shell wants it. Call only after checkDraft found nothing. `several`: the product has more than one size. */
+export function sizePayload(size: SizeDraft, unit: Unit, several = false, lockedBase?: BaseUnitCode): SizePayload {
+  const base = lockedBase ?? baseUnitOf(unit);
+  const pack = parsePackSize(size.packSize, displayUnitOf(base)) as number;
   return {
-    pack_label: size.label.trim(),
+    pack_label: labelFor(size, base, pack, several),
     sku: size.sku.trim() === '' ? null : size.sku.trim(),
     barcode: size.barcode.trim() === '' ? null : size.barcode.trim(),
-    base_unit: unit,
+    base_unit: base,
     pack_size: pack,
     // A piece cannot be sold in parts.
-    allow_loose: unit !== 'piece' && size.allowLoose ? 1 : 0,
+    allow_loose: base !== 'piece' && size.allowLoose ? 1 : 0,
     retail_price: parseRupees(size.retail) as number,
     wholesale_price: parseRupees(size.wholesale) as number,
     tax_rate_bp: parseTaxPercent(size.taxPct) as number,
@@ -240,7 +252,7 @@ export function buildSaveSteps(draft: ProductDraft, saved: SavedGroup | null): S
           ...(nameUr === '' ? {} : { name_ur: nameUr }),
           category_id: draft.categoryId === '' ? null : draft.categoryId,
           brand_id: draft.brandId === '' ? null : draft.brandId,
-          sizes: draft.sizes.map((s) => sizePayload(s, draft.unit)),
+          sizes: draft.sizes.map((s) => sizePayload(s, draft.unit, draft.sizes.length > 1)),
         },
       },
     ];
@@ -258,7 +270,7 @@ export function buildSaveSteps(draft: ProductDraft, saved: SavedGroup | null): S
     if (size.id === null || size.saved === null) continue;
     const was = size.saved;
     // A locked size keeps the pack size it has, whatever the draft says, so the alert is converted with the real one.
-    const now = sizePayload(isLocked(size) ? { ...size, packSize: String(was.pack_size) } : size, isLocked(size) ? was.base_unit : draft.unit);
+    const now = sizePayload(isLocked(size) ? { ...size, packSize: formatNumber(was.base_unit, was.pack_size) } : size, draft.unit, draft.sizes.length > 1, isLocked(size) ? was.base_unit : undefined);
     const changes: Partial<SizePayload> = {};
     if (now.pack_label !== was.pack_label) changes.pack_label = now.pack_label;
     if (now.sku !== was.sku) changes.sku = now.sku;
@@ -278,7 +290,7 @@ export function buildSaveSteps(draft: ProductDraft, saved: SavedGroup | null): S
 
   for (const size of draft.sizes) {
     if (size.id !== null) continue;
-    steps.push({ kind: 'addSize', key: size.key, input: { group_id: saved.group.id, size: sizePayload(size, draft.unit) } });
+    steps.push({ kind: 'addSize', key: size.key, input: { group_id: saved.group.id, size: sizePayload(size, draft.unit, draft.sizes.length > 1) } });
   }
 
   for (const size of draft.sizes) {

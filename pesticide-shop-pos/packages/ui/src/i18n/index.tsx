@@ -4,7 +4,8 @@ import { en, type Messages } from './messages/en.js';
 import { ur } from './messages/ur.js';
 
 export { describeError, errorCodes, errorText, type ErrorText } from './errors.js';
-export { formatDate, formatMoney, formatQty, ltr } from './format.js';
+export { formatDate, formatMoney, ltr } from './format.js';
+export { legacyText, packText, perUnitPriceText, qtyText, quantityProblem, readQuantity, stockText, unitName, wordsOf } from './units.js';
 export { MAX_YEAR, MIN_YEAR, parseDateText, type DateParse } from './parse-date.js';
 export type { Messages } from './messages/en.js';
 

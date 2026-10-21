@@ -67,7 +67,6 @@ export function cartFromResumed(bill: ResumedHeldBill, seen: Map<string, SeenLin
     productId: l.product_id,
     nameEn: l.name_en,
     nameUr: l.name_ur,
-    label: l.pack_label,
     packSize: l.pack_size,
     allowLoose: l.allow_loose,
     baseUnit: l.base_unit,

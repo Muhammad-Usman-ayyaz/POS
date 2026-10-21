@@ -58,7 +58,8 @@ export function createSalesReturnService(deps: ServiceDeps) {
         const items = tx.invoices.listItems(invoice.id);
         const returned = tx.salesReturns.returnedQtyByItem(invoice.id);
         const sold: SoldLine[] = items.map((i) => {
-          const packSize = tx.products.getById(i.product_id)?.pack_size;
+          const product = tx.products.getById(i.product_id);
+          const packSize = product?.pack_size;
           return {
             invoice_item_id: i.id,
             qty: i.qty,
@@ -66,6 +67,7 @@ export function createSalesReturnService(deps: ServiceDeps) {
             tax_amount: i.tax_amount,
             qty_returned: returned.get(i.id) ?? 0,
             ...(packSize !== undefined ? { pack_size: packSize } : {}),
+            ...(product ? { base_unit: product.base_unit } : {}),
           };
         });
         const plan = planReturn({ invoice_status: invoice.status, lines: sold, requested: input.items });

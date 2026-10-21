@@ -7,11 +7,12 @@ import { Button } from '../../components/ui/button.js';
 import { Dialog } from '../../components/ui/dialog.js';
 import { Input } from '../../components/ui/input.js';
 import { Select } from '../../components/ui/select.js';
-import { formatQty, useI18n } from '../../i18n/index.js';
+import { packText, stockText, useI18n } from '../../i18n/index.js';
+import { baseUnitOf, parseQuantity } from '@pos/core';
 import { buildSaveSteps, blankSize, checkDraft, draftFromSaved, hasProblems, newDraft, unitEditable, type DraftProblems, type ProductDraft, type SavedGroup, type SaveStep, type SizeDraft, type Unit } from './product-form-state.js';
 import { SizeCard } from './size-card.js';
 
-const UNITS: Unit[] = ['ml', 'g', 'piece'];
+const UNITS: Unit[] = ['kg', 'L', 'piece'];
 export type Named = { id: string; name_en: string | null; name_ur: string | null };
 
 /**
@@ -95,6 +96,10 @@ function OwnerForm({ api }: { api: Api }) {
   const removeSize = (key: string) => setDraft((d) => (d ? { ...d, sizes: d.sizes.filter((s) => s.key !== key || s.id !== null) } : d));
 
   const lockedSize = draft?.sizes.find((s) => s.key === lockedKey) ?? null;
+  // The locked size said in its unit ("0.5 L"), worked out from what was typed by the units module.
+  const lockedParsed = lockedSize && draft ? parseQuantity(baseUnitOf(draft.unit), lockedSize.packSize) : null;
+  const lockedPack = lockedParsed?.ok ? lockedParsed.value : 1;
+  const lockedPackLabel = draft ? packText(m, language, baseUnitOf(draft.unit), lockedPack) || stockText(m, language, baseUnitOf(draft.unit), 1, lockedPack) : '';
 
   const run = async (step: SaveStep): Promise<void> => {
     switch (step.kind) {
@@ -234,7 +239,7 @@ function OwnerForm({ api }: { api: Api }) {
             <Select id="unit" value={draft.unit} disabled={!canEditUnit} onChange={(e) => update({ unit: e.target.value as Unit })}>
               {UNITS.map((u) => (
                 <option key={u} value={u}>
-                  {f.unitOptions[u]}
+                  {m.units.names[u]}
                 </option>
               ))}
             </Select>
@@ -276,7 +281,7 @@ function OwnerForm({ api }: { api: Api }) {
       <Dialog open={lockedSize !== null} title={f.lockTitle} onClose={() => setLockedKey(null)} icon={<span className="grid size-12 shrink-0 place-items-center rounded-lg bg-warn-bg text-warn-ink"><Lock aria-hidden className="size-6" /></span>}>
         {lockedSize && (
           <>
-            <p className="mt-3 text-base">{f.lockBody(lockedSize.label || `${lockedSize.packSize} ${f.unitShort[draft.unit]}`, formatQty(lockedSize.stockTotal, Number(lockedSize.packSize) || 1, language), lockedSize.batchCount)}</p>
+            <p className="mt-3 text-base">{f.lockBody(lockedPackLabel, stockText(m, language, baseUnitOf(draft.unit), lockedPack, lockedSize.stockTotal), lockedSize.batchCount)}</p>
             <p className="mt-4 rounded-md bg-tint-soft px-4 py-3 text-base">
               <strong>{f.lockNextLead}</strong> {f.lockNext}
             </p>

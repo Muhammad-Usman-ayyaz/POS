@@ -1,7 +1,16 @@
 import { ApiError } from '@pos/api-contract';
 import type { Language } from '@pos/api-contract';
 import type { DomainErrorCode, ErrorParams } from '@pos/core';
-import { formatDate, formatMoney, formatQty, ltr } from './format.js';
+import { isBaseUnit, type BaseUnitCode } from '@pos/core';
+import { formatDate, formatMoney, ltr } from './format.js';
+import { en as enMessages } from './messages/en.js';
+import { ur as urMessages } from './messages/ur.js';
+import { legacyText, packText, qtyText, stockText, unitName } from './units.js';
+
+const MESSAGES_FOR = { en: enMessages, ur: urMessages } as const;
+
+/** The stored unit an error carries in its params (`unit`), or pieces when it has none. */
+const unitOf = (params: ErrorParams): BaseUnitCode => (isBaseUnit(params.unit) ? params.unit : 'piece');
 
 // THE one place that turns an error code into words, in English and Urdu.
 // Every DomainErrorCode must have an entry (the type below makes the compiler check that), and every entry says
@@ -22,8 +31,14 @@ interface Say {
   /** A string from the params, or "". */
   s(params: ErrorParams, key: string): string;
   money(paisa: number): string;
-  /** A quantity in base units, said in packs. */
-  qty(qty: number, packSize: number): string;
+  /** A quantity from the params (stored base units), said in kg, L or pieces and packs; the params carry `packSize` and `unit`. */
+  qty(params: ErrorParams, key: string): string;
+  /** The size of one pack from the params, in kg, L or pieces. */
+  pack(params: ErrorParams): string;
+  /** A stored unit code as its standard unit word. */
+  unit(code: string): string;
+  /** Old text that may still carry the old small units, shown in kg or L. */
+  text(text: string): string;
   date(iso: string): string;
   /** A plain number kept left to right. */
   num(value: number): string;
@@ -36,13 +51,13 @@ const en: Catalogue = {
   INVALID_MONEY: () => ({ title: 'That amount is not valid', next: 'Type rupees like 1,250 or 1,250.50.' }),
   INVALID_QUANTITY: () => ({ title: 'The quantity must be a whole number above zero', next: 'Type 1 or more.' }),
   INSUFFICIENT_STOCK: (p, t) => {
-    const left = t.qty(t.n(p, 'available'), t.n(p, 'packSize'));
+    const left = t.qty(p, 'available');
     return {
       title: `Only ${left} left in ${t.s(p, 'scope') === 'batch' ? 'this batch' : 'stock'}`,
       next: t.s(p, 'scope') === 'batch' ? 'Lower the quantity, or choose another batch.' : 'Lower the quantity, or receive more stock first.',
     };
   },
-  WHOLE_PACKS_ONLY: (p, t) => ({ title: 'This product is sold in whole packs only', next: `Enter whole packs. One pack is ${t.num(t.n(p, 'packSize'))}.` }),
+  WHOLE_PACKS_ONLY: (p, t) => ({ title: 'This product is sold in whole packs only', next: `Enter whole packs. One pack is ${t.pack(p)}.` }),
   BATCH_EXPIRED: (p, t) => ({ title: `This batch expired on ${t.date(t.s(p, 'expiry'))}`, next: 'Choose a batch that has not expired.' }),
   BATCH_NOT_AVAILABLE: () => ({ title: 'That batch does not belong to this product', next: 'Choose one of the batches shown for the product.' }),
   ALLOCATION_MISMATCH: () => ({ title: 'The batch quantities do not add up to the line', next: 'Make the batch quantities add up to the quantity you want to sell.' }),
@@ -53,7 +68,7 @@ const en: Catalogue = {
   ITEM_NOT_ON_INVOICE: () => ({ title: 'That item is not on this bill', next: 'Pick the item from the bill you are returning against.' }),
   DUPLICATE_LINE: () => ({ title: 'The same item is listed twice', next: 'Combine them into one line.' }),
   RETURN_EXCEEDS_SOLD: (p, t) => ({
-    title: `Only ${t.qty(t.n(p, 'returnable'), t.n(p, 'packSize'))} can still be returned`,
+    title: `Only ${t.qty(p, 'returnable')} can still be returned`,
     next: 'Lower the quantity. Goods already returned cannot be returned again.',
   }),
   EMPTY_RETURN: () => ({ title: 'Nothing is selected to return', next: 'Choose at least one item and a quantity.' }),
@@ -71,12 +86,12 @@ const en: Catalogue = {
   RECEIPT_DATE_OLD: (p, t) => ({ title: `This receipt is dated ${t.num(t.n(p, 'days'))} days ago (${t.date(t.s(p, 'date'))}). Save anyway?`, next: 'If the date is right, confirm to save it. If not, correct the date.' }),
   FUTURE_DATE: (p, t) => ({ title: `The date ${t.date(t.s(p, 'date'))} is after today`, next: 'Pick today or an earlier day.' }),
   DUPLICATE_NAME: (p, t) => ({ title: `"${t.s(p, 'name')}" is already in the list`, next: 'Pick it from the list instead of adding it again.' }),
-  DUPLICATE_PACK_LABEL: (p, t) => ({ title: `This product already has a size called "${t.s(p, 'label')}"`, next: 'Give this size a different label, such as 500 ml or 1 L.' }),
+  DUPLICATE_PACK_LABEL: (p, t) => ({ title: `This product already has a size of ${t.text(t.s(p, 'label'))}`, next: 'Each size needs a different pack size. Change this one, or edit the existing size.' }),
   DUPLICATE_BARCODE: (p, t) => ({ title: `Barcode ${t.s(p, 'barcode')} is already used by another size`, next: 'Check the barcode on the pack. Each size has its own barcode.' }),
   DUPLICATE_SKU: (p, t) => ({ title: `SKU ${t.s(p, 'sku')} is already used by another size`, next: 'Type a different SKU.' }),
-  MIXED_UNITS: (p, t) => ({ title: `All sizes of one product must be measured the same way (${t.s(p, 'expected')})`, next: 'Use ml with ml, or g with g. If this is a different product, make it a new product.' }),
+  MIXED_UNITS: (p, t) => ({ title: `All sizes of one product must be measured the same way (${t.unit(t.s(p, 'expected'))})`, next: 'Use kg with kg, or L with L. If this is a different product, make it a new product.' }),
   GROUP_INACTIVE: () => ({ title: 'This product is switched off', next: 'Switch the product on first, then its sizes.' }),
-  PACK_LABEL_REQUIRED: () => ({ title: 'Every size needs a label', next: 'Write the size on each one, for example 500 ml or 1 L, so they can be told apart.' }),
+  PACK_LABEL_REQUIRED: () => ({ title: 'Every size needs a pack size', next: 'Type the pack size on each one, for example 0.5 L or 1 kg, so they can be told apart.' }),
   PACK_SIZE_LOCKED: () => ({ title: 'This size already has stock records', next: 'Its pack size and unit can no longer change. Add a new size instead.' }),
   REQUEST_ID_REUSED: () => ({ title: 'This bill was already used for a different sale', next: 'Start the bill again.' }),
   HELD_BILL_GONE: () => ({ title: 'This held bill is not there any more', next: 'Someone else may have resumed or discarded it. Open the held bills again to see what is left.' }),
@@ -99,13 +114,13 @@ const ur: Catalogue = {
   INVALID_MONEY: () => ({ title: 'یہ رقم درست نہیں', next: 'روپے اس طرح لکھیں: 1,250 یا 1,250.50۔' }),
   INVALID_QUANTITY: () => ({ title: 'مقدار صفر سے زیادہ پورا عدد ہونی چاہیے', next: '1 یا اس سے زیادہ لکھیں۔' }),
   INSUFFICIENT_STOCK: (p, t) => {
-    const left = t.qty(t.n(p, 'available'), t.n(p, 'packSize'));
+    const left = t.qty(p, 'available');
     return {
       title: t.s(p, 'scope') === 'batch' ? `اس بیچ میں صرف ${left} باقی ہے` : `اسٹاک میں صرف ${left} باقی ہے`,
       next: t.s(p, 'scope') === 'batch' ? 'مقدار کم کریں، یا دوسرا بیچ چنیں۔' : 'مقدار کم کریں، یا پہلے مزید اسٹاک وصول کریں۔',
     };
   },
-  WHOLE_PACKS_ONLY: (p, t) => ({ title: 'یہ مصنوعہ صرف پورے پیک میں بکتا ہے', next: `پورے پیک لکھیں۔ ایک پیک ${t.num(t.n(p, 'packSize'))} کا ہے۔` }),
+  WHOLE_PACKS_ONLY: (p, t) => ({ title: 'یہ مصنوعہ صرف پورے پیک میں بکتا ہے', next: `پورے پیک لکھیں۔ ایک پیک ${t.pack(p)} کا ہے۔` }),
   BATCH_EXPIRED: (p, t) => ({ title: `اس بیچ کی میعاد ${t.date(t.s(p, 'expiry'))} کو ختم ہو گئی`, next: 'ایسا بیچ چنیں جس کی میعاد ختم نہ ہوئی ہو۔' }),
   BATCH_NOT_AVAILABLE: () => ({ title: 'یہ بیچ اس مصنوعہ کا نہیں ہے', next: 'مصنوعہ کے دکھائے گئے بیچوں میں سے کوئی چنیں۔' }),
   ALLOCATION_MISMATCH: () => ({ title: 'بیچوں کی مقدار لائن کی مقدار کے برابر نہیں', next: 'بیچوں کی مقدار کو بیچی جانے والی مقدار کے برابر کریں۔' }),
@@ -116,7 +131,7 @@ const ur: Catalogue = {
   ITEM_NOT_ON_INVOICE: () => ({ title: 'یہ آئٹم اس بل میں نہیں ہے', next: 'جس بل پر واپسی کر رہے ہیں اسی میں سے آئٹم چنیں۔' }),
   DUPLICATE_LINE: () => ({ title: 'ایک ہی آئٹم دو بار لکھا ہے', next: 'انہیں ایک لائن میں ملا دیں۔' }),
   RETURN_EXCEEDS_SOLD: (p, t) => ({
-    title: `صرف ${t.qty(t.n(p, 'returnable'), t.n(p, 'packSize'))} واپس ہو سکتا ہے`,
+    title: `صرف ${t.qty(p, 'returnable')} واپس ہو سکتا ہے`,
     next: 'مقدار کم کریں۔ جو مال پہلے واپس ہو چکا وہ دوبارہ واپس نہیں ہو سکتا۔',
   }),
   EMPTY_RETURN: () => ({ title: 'واپسی کے لیے کچھ نہیں چنا گیا', next: 'کم از کم ایک آئٹم اور اس کی مقدار چنیں۔' }),
@@ -134,12 +149,12 @@ const ur: Catalogue = {
   RECEIPT_DATE_OLD: (p, t) => ({ title: `اس رسید کی تاریخ ${t.num(t.n(p, 'days'))} دن پہلے کی ہے (${t.date(t.s(p, 'date'))})۔ پھر بھی محفوظ کریں؟`, next: 'اگر تاریخ ٹھیک ہے تو تصدیق کر کے محفوظ کریں، ورنہ تاریخ درست کریں۔' }),
   FUTURE_DATE: (p, t) => ({ title: `تاریخ ${t.date(t.s(p, 'date'))} آج کے بعد کی ہے`, next: 'آج کی یا اس سے پہلے کی تاریخ چنیں۔' }),
   DUPLICATE_NAME: (p, t) => ({ title: `"${t.s(p, 'name')}" فہرست میں پہلے سے موجود ہے`, next: 'اسے دوبارہ شامل کرنے کے بجائے فہرست میں سے چنیں۔' }),
-  DUPLICATE_PACK_LABEL: (p, t) => ({ title: `اس پروڈکٹ میں "${t.s(p, 'label')}" نام کا سائز پہلے سے موجود ہے`, next: 'اس سائز کے لیے دوسرا لیبل لکھیں، مثلاً 500 ml یا 1 L۔' }),
+  DUPLICATE_PACK_LABEL: (p, t) => ({ title: `اس پروڈکٹ میں ${t.text(t.s(p, 'label'))} کا سائز پہلے سے موجود ہے`, next: 'ہر سائز کا پیک سائز الگ ہونا چاہیے۔ اسے بدلیں، یا موجودہ سائز میں تبدیلی کریں۔' }),
   DUPLICATE_BARCODE: (p, t) => ({ title: `بارکوڈ ${ltr(t.s(p, 'barcode'))} کسی اور سائز میں استعمال ہو رہا ہے`, next: 'پیک پر بارکوڈ دیکھیں۔ ہر سائز کا اپنا بارکوڈ ہوتا ہے۔' }),
   DUPLICATE_SKU: (p, t) => ({ title: `SKU ${ltr(t.s(p, 'sku'))} کسی اور سائز میں استعمال ہو رہا ہے`, next: 'کوئی دوسرا SKU لکھیں۔' }),
-  MIXED_UNITS: (p, t) => ({ title: `ایک پروڈکٹ کے تمام سائز ایک ہی پیمانے میں ہونے چاہئیں (${ltr(t.s(p, 'expected'))})`, next: 'ml کے ساتھ ml، یا g کے ساتھ g۔ اگر یہ الگ پروڈکٹ ہے تو نئی پروڈکٹ بنائیں۔' }),
+  MIXED_UNITS: (p, t) => ({ title: `ایک پروڈکٹ کے تمام سائز ایک ہی پیمانے میں ہونے چاہئیں (${t.unit(t.s(p, 'expected'))})`, next: 'کلو کے ساتھ کلو، یا لیٹر کے ساتھ لیٹر۔ اگر یہ الگ پروڈکٹ ہے تو نئی پروڈکٹ بنائیں۔' }),
   GROUP_INACTIVE: () => ({ title: 'یہ پروڈکٹ بند ہے', next: 'پہلے پروڈکٹ کو چالو کریں، پھر اس کے سائز۔' }),
-  PACK_LABEL_REQUIRED: () => ({ title: 'ہر سائز کا لیبل ضروری ہے', next: 'ہر سائز پر لکھیں، مثلاً 500 ml یا 1 L، تاکہ ان میں فرق کیا جا سکے۔' }),
+  PACK_LABEL_REQUIRED: () => ({ title: 'ہر سائز کا پیک سائز ضروری ہے', next: 'ہر سائز پر پیک سائز لکھیں، مثلاً 0.5 لیٹر یا 1 کلو، تاکہ ان میں فرق کیا جا سکے۔' }),
   PACK_SIZE_LOCKED: () => ({ title: 'اس سائز کا اسٹاک ریکارڈ موجود ہے', next: 'اس کا پیک سائز اور پیمانہ اب تبدیل نہیں ہو سکتا۔ اس کے بجائے نیا سائز شامل کریں۔' }),
   REQUEST_ID_REUSED: () => ({ title: 'یہ بل پہلے ہی ایک اور فروخت کے لیے استعمال ہو چکا ہے', next: 'بل دوبارہ شروع کریں۔' }),
   HELD_BILL_GONE: () => ({ title: 'یہ رکا ہوا بل اب موجود نہیں', next: 'ہو سکتا ہے کسی اور نے اسے کھول لیا ہو یا ختم کر دیا ہو۔ رکے ہوئے بل دوبارہ کھول کر دیکھیں۔' }),
@@ -164,12 +179,16 @@ const CATALOGUES: Record<Language, Catalogue> = { en, ur };
 export const errorCodes = Object.keys(en) as DomainErrorCode[];
 
 function sayIn(language: Language): Say {
+  const m = MESSAGES_FOR[language];
   const plain = language === 'ur' ? ltr : (text: string): string => text;
   return {
     n: (params, key) => (typeof params[key] === 'number' ? (params[key] as number) : 0),
     s: (params, key) => (typeof params[key] === 'string' ? (params[key] as string) : ''),
     money: (paisa) => formatMoney(paisa, language),
-    qty: (qty, packSize) => formatQty(qty, packSize, language),
+    qty: (params, key) => stockText(m, language, unitOf(params), Math.max(1, typeof params.packSize === 'number' ? params.packSize : 1), typeof params[key] === 'number' ? (params[key] as number) : 0),
+    pack: (params) => packText(m, language, unitOf(params), typeof params.packSize === 'number' ? params.packSize : 1) || qtyText(m, language, unitOf(params), 1),
+    unit: (code) => unitName(m, isBaseUnit(code) ? code : 'piece', 2),
+    text: (text) => legacyText(m, text),
     date: (iso) => plain(formatDate(iso, language)),
     num: (value) => plain(String(value)),
   };

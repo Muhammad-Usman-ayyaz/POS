@@ -4,6 +4,9 @@ import { DomainError } from '../errors.js';
 import { Id, IsoDate, NonNegPaisa, Qty } from '../schemas/common.js';
 import { activeUser, found, liveBatch, liveProduct, liveSupplier, parseInput, pickOrCreateBatch, rowFactory, type ServiceDeps } from './support.js';
 
+/** The stored unit as an error param, so a screen can say the quantity in kg, L or pieces. */
+const unitOf = (unit: string | undefined): { unit: string } | Record<string, never> => (unit ? { unit } : {});
+
 export const OpeningStockInput = z.object({
   product_id: Id,
   supplier_id: Id.optional(),
@@ -103,6 +106,7 @@ export function createStockService(deps: ServiceDeps) {
             available: current,
             requested: -input.qty_delta,
             packSize: tx.products.getById(batch.product_id)?.pack_size ?? 1,
+            ...unitOf(tx.products.getById(batch.product_id)?.base_unit),
             scope: 'batch',
           });
         }
@@ -132,6 +136,7 @@ export function createStockService(deps: ServiceDeps) {
             available: current,
             requested: input.qty,
             packSize: tx.products.getById(batch.product_id)?.pack_size ?? 1,
+            ...unitOf(tx.products.getById(batch.product_id)?.base_unit),
             scope: 'batch',
           });
         }

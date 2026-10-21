@@ -1,10 +1,11 @@
 import type { SaleQuoteView } from '@pos/api-contract';
 import { Notice } from '../../components/feedback.js';
-import { describeError, formatDate, formatMoney, useI18n, type Messages } from '../../i18n/index.js';
+import { quantityParts, pricePerUnit, splitPacks } from '@pos/core';
+import { describeError, formatDate, formatMoney, legacyText, ltr, packText, unitName, useI18n, wordsOf, type Messages } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
 import { ApiError } from '@pos/api-contract';
 import { Chip, TrashIcon } from './counter-ui.js';
-import { pickName, stepOf, type BaseUnit, type CartLine } from './pos-state.js';
+import { pickName, stepOf, type CartLine } from './pos-state.js';
 
 /** Product, Qty (132), Price (92), Total (104) and the bin: the widths of docs/design/Main.dc.html (the bin column is 44, the touch size, not 40). */
 const COLS = 'grid-cols-[minmax(0,1fr)_132px_92px_104px_44px]';
@@ -12,11 +13,25 @@ const COLS = 'grid-cols-[minmax(0,1fr)_132px_92px_104px_44px]';
 type QuoteLine = SaleQuoteView['lines'][number];
 type Issue = SaleQuoteView['issues'][number];
 
-/** The quantity as the shopkeeper says it: whole packs for a sealed size ("2 packs"), the unit for a loose one ("250 g"). */
-export function qtyParts(line: Pick<CartLine, 'qty' | 'packSize' | 'allowLoose' | 'baseUnit'>, t: Messages['pos']): { value: string; unit: string } {
-  if (line.allowLoose || line.packSize <= 1) return { value: String(line.qty), unit: line.allowLoose ? t.unit[line.baseUnit as BaseUnit] : t.packs };
-  const packs = line.qty / line.packSize;
-  return { value: Number.isInteger(packs) ? String(packs) : String(line.qty), unit: Number.isInteger(packs) ? (packs === 1 ? t.pack : t.packs) : t.unit[line.baseUnit as BaseUnit] };
+/**
+ * The quantity as the shopkeeper says it, always with a unit: a loose line in kg or L ("1.5 kg"), a sealed one in whole packs ("2 packs"),
+ * pieces as "3 pieces". The numbers come from the units module; the stored base integer is never shown.
+ */
+export function qtyParts(line: Pick<CartLine, 'qty' | 'packSize' | 'allowLoose' | 'baseUnit'>, m: Pick<Messages, 'units'>): { value: string; unit: string } {
+  const sealed = !line.allowLoose && line.packSize > 1 && line.qty % line.packSize === 0;
+  if (sealed) {
+    const { packs } = splitPacks(line.qty, line.packSize);
+    return { value: String(packs), unit: packs === 1 ? m.units.pack : m.units.packs };
+  }
+  return quantityParts(line.baseUnit, line.qty, wordsOf(m));
+}
+
+/** "2 × 0.5 L": the packs and the size of one pack, for a sealed line. Empty for a loose line or a single piece. */
+export function packSummary(line: Pick<CartLine, 'qty' | 'packSize' | 'allowLoose' | 'baseUnit'>, m: Pick<Messages, 'units'>, language: 'en' | 'ur'): string {
+  if (line.allowLoose || line.packSize <= 1 || line.qty % line.packSize !== 0) return '';
+  const size = packText(m, language, line.baseUnit, line.packSize);
+  const count = String(line.qty / line.packSize);
+  return `${language === 'ur' ? ltr(count) : count} × ${size}`;
 }
 
 /** The bill's lines, as a table: name and size, batch and expiry, the quantity with - and +, the price, the line total and a bin. */
@@ -79,8 +94,11 @@ export function CartTable({
         const problem = issues.find((i) => i.scope === 'line' && i.line_index === index);
         const batch = q?.batches[0];
         const nearest = q?.batches.find((b) => b.near_expiry);
-        const { value, unit } = qtyParts(line, t);
-        const name = pickName(line.nameEn, line.nameUr, language);
+        const { value, unit } = qtyParts(line, m);
+        const name = legacyText(m, pickName(line.nameEn, line.nameUr, language));
+        const sizeText = packText(m, language, line.baseUnit, line.packSize);
+        const summary = packSummary(line, m, language);
+        const per = line.allowLoose && q ? pricePerUnit(line.baseUnit, line.packSize, q.unit_price) : null;
         return (
           <div
             key={line.key}
@@ -99,12 +117,15 @@ export function CartTable({
             <div role="cell" className="min-w-0">
               <button type="button" onClick={() => onEdit(line.key)} title={t.editLine} className="flex max-w-full flex-wrap items-baseline gap-2 rounded-sm text-start">
                 <span className="text-base font-semibold leading-[1.35]">{name}</span>
-                {line.label !== '' && (
-                  <Chip dir="auto">{line.label}</Chip>
-                )}
-                {line.allowLoose && <Chip>{t.looseBadge(line.baseUnit)}</Chip>}
+                {sizeText !== '' && <Chip dir="auto">{sizeText}</Chip>}
+                {line.allowLoose && <Chip>{t.looseBadge(unitName(m, line.baseUnit, 1))}</Chip>}
               </button>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                {summary !== '' && (
+                  <span data-pack-summary className="num text-[12.5px] font-semibold text-ink-mid">
+                    {summary}
+                  </span>
+                )}
                 {batch && (
                   <span className="text-[12.5px] text-muted">
                     <span className="num">{batch.batch_no}</span> · {t.exp} <span className="num">{formatDate(batch.expiry_date, language)}</span>
@@ -139,9 +160,16 @@ export function CartTable({
                 +
               </button>
             </div>
-            <p role="cell" className="num text-end text-ink-mid">
-              {q ? formatMoney(q.unit_price, language) : '—'}
-            </p>
+            <div role="cell" className="text-end text-ink-mid">
+              <p className="num" data-unit-price>
+                {q ? formatMoney(per ? per.paisa : q.unit_price, language) : '—'}
+              </p>
+              {q && per && (
+                <p data-per-unit className="text-[11.5px] leading-[1.2] text-muted">
+                  / {unitName(m, line.baseUnit, 1)}
+                </p>
+              )}
+            </div>
             <p role="cell" data-line-total className="num text-end text-[17px] font-bold">
               {q ? formatMoney(q.line_total, language) : '—'}
             </p>

@@ -3,7 +3,7 @@ import { Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import { ErrorNotice } from '../../components/feedback.js';
 import { SegmentedToggle } from '../../components/ui/segmented.js';
-import { formatMoney, useI18n } from '../../i18n/index.js';
+import { formatMoney, packText, qtyText, useI18n } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
 import { useDebouncedSearch } from '../../lib/use-debounced-search.js';
 import { pickName, type BaseUnit, type PriceType, type SizePick } from './pos-state.js';
@@ -17,7 +17,6 @@ const toPick = (hit: Hit, size: Size): SizePick => ({
   productId: size.id,
   nameEn: hit.group.name_en,
   nameUr: hit.group.name_ur,
-  label: size.pack_label,
   packSize: size.pack_size,
   allowLoose: size.allow_loose === 1,
   baseUnit: size.base_unit as BaseUnit,
@@ -88,7 +87,8 @@ export function SearchPanel({
   const leftText = (size: Size): string => {
     if (!inStock(size)) return t.out;
     const packs = Math.floor(size.stock_sellable / Math.max(1, size.pack_size));
-    return packs > 0 ? t.left(packs) : t.leftLoose(size.stock_sellable, t.unit[size.base_unit as BaseUnit]);
+    if (size.pack_size === 1) return t.left(qtyText(m, language, size.base_unit as BaseUnit, size.stock_sellable));
+    return packs > 0 ? t.left(`${packs} ${packs === 1 ? m.units.pack : m.units.packs}`) : t.leftLoose(qtyText(m, language, size.base_unit as BaseUnit, size.stock_sellable));
   };
 
   return (
@@ -155,7 +155,7 @@ export function SearchPanel({
                         )}
                       >
                         <span dir="auto" className="text-[13px] font-semibold leading-[1.35]">
-                          {size.pack_label}
+                          {packText(m, language, size.base_unit as BaseUnit, size.pack_size) || qtyText(m, language, size.base_unit as BaseUnit, size.pack_size)}
                         </span>
                         <span className="num text-sm font-bold leading-[1.3]">{formatMoney(price(size), language)}</span>
                         <span className="text-[11.5px] leading-[1.3] opacity-80">{leftText(size)}</span>

@@ -1,5 +1,6 @@
 // The Receive stock form, without any React: what is typed (text), what is checked, where a batch number clashes with one that
 // already exists (or with another line), and the exact request that is sent. Pure, so the rules that matter can be tested alone.
+import { parseQuantity, priceForQty, type BaseUnitCode } from '@pos/core';
 import { parseRupees } from '../products/product-form-state.js';
 
 export { parseRupees, rupeesText } from '../products/product-form-state.js';
@@ -17,14 +18,18 @@ export interface LineDraft {
   productId: string;
   nameEn: string | null;
   nameUr: string | null;
-  /** "500 ml"; empty for a product with one size. */
-  label: string;
-  /** Base units per pack. */
+  /** Base units per pack. The size is shown from this and `baseUnit` (the units module derives the "0.5 L" text). */
   packSize: number;
+  /** The stored unit of the size: its quantity is typed in kg, L or pieces. */
+  baseUnit: BaseUnitCode;
+  /** True for a size that is sold loose: it can also be received as an amount in kg or L. */
+  allowLoose: boolean;
+  /** What `packs` holds: a whole number of packs (default), or an amount in kg / L / pieces (loose sizes only). */
+  by: 'packs' | 'amount';
   batchNo: string;
   /** YYYY-MM-DD as typed, or ''. */
   expiry: string;
-  /** Whole packs, as typed. */
+  /** Whole packs, or an amount in kg / L when `by` is 'amount', as typed. */
   packs: string;
   /** Rupees per pack, as typed. */
   cost: string;
@@ -51,19 +56,29 @@ export function parsePacks(text: string): number | null {
   return n > 0 ? n : null;
 }
 
+/** The quantity of a line in BASE units (what is stored and sent): packs times the pack size, or the amount typed in kg / L through the units module. null when it is not valid. */
+export function lineQty(line: Pick<LineDraft, 'packs' | 'by' | 'packSize' | 'baseUnit'>): number | null {
+  if (line.by === 'packs') {
+    const packs = parsePacks(line.packs);
+    return packs === null ? null : packs * line.packSize;
+  }
+  const parsed = parseQuantity(line.baseUnit, line.packs);
+  return parsed.ok ? parsed.value : null;
+}
+
 /** Today as the shell counts it (the UTC date), so "refuse a future date" agrees with the shell. */
 export const todayText = (now: Date = new Date()): string => now.toISOString().slice(0, 10);
 
 // ---------- checking one line ----------
 
-export type LineProblem = 'batchRequired' | 'expiryInvalid' | 'packsInvalid' | 'costInvalid';
+export type LineProblem = 'batchRequired' | 'expiryInvalid' | 'packsInvalid' | 'amountInvalid' | 'costInvalid';
 export type LineProblems = Partial<Record<'batchNo' | 'expiry' | 'packs' | 'cost', LineProblem>>;
 
 export function checkLine(line: LineDraft): LineProblems {
   const p: LineProblems = {};
   if (line.batchNo.trim() === '') p.batchNo = 'batchRequired';
   if (!isIsoDate(line.expiry)) p.expiry = 'expiryInvalid';
-  if (parsePacks(line.packs) === null) p.packs = 'packsInvalid';
+  if (lineQty(line) === null) p.packs = line.by === 'packs' ? 'packsInvalid' : 'amountInvalid';
   if (parseRupees(line.cost) === null) p.cost = 'costInvalid';
   return p;
 }
@@ -137,17 +152,17 @@ export interface Totals {
   cost: number;
 }
 
-/** What one line costs: whole packs times the cost per pack, in paisa. 0 until both are valid. */
+/** What one line costs: the quantity at the cost per pack, rounded once with the shared integer helper, in paisa. 0 until both are valid. */
 export function lineTotal(line: LineDraft): number {
-  const packs = parsePacks(line.packs);
+  const qty = lineQty(line);
   const cost = parseRupees(line.cost);
-  return packs === null || cost === null ? 0 : packs * cost;
+  return qty === null || cost === null ? 0 : priceForQty(qty, cost, line.packSize);
 }
 
 export function totalsOf(lines: readonly LineDraft[]): Totals {
   return {
     lines: lines.length,
-    packs: lines.reduce((sum, l) => sum + (parsePacks(l.packs) ?? 0), 0),
+    packs: lines.reduce((sum, l) => sum + (l.by === 'packs' ? (parsePacks(l.packs) ?? 0) : 0), 0),
     cost: lines.reduce((sum, l) => sum + lineTotal(l), 0),
   };
 }
@@ -191,7 +206,7 @@ export function buildReceiveRequest(header: ReceiveHeader, lines: readonly LineD
       product_id: l.productId,
       batch_no: l.batchNo.trim(),
       expiry_date: l.expiry.trim(),
-      qty: (parsePacks(l.packs) as number) * l.packSize,
+      qty: lineQty(l) as number,
       cost_price: parseRupees(l.cost) as number,
     })),
   };

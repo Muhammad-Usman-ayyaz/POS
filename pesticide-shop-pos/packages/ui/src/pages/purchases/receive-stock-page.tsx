@@ -103,7 +103,7 @@ function OwnerReceive({ api }: { api: Api }) {
   const updateLine = (key: string, patch: Partial<LineDraft>) => setLines((all) => all.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const touch = (key: string, field: LineField) => setTouched((t) => new Set(t).add(`${key}.${field}`));
   const addLine = (size: PickedSize) => {
-    setLines((all) => [...all, { key: newLineKey(), productId: size.productId, nameEn: size.nameEn, nameUr: size.nameUr, label: size.label, packSize: size.packSize, batchNo: '', expiry: '', packs: '', cost: '' }]);
+    setLines((all) => [...all, { key: newLineKey(), productId: size.productId, nameEn: size.nameEn, nameUr: size.nameUr, packSize: size.packSize, baseUnit: size.baseUnit, allowLoose: size.allowLoose, by: 'packs', batchNo: '', expiry: '', packs: '', cost: '' }]);
     setPicking(false);
     setSaveError(null);
   };
