@@ -217,6 +217,56 @@ describe('toast', () => {
   });
 });
 
+describe.each([
+  ['the counter dialog', true],
+  ['the ordinary dialog', false],
+])('Dialog locked (%s)', (_name, counter) => {
+  const box = (locked: boolean | undefined, onClose: () => void) => (
+    <Dialog open title="Saving" counter={counter} {...(locked === undefined ? {} : { locked })} onClose={onClose}>
+      <button type="button">Inside</button>
+    </Dialog>
+  );
+
+  it('while locked, Escape and a press on the backdrop do not close it, and it says it is busy', () => {
+    const onClose = vi.fn();
+    inEnglish(box(true, onClose));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.getAttribute('aria-busy')).toBe('true');
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.mouseDown(dialog.parentElement!);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('without the prop (or with locked false) Escape and the backdrop close it as before; a press INSIDE never does', () => {
+    for (const locked of [undefined, false]) {
+      const onClose = vi.fn();
+      const { unmount } = inEnglish(box(locked, onClose));
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.hasAttribute('aria-busy')).toBe(false);
+      fireEvent.mouseDown(screen.getByRole('button', { name: 'Inside' }));
+      expect(onClose).not.toHaveBeenCalled();
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+      fireEvent.mouseDown(dialog.parentElement!);
+      expect(onClose).toHaveBeenCalledTimes(2);
+      unmount();
+    }
+  });
+
+  it('closes again once it is unlocked', () => {
+    const onClose = vi.fn();
+    const { rerender } = inEnglish(box(true, onClose));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    rerender(
+      <I18nProvider language="en" onLanguageChange={() => undefined}>
+        {box(false, onClose)}
+      </I18nProvider>,
+    );
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('the counter dialog (docs/design/PosDialogs.dc.html)', () => {
   it('has the grey chip, the 20px title, the 14px lead and the 16px corners; the ordinary dialog is unchanged', () => {
     inEnglish(

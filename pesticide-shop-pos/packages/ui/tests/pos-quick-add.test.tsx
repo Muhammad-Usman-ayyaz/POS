@@ -502,6 +502,287 @@ describe('Urdu, right to left', () => {
   });
 });
 
+const NEW_CUSTOMER = (name: string) => ok({ customer: { id: 'new1', name_en: name, name_ur: null, village: null, phone: null, default_price_type: 'retail', credit_limit: 0, version: 1 }, balance: 0, no_limit: true });
+/** A promise the test settles by hand, to hold a request in flight. */
+function gate() {
+  let release: () => void = () => undefined;
+  const wait = new Promise<void>((r) => (release = r));
+  return { wait, release };
+}
+const backdropOf = (dialog: HTMLElement) => dialog.parentElement!;
+
+describe('the credit-limit line when the shop settings cannot be read', () => {
+  it('says the limit is unknown, never "No limit", and still saves (the shop applies its default)', async () => {
+    const shell = fakeShell(STAFF, {}, { 'customers:getSettings': () => fail('INTERNAL') });
+    show(shell);
+    const dialog = await openForm('Imran');
+    const notice = await within(dialog).findByText(Q.limitUnknown);
+    expect(notice.textContent).toBe("Could not read the shop's credit limit");
+    expect(dialog.querySelector('[data-default-limit]')).toBeNull();
+    expect(dialog.textContent).not.toMatch(/No limit/i);
+    await userEvent.setup().click(saveButton(dialog));
+    await waitFor(() => expect(shell.creates()).toHaveLength(1));
+    expect(shell.creates()[0]!.input).toEqual({ fields: { name_en: 'Imran' } });
+  });
+
+  it('is in Urdu in Urdu', async () => {
+    const shell = fakeShell(STAFF, {}, { 'customers:getSettings': () => fail('INTERNAL') });
+    show(shell, STAFF, 'ur');
+    fireEvent.keyDown(window, { key: 'F4' });
+    await userEvent.setup().click(within(await picker()).getByRole('button', { name: Q.newCustomer }));
+    expect(await within(await form()).findByText(ur.quickAdd.limitUnknown)).toBeTruthy();
+  });
+
+  it('a failed customers:get on "Use existing" keeps the warning open, shows the error in it and puts nobody on the bill', async () => {
+    const shell = fakeShell(STAFF, { existing: [RASHID, ADVANCE] }, { 'customers:get': () => fail('INTERNAL') });
+    show(shell);
+    const dialog = await openForm('Rashid');
+    await userEvent.setup().click(saveButton(dialog));
+    const dup = await screen.findByRole('dialog', { name: en.customerForm.dupTitle('Rashid') });
+    await userEvent.setup().click(within(dup).getByRole('button', { name: Q.useExisting('Rashid Ali') }));
+    await waitFor(() => expect(within(dup).getByRole('alert').getAttribute('data-code')).toBe('INTERNAL'));
+    expect(screen.getByRole('dialog', { name: en.customerForm.dupTitle('Rashid') })).toBe(dup); // still open
+    expect(within(dup).getByRole('button', { name: en.customerForm.dupCancel }).hasAttribute('disabled')).toBe(false); // free again
+    expect(document.querySelector('[data-customer-name]')!.textContent).not.toContain('Rashid');
+  });
+});
+
+describe('a name with nothing in it', () => {
+  it.each([
+    ['spaces', '   '],
+    ['a tab and a line break', '\t\n'],
+    ['a no-break space', '  '],
+    ['a zero-width space', '​'],
+  ])('%s is no name: the name is asked for and nothing is sent', async (_label, text) => {
+    const shell = fakeShell();
+    show(shell);
+    const dialog = await openForm();
+    fireEvent.change(field(dialog, Q.name), { target: { value: text } });
+    await userEvent.setup().click(saveButton(dialog));
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(Q.nameRequired);
+    expect(shell.creates()).toHaveLength(0);
+  });
+
+  it('a phone without a name is still refused', async () => {
+    const shell = fakeShell();
+    show(shell);
+    const dialog = await openForm('0345 1234567'); // a phone-like search text fills only the phone
+    expect(field(dialog, Q.name).value).toBe('');
+    await userEvent.setup().click(saveButton(dialog));
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(Q.nameRequired);
+    expect(shell.creates()).toHaveLength(0);
+  });
+
+  it('the request builder never makes a name out of whitespace', () => {
+    expect(buildQuickAddRequest({ name: '  ', phone: '0300', village: '' }).fields).not.toHaveProperty('name_en');
+    expect(buildQuickAddRequest({ name: '  ', phone: '0300', village: '' }).fields).not.toHaveProperty('name_ur');
+  });
+});
+
+describe('the dialog cannot be closed while it saves', () => {
+  const heldCreate = () => {
+    const g = gate();
+    const shell = fakeShell(STAFF, { createReplies: [async () => (await g.wait, NEW_CUSTOMER('Imran'))] });
+    return { g, shell };
+  };
+
+  it('Escape and a click on the backdrop do nothing; once the answer is in the customer is on the bill', async () => {
+    const { g, shell } = heldCreate();
+    show(shell);
+    const dialog = await openForm('Imran');
+    await userEvent.setup().click(saveButton(dialog));
+    await waitFor(() => expect(saveButton(dialog).textContent).toBe(Q.saving));
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.mouseDown(backdropOf(dialog));
+    expect(screen.queryByRole('dialog', { name: Q.title })).toBe(dialog);
+    g.release();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(customerName()).toBe('Imran');
+  });
+
+  it('Back is disabled while saving and the button says "Saving…"', async () => {
+    const { g, shell } = heldCreate();
+    show(shell);
+    const dialog = await openForm('Imran');
+    await userEvent.setup().click(saveButton(dialog));
+    await waitFor(() => expect(saveButton(dialog).textContent).toBe('Saving…'));
+    expect((within(dialog).getByRole('button', { name: Q.back }) as HTMLButtonElement).disabled).toBe(true);
+    expect(saveButton(dialog).disabled).toBe(true);
+    g.release();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('after a failed save the dialog closes with Escape again', async () => {
+    const shell = fakeShell(STAFF, { createReplies: [() => fail('INTERNAL')] });
+    show(shell);
+    const dialog = await openForm('Imran');
+    await userEvent.setup().click(saveButton(dialog));
+    await waitFor(() => expect(alerts()).toHaveLength(1));
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('the duplicate warning ignores Escape and the backdrop while "Use existing" is reading the customer', async () => {
+    const g = gate();
+    const shell = fakeShell(STAFF, { existing: [RASHID, ADVANCE] }, { 'customers:get': async () => (await g.wait, ok({ customer: { ...ADVANCE, version: 1 }, balance: ADVANCE.balance })) });
+    show(shell);
+    const dialog = await openForm('Rashid');
+    await userEvent.setup().click(saveButton(dialog));
+    const dup = await screen.findByRole('dialog', { name: en.customerForm.dupTitle('Rashid') });
+    await userEvent.setup().click(within(dup).getByRole('button', { name: Q.useExisting('Rashid Ali') }));
+    await waitFor(() => expect(shell.of('customers:get')).toHaveLength(1));
+    fireEvent.keyDown(dup, { key: 'Escape' });
+    fireEvent.mouseDown(backdropOf(dup));
+    expect(within(dup).getByRole('button', { name: en.customerForm.dupCancel }).hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByRole('dialog', { name: en.customerForm.dupTitle('Rashid') })).toBe(dup);
+    g.release();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(customerName()).toBe('Rashid Ali');
+  });
+
+  it('while "Save as new" is saving, the picker cannot be closed either', async () => {
+    const g = gate();
+    const shell = fakeShell(STAFF);
+    const original = shell.api.customers.create;
+    let calls = 0;
+    shell.api.customers.create = async (input) => {
+      calls += 1;
+      if (calls === 2) await g.wait;
+      return original(input);
+    };
+    show(shell);
+    const dialog = await openForm('Rashid');
+    await userEvent.setup().click(saveButton(dialog));
+    const dup = await screen.findByRole('dialog', { name: en.customerForm.dupTitle('Rashid') });
+    await userEvent.setup().click(within(dup).getByRole('button', { name: en.customerForm.dupSaveNew }));
+    await waitFor(() => expect(saveButton(dialog).textContent).toBe(Q.saving));
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeNull();
+    g.release();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(customerName()).toBe('Rashid');
+  });
+});
+
+describe('what counts as a name, a phone and Urdu', () => {
+  it('detects Urdu in the Arabic Supplement range and in the presentation forms', () => {
+    expect(hasUrduScript('ݐ')).toBe(true); // Arabic Supplement, first letter
+    expect(hasUrduScript('ݿ')).toBe(true); // Arabic Supplement, last
+    expect(hasUrduScript('ﭖ')).toBe(true); // Presentation Forms-A (peh)
+    expect(hasUrduScript('ﺍ')).toBe(true); // Presentation Forms-B (alef)
+    expect(hasUrduScript('ﻼ')).toBe(true); // Presentation Forms-B (lam-alef)
+    expect(hasUrduScript('ࢠ')).toBe(true); // Arabic Extended-A
+    expect(hasUrduScript('Ali Raza')).toBe(false);
+    expect(buildQuickAddRequest({ name: 'ﺍﻟﻑ', phone: '', village: '' }).fields).toEqual({ name_ur: 'ﺍﻟﻑ' });
+    expect(buildQuickAddRequest({ name: 'ݐ', phone: '', village: '' }).fields).toEqual({ name_ur: 'ݐ' });
+  });
+
+  it('phone-like text fills the phone: "+92 300" does; "Ali 12345" is a name; a single digit is a name', () => {
+    expect(startForm('+92 300')).toEqual({ name: '', phone: '+92 300', village: '' });
+    expect(startForm('0300-1234567')).toEqual({ name: '', phone: '0300-1234567', village: '' });
+    expect(startForm('Ali 12345')).toEqual({ name: 'Ali 12345', phone: '', village: '' });
+    expect(startForm('7')).toEqual({ name: '7', phone: '', village: '' });
+    expect(startForm('1234')).toEqual({ name: '1234', phone: '', village: '' }); // under 5 characters: not a phone
+  });
+
+  it('the typed phone is trimmed in the request', async () => {
+    const shell = fakeShell();
+    show(shell);
+    const dialog = await openForm('Imran');
+    const u = userEvent.setup();
+    await u.type(field(dialog, Q.phone), '  0321 7654321  ');
+    await u.click(saveButton(dialog));
+    await waitFor(() => expect(shell.creates()).toHaveLength(1));
+    expect(shell.creates()[0]!.input).toEqual({ fields: { name_en: 'Imran', phone: '0321 7654321' } });
+  });
+
+  it('the duplicate check is asked with the typed name AND phone', async () => {
+    const shell = fakeShell();
+    show(shell);
+    const dialog = await openForm('Rashid');
+    await userEvent.setup().type(field(dialog, Q.phone), '0300 1112223');
+    await userEvent.setup().click(saveButton(dialog));
+    await screen.findByRole('dialog', { name: en.customerForm.dupTitle('Rashid') });
+    expect(shell.of('customers:findDuplicates')[0]!.input).toEqual({ name_en: 'Rashid', phone: '0300 1112223' });
+  });
+});
+
+describe('moving around the picker', () => {
+  it('Back keeps the typed search text and the customer that was chosen', async () => {
+    const shell = fakeShell();
+    show(shell);
+    const u = userEvent.setup();
+    fireEvent.keyDown(window, { key: 'F4' });
+    const dialog = await picker();
+    await u.type(within(dialog).getByLabelText(T.customer.searchLabel), 'Rash');
+    await u.click(await within(dialog).findByRole('option', { name: /Rashid/ }));
+    await u.click(within(dialog).getByRole('button', { name: Q.newCustomer }));
+    await u.click(within(await form()).getByRole('button', { name: Q.back }));
+    const again = await picker();
+    expect((within(again).getByLabelText(T.customer.searchLabel) as HTMLInputElement).value).toBe('Rash');
+    expect((await within(again).findByRole('option', { name: /Rashid/ })).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('the duplicate Cancel keeps every field that was typed', async () => {
+    const shell = fakeShell();
+    show(shell);
+    const dialog = await openForm('Rashid');
+    const u = userEvent.setup();
+    await u.type(field(dialog, Q.phone), '0300 5551234');
+    await u.type(field(dialog, Q.village), 'Chak 77');
+    await u.click(saveButton(dialog));
+    const dup = await screen.findByRole('dialog', { name: en.customerForm.dupTitle('Rashid') });
+    await u.click(within(dup).getByRole('button', { name: en.customerForm.dupCancel }));
+    const back = await form();
+    expect([field(back, Q.name).value, field(back, Q.phone).value, field(back, Q.village).value]).toEqual(['Rashid', '0300 5551234', 'Chak 77']);
+    expect(shell.creates()).toHaveLength(1);
+  });
+
+  it("a customer already on the bill is REPLACED by the new one, at the new customer's price type", async () => {
+    const shell = fakeShell(STAFF, { createdPriceType: 'wholesale' });
+    show(shell);
+    const u = userEvent.setup();
+    fireEvent.keyDown(window, { key: 'F4' });
+    const first = await picker();
+    await u.type(within(first).getByLabelText(T.customer.searchLabel), 'Rash');
+    await u.click(await within(first).findByRole('option', { name: /Rashid/ }));
+    await u.click(within(first).getByRole('button', { name: T.customer.use('Rashid') }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(customerName()).toBe('Rashid');
+    expect(screen.getByRole('radio', { name: T.retail }).getAttribute('aria-checked')).toBe('true');
+    const dialog = await openForm('Imran');
+    await u.click(saveButton(dialog));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(customerName()).toBe('Imran');
+    expect(document.body.textContent).not.toContain('Rashid');
+    expect(screen.getByRole('radio', { name: T.wholesale }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('opening F4 again starts with an empty search', async () => {
+    const shell = fakeShell();
+    show(shell);
+    const u = userEvent.setup();
+    fireEvent.keyDown(window, { key: 'F4' });
+    const first = await picker();
+    await u.type(within(first).getByLabelText(T.customer.searchLabel), 'Rash');
+    fireEvent.keyDown(first, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.keyDown(window, { key: 'F4' });
+    expect((within(await picker()).getByLabelText(T.customer.searchLabel) as HTMLInputElement).value).toBe('');
+  });
+
+  it('the Add "text" button opens the form with that text as the name', async () => {
+    const shell = fakeShell();
+    show(shell);
+    const u = userEvent.setup();
+    fireEvent.keyDown(window, { key: 'F4' });
+    const dialog = await picker();
+    await u.type(within(dialog).getByLabelText(T.customer.searchLabel), 'Zubair');
+    await u.click(await within(dialog).findByRole('button', { name: Q.addText('Zubair') }));
+    expect(field(await form(), Q.name).value).toBe('Zubair');
+  });
+});
+
 describe('source of the quick-add files', () => {
   const dir = join(__dirname, '../src/pages/pos');
   const files = readdirSync(dir).filter((f) => f.startsWith('customer-quick-add') || f === 'customer-dialog.tsx');

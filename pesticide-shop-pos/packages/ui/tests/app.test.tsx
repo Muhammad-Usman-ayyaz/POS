@@ -49,10 +49,15 @@ function fakeShell(initial: Partial<AppState> = {}) {
   return { api, calls, handlers, setState: (next: Partial<AppState>) => void (state = { ...state, ...next }), get state() { return state; } };
 }
 
-const user = () => userEvent.setup();
+// ONE user-event instance per test. A new `userEvent.setup()` for every step (the old `user()`) gave each step its own idea of where the cursor is, and under load the typed
+// letters of one field landed in the wrong places ("aPleist" for "Pesticide Club Shop"). `delay: null` also drops the timer wait between keystrokes, which is where a loaded
+// machine used to run out of the 5 s a test gets.
+let ui = userEvent.setup({ delay: null });
+const user = () => ui;
 const root = () => document.getElementById('app-root')!;
 
 beforeEach(() => {
+  ui = userEvent.setup({ delay: null });
   location.hash = '';
 });
 afterEach(cleanup);
@@ -274,9 +279,8 @@ describe('first-launch setup', () => {
   const fill = async (over: Partial<Record<'Shop name' | 'Owner name' | 'Username' | 'Password' | 'Type the password again', string>> = {}) => {
     const values = { 'Shop name': 'Pesticide Club Shop', 'Owner name': 'Ali', Username: 'ali', Password: 'long-enough-1', 'Type the password again': 'long-enough-1', ...over };
     for (const [label, value] of Object.entries(values)) {
-      const field = screen.getByLabelText(label);
-      await user().clear(field);
-      if (value) await user().type(field, value);
+      // the whole value at once: typing a long text letter by letter is what a loaded machine garbled
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
     }
   };
 
