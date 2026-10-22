@@ -1,4 +1,4 @@
-import { BaseUnit, Flag, HeldCartSchema, IsoDate, NonNegPaisa, PaymentMethod, PriceType, Qty, TaxRateBp } from '@pos/core';
+import { BaseUnit, Flag, HeldCartSchema, IsoDate, NonNegPaisa, PaymentMethod, PriceType, Qty, RETURN_REASONS, TaxRateBp } from '@pos/core';
 import { z } from 'zod';
 import type {
   AddSizeResult,
@@ -33,6 +33,13 @@ import type {
   SaleView,
   SalesReturnResult,
   SessionUser,
+  // Phase 7 returns and voids
+  InvoiceForReturnView,
+  ReturnApprovalGrant,
+  ReturnDetailView,
+  ReturnListView,
+  ReturnPreviewView,
+  VoidInvoiceView,
   SetupResult,
   // M2 (Phase 6) customers, payments, statement
   CustomerListView,
@@ -212,14 +219,45 @@ export const CustomerSearchInput = z.strictObject({
   limit: z.number().int().min(1).max(50).optional(),
 });
 
+// ---------- BEGIN Phase 7: returns and voids ----------
+// No approved_by / requested_by / created_by anywhere: the shell takes the user from the session and the approver from the owner's own
+// sign-in or from the one-use token. `tax_refund`, the refund and the cash / Khata split are worked out by the core and never accepted.
+const ReturnReasonSchema = z.enum(RETURN_REASONS);
+const ReturnCondition = z.enum(['resellable', 'damaged', 'expired']);
+const ReturnLine = z.strictObject({
+  invoice_item_id: Id,
+  /** Base units, in the line's own unit (500 g of a 2.5 kg line, whole packs of a sealed size). */
+  qty: Qty,
+  condition: ReturnCondition,
+  reason: ReturnReasonSchema,
+});
+/** A draft return to price: the reason may still be missing (the reply lists it under `issues`). */
+export const ReturnsPreviewInput = z.strictObject({
+  invoice_id: Id,
+  items: z.array(ReturnLine.extend({ reason: ReturnReasonSchema.optional() })).min(1).max(100),
+});
 export const SalesReturnCreateInput = z.strictObject({
   invoice_id: Id,
-  reason: z.string().min(1).max(200).optional(),
-  refund_method: z.enum(['cash', 'khata_credit']),
-  items: z
-    .array(z.strictObject({ invoice_item_id: Id, qty: Qty, condition: z.enum(['resellable', 'damaged', 'expired']) }))
-    .min(1),
+  note: z.string().trim().min(1).max(200).optional(),
+  items: z.array(ReturnLine).min(1).max(100),
+  /** Staff only: the owner's one-use approval from `approval:requestReturn`, for exactly this return. The owner needs none. */
+  approval_token: z.string().min(16).max(200).optional(),
 });
+/** The owner types their own password at the counter so staff can complete THIS return (these lines, quantities, conditions and reasons). */
+export const ApprovalRequestReturnInput = z.strictObject({
+  username: Username,
+  password: CurrentPassword,
+  return: z.strictObject({ invoice_id: Id, items: z.array(ReturnLine).min(1).max(100) }),
+});
+export const ReturnsListInput = z.strictObject({
+  query: z.string().max(100).optional(),
+  from: IsoDate.optional(),
+  to: IsoDate.optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+export const InvoiceVoidInput = z.strictObject({ invoice_id: Id, reason: z.string().trim().min(1).max(200) });
+// ---------- END Phase 7 ----------
 
 // ---------- invoices and printing ----------
 // No user id anywhere: the shell takes the signed-in user from the session. Nothing here (or in its replies) carries a cost.
@@ -345,6 +383,8 @@ export const CustomerTermsInput = z.strictObject({
 export const CustomerSettingsSetInput = z.strictObject({
   default_credit_limit: LimitPaisa.optional(),
   show_farmer_fields: z.boolean().optional(),
+  /** Q8: give a returning customer Khata credit even for the part they paid. Owner only (the same capability as the other two). */
+  refund_paid_part_to_khata: z.boolean().optional(),
 });
 export const PaymentReceiveInput = z.strictObject({
   customer_id: Id,
@@ -381,6 +421,14 @@ export const ExportStatementInput = z
   .strictObject({ customer_id: Id, from: CalendarDay.optional(), to: CalendarDay.optional() })
   .refine((i) => i.from === undefined || i.to === undefined || i.from <= i.to, { message: 'from must not be after to', path: ['from'] });
 // ---------- END Phase 6 M6 ----------
+
+export const PrintReturnSlipInput = z.strictObject({
+  return_id: Id,
+  /** 'receipt' is the 80 mm slip, 'invoice' the A4 credit note. */
+  kind: DocumentKindSchema,
+  language: Language2.optional(),
+  output: z.enum(['printer', 'pdf']).optional(),
+});
 
 /** channel -> input schema. Add a channel here first, then implement it in the shell. */
 export const contract = {
@@ -504,6 +552,15 @@ export const contract = {
   'print:paymentReceipt': { input: PrintPaymentReceiptInput },
   'khata:exportStatement': { input: ExportStatementInput },
   // ---------- END Phase 6 M6 ----------
+  // ---------- BEGIN Phase 7 ----------
+  'returns:preview': { input: ReturnsPreviewInput },
+  'returns:forInvoice': { input: z.strictObject({ invoice_id: Id }) },
+  'returns:list': { input: ReturnsListInput },
+  'returns:get': { input: z.strictObject({ return_id: Id }) },
+  'approval:requestReturn': { input: ApprovalRequestReturnInput },
+  'invoices:void': { input: InvoiceVoidInput },
+  'print:returnSlip': { input: PrintReturnSlipInput },
+  // ---------- END Phase 7 ----------
   // ---------- BEGIN Phase 6 wrap-up ----------
   // The owner's correction of a wrong opening balance: ONE `adjustment` ledger row and an audit row. No customer, user or date comes from anywhere but the session.
   'khata:adjustOpening': { input: z.strictObject({ customer_id: Id, delta: z.number().int().min(-MAX_PAISA).max(MAX_PAISA).refine((n) => n !== 0, { message: 'cannot be 0' }), reason: z.string().trim().min(1).max(200) }) },
@@ -582,6 +639,15 @@ export interface Outputs {
   'print:paymentReceipt': PrintResult;
   'khata:exportStatement': ExportStatementResult;
   // ---------- END Phase 6 M6 ----------
+  // ---------- BEGIN Phase 7 ----------
+  'returns:preview': ReturnPreviewView;
+  'returns:forInvoice': InvoiceForReturnView;
+  'returns:list': ReturnListView;
+  'returns:get': ReturnDetailView;
+  'approval:requestReturn': ReturnApprovalGrant;
+  'invoices:void': VoidInvoiceView;
+  'print:returnSlip': PrintResult;
+  // ---------- END Phase 7 ----------
   // ---------- BEGIN Phase 6 wrap-up ----------
   'khata:adjustOpening': AdjustOpeningView;
   // ---------- END Phase 6 wrap-up ----------

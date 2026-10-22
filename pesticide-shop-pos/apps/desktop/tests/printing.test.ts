@@ -96,6 +96,9 @@ describe('invoice history, receipts and printing', () => {
         // Phase 6 M6 (their own tests are in statement-printing.test.ts)
         'print:statement': { customer_id: sold.invoice.id, kind: 'receipt' },
         'print:paymentReceipt': { payment_id: sold.invoice.id },
+        // Phase 7
+        'invoices:void': { invoice_id: sold.invoice.id, reason: 'x' },
+        'print:returnSlip': { return_id: sold.invoice.id, kind: 'receipt' },
       };
       expect(Object.keys(inputs).sort()).toEqual(channels.filter((c) => /^(invoices|print|printers):/.test(c)).sort());
       for (const [channel, input] of Object.entries(inputs)) {

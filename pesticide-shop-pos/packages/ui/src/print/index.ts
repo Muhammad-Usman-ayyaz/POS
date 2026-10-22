@@ -11,4 +11,8 @@ export { PaymentReceiptDocument } from './payment-receipt-document.js';
 export { khataCss, renderPaymentReceiptHtml, renderPaymentReceiptMarkup, renderStatementHtml, renderStatementMarkup } from './khata-render.js';
 export { KHATA_LABELS } from './khata-labels.js';
 export { balanceParts, calendarDayText, dayText, rangeText } from './khata-format.js';
+// Phase 7: return slip (80 mm) and credit note (A4)
+export { ReturnSlipA4, ReturnSlipReceipt } from './return-slip-document.js';
+export { renderReturnSlipHtml, renderReturnSlipMarkup, returnCss } from './return-render.js';
+export { RETURN_LABELS } from './return-labels.js';
 export { CSV_BOM, csvCell, rupeesText, safeText, statementCsv, statementFileName, STATEMENT_CSV_HEADER } from './statement-csv.js';

@@ -88,7 +88,7 @@ describe('terms and shop settings are the owner\'s', () => {
     expect(error.code).toBe('NOT_AUTHORIZED');
     expect(error.params).toEqual({ capability: 'customers.settings' });
     expect(footprint()).toEqual(before);
-    expect(await h()['customers:getSettings']({})).toEqual({ default_credit_limit: 0, show_farmer_fields: false }); // staff can read them
+    expect(await h()['customers:getSettings']({})).toEqual({ default_credit_limit: 0, show_farmer_fields: false, refund_paid_part_to_khata: false }); // staff can read them
   });
 
   it('the owner sets terms: the change is audited with the OWNER from the session (before and after), an unchanged save writes nothing', async () => {
@@ -133,9 +133,9 @@ describe('terms and shop settings are the owner\'s', () => {
 
   it('the owner changes the settings: audited once per setting that really changed, with the owner; an unchanged value writes nothing', async () => {
     await shop.signInAs('owner');
-    expect(await h()['customers:getSettings']({})).toEqual({ default_credit_limit: 0, show_farmer_fields: false });
+    expect(await h()['customers:getSettings']({})).toEqual({ default_credit_limit: 0, show_farmer_fields: false, refund_paid_part_to_khata: false });
     const set = await h()['customers:setSettings']({ default_credit_limit: 750_000, show_farmer_fields: true });
-    expect(set).toEqual({ default_credit_limit: 750_000, show_farmer_fields: true });
+    expect(set).toEqual({ default_credit_limit: 750_000, show_farmer_fields: true, refund_paid_part_to_khata: false });
     expect(await h()['customers:getSettings']({})).toEqual(set);
     const rows = audits('customer_setting_changed');
     expect(rows.map((r) => [r.user_id, JSON.parse(r.details)])).toEqual([
@@ -575,7 +575,7 @@ describe('more payment, terms and settings rules through the handlers', () => {
     await shop.signInAs('owner');
     await h()['customers:setSettings']({ default_credit_limit: 750_000 });
     const set = await h()['customers:setSettings']({ show_farmer_fields: true });
-    expect(set).toEqual({ default_credit_limit: 750_000, show_farmer_fields: true });
+    expect(set).toEqual({ default_credit_limit: 750_000, show_farmer_fields: true, refund_paid_part_to_khata: false });
     expect(await h()['customers:setSettings']({})).toEqual(set);
     expect(audits('customer_setting_changed').map((r) => JSON.parse(r.details).field)).toEqual(['default_credit_limit', 'show_farmer_fields']);
   });

@@ -39,7 +39,7 @@ export interface LineQuantity {
   rateText: string;
 }
 
-export function lineQuantity(line: DocumentLine, language: DocumentLanguage): LineQuantity {
+export function lineQuantity(line: Pick<DocumentLine, 'qty' | 'pack_size' | 'base_unit' | 'unit_price'>, language: DocumentLanguage): LineQuantity {
   const labels = LABELS[language];
   const loose = line.pack_size > 1 && line.qty % line.pack_size !== 0;
   if (!loose) {
@@ -66,7 +66,7 @@ export function lineName(line: Pick<DocumentLine, 'name_en' | 'name_ur'>, langua
 }
 
 /** "Rashid · Chak 12": the customer's name, then the village. null for a walk-in sale. */
-export function customerText(data: Pick<InvoiceDocumentData, 'customer'>, language: DocumentLanguage): string | null {
+export function customerText(data: { customer: Pick<NonNullable<InvoiceDocumentData['customer']>, 'name_en' | 'name_ur' | 'village'> | null }, language: DocumentLanguage): string | null {
   if (!data.customer) return null;
   const name = lineName(data.customer, language);
   const village = data.customer.village?.trim();

@@ -19,7 +19,7 @@ const samples: Record<Channel, () => Record<string, unknown>> = {
   'sale:create': () => ({ paid_amount: 50_000, lines: [{ product_id: id(), qty: 1000 }] }),
   'customers:search': () => ({ query: 'rashid' }),
   'approval:request': () => ({ username: 'owner', password: 'x', actions: ['credit_override'], sale: { paid_amount: 0, lines: [{ product_id: id(), qty: 1000 }] } }),
-  'salesReturn:create': () => ({ invoice_id: id(), refund_method: 'khata_credit', items: [{ invoice_item_id: id(), qty: 1000, condition: 'resellable' }] }),
+  'salesReturn:create': () => ({ invoice_id: id(), items: [{ invoice_item_id: id(), qty: 1000, condition: 'resellable', reason: 'other' }] }),
   'invoices:list': () => ({ query: 'rashid', from: '2026-10-01', to: '2026-10-31', status: 'active', limit: 20, offset: 0 }),
   'invoices:get': () => ({ invoice_id: id() }),
   'invoices:receipt': () => ({ invoice_id: id(), kind: 'invoice' }),
@@ -68,6 +68,15 @@ const samples: Record<Channel, () => Record<string, unknown>> = {
   'print:paymentReceipt': () => ({ payment_id: id(), language: 'en', output: 'printer' }),
   'khata:exportStatement': () => ({ customer_id: id(), from: '2026-10-01' }),
   // END Phase 6 M6 samples
+  // BEGIN Phase 7 samples
+  'returns:preview': () => ({ invoice_id: id(), items: [{ invoice_item_id: id(), qty: 500, condition: 'damaged' }] }),
+  'returns:forInvoice': () => ({ invoice_id: id() }),
+  'returns:list': () => ({ query: 'RET-A', from: '2026-10-01', to: '2026-10-31', limit: 20, offset: 0 }),
+  'returns:get': () => ({ return_id: id() }),
+  'approval:requestReturn': () => ({ username: 'owner', password: 'x', return: { invoice_id: id(), items: [{ invoice_item_id: id(), qty: 500, condition: 'resellable', reason: 'changed_mind' }] } }),
+  'invoices:void': () => ({ invoice_id: id(), reason: 'Entered for the wrong customer' }),
+  'print:returnSlip': () => ({ return_id: id(), kind: 'receipt', language: 'ur', output: 'pdf' }),
+  // END Phase 7 samples
   // BEGIN Phase 6 wrap-up samples
   'khata:adjustOpening': () => ({ customer_id: id(), delta: -25_000, reason: 'Wrote Rs 2,500 too much' }),
   // END Phase 6 wrap-up samples
@@ -210,9 +219,19 @@ describe('field rules', () => {
     }
     // nor can a return line carry a tax_refund (the return service works it out)
     const back = contract['salesReturn:create'].input;
-    const item = { invoice_item_id: id(), qty: 1000, condition: 'resellable' };
-    expect(back.safeParse({ invoice_id: id(), refund_method: 'khata_credit', items: [item] }).success).toBe(true);
-    expect(back.safeParse({ invoice_id: id(), refund_method: 'khata_credit', items: [{ ...item, tax_refund: 1 }] }).success).toBe(false);
+    const item = { invoice_item_id: id(), qty: 1000, condition: 'resellable', reason: 'other' };
+    expect(back.safeParse({ invoice_id: id(), items: [item] }).success).toBe(true);
+    expect(back.safeParse({ invoice_id: id(), items: [{ ...item, tax_refund: 1 }] }).success).toBe(false);
+    // nor who approved it, who started it, how it is paid or what it refunds: the shell and the core decide those
+    for (const key of ['approved_by', 'requested_by', 'created_by', 'refund_method', 'refund_amount', 'cash_amount', 'khata_amount', 'total']) {
+      expect(back.safeParse({ invoice_id: id(), items: [item], [key]: key === 'refund_method' ? 'cash' : 'x' }).success, `${key} on the return`).toBe(false);
+      expect(back.safeParse({ invoice_id: id(), items: [{ ...item, [key]: 1 }] }).success, `${key} on a return line`).toBe(false);
+    }
+    // a return line needs a known reason, and a void needs a reason with something in it
+    expect(back.safeParse({ invoice_id: id(), items: [{ ...item, reason: 'because' }] }).success).toBe(false);
+    expect(back.safeParse({ invoice_id: id(), items: [{ invoice_item_id: id(), qty: 1000, condition: 'resellable' }] }).success).toBe(false);
+    expect(contract['invoices:void'].input.safeParse({ invoice_id: id(), reason: '   ' }).success).toBe(false);
+    expect(contract['invoices:void'].input.safeParse({ invoice_id: id(), reason: 'x', voided_by: id() }).success).toBe(false);
   });
 
   it('stock and Khata changes cannot be zero', () => {
@@ -224,7 +243,7 @@ describe('field rules', () => {
 describe('buildApi', () => {
   it('turns channels into named functions: app:getState is api.app.getState', () => {
     const api = buildApi(async () => ({ ok: true, data: null }));
-    expect(Object.keys(api).sort()).toEqual(['app', 'approval', 'auth', 'bills', 'brands', 'catalogue', 'categories', 'customers', 'invoices', 'khata', 'payments', 'prefs', 'print', 'printers', 'reports', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
+    expect(Object.keys(api).sort()).toEqual(['app', 'approval', 'auth', 'bills', 'brands', 'catalogue', 'categories', 'customers', 'invoices', 'khata', 'payments', 'prefs', 'print', 'printers', 'reports', 'returns', 'sale', 'salesReturn', 'setup', 'stock', 'suppliers']);
     expect(Object.keys(api.auth).sort()).toEqual(['login', 'logout', 'me', 'regenerateRecoveryCode', 'resetOwnerPassword']);
     // one function per channel, nothing else
     const functions = Object.values(api).flatMap((ns) => Object.values(ns as Record<string, unknown>));

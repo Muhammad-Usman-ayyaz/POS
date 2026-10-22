@@ -30,7 +30,7 @@ const EXPECTED: Record<Channel, Who> = {
   'sale:create': 'signed-in',
   'customers:search': 'signed-in',
   'approval:request': 'signed-in',
-  'salesReturn:create': 'owner',
+  'salesReturn:create': 'signed-in',
   'invoices:list': 'signed-in',
   'invoices:get': 'signed-in',
   'invoices:receipt': 'signed-in',
@@ -80,6 +80,14 @@ const EXPECTED: Record<Channel, Who> = {
   'print:statement': 'signed-in',
   'print:paymentReceipt': 'signed-in',
   'khata:exportStatement': 'signed-in',
+  // Phase 7
+  'returns:preview': 'signed-in',
+  'returns:forInvoice': 'signed-in',
+  'returns:list': 'signed-in',
+  'returns:get': 'signed-in',
+  'approval:requestReturn': 'signed-in',
+  'invoices:void': 'owner',
+  'print:returnSlip': 'signed-in',
   // END Phase 6 M6 matrix rows
 };
 
@@ -101,7 +109,7 @@ const SAMPLES: Record<Channel, () => Record<string, unknown>> = {
   'sale:create': () => ({ paid_amount: 50_000, lines: [{ product_id: randomUUID(), qty: 1000 }] }),
   'customers:search': () => ({ query: 'rashid' }),
   'approval:request': () => ({ username: 'owner', password: 'x', actions: ['credit_override'], sale: { paid_amount: 0, lines: [{ product_id: randomUUID(), qty: 1000 }] } }),
-  'salesReturn:create': () => ({ invoice_id: randomUUID(), refund_method: 'khata_credit', items: [{ invoice_item_id: randomUUID(), qty: 1000, condition: 'resellable' }] }),
+  'salesReturn:create': () => ({ invoice_id: randomUUID(), items: [{ invoice_item_id: randomUUID(), qty: 1000, condition: 'resellable', reason: 'other' }] }),
   'invoices:list': () => ({ query: 'rashid' }),
   'invoices:get': () => ({ invoice_id: randomUUID() }),
   'invoices:receipt': () => ({ invoice_id: randomUUID() }),
@@ -150,6 +158,15 @@ const SAMPLES: Record<Channel, () => Record<string, unknown>> = {
   'print:paymentReceipt': () => ({ payment_id: randomUUID() }),
   'khata:exportStatement': () => ({ customer_id: randomUUID(), from: '2026-10-01', to: '2026-10-31' }),
   // END Phase 6 M6 samples
+  // Phase 7 samples
+  'returns:preview': () => ({ invoice_id: randomUUID(), items: [{ invoice_item_id: randomUUID(), qty: 500, condition: 'damaged' }] }),
+  'returns:forInvoice': () => ({ invoice_id: randomUUID() }),
+  'returns:list': () => ({ query: 'RET' }),
+  'returns:get': () => ({ return_id: randomUUID() }),
+  'approval:requestReturn': () => ({ username: 'owner', password: 'x', return: { invoice_id: randomUUID(), items: [{ invoice_item_id: randomUUID(), qty: 500, condition: 'resellable', reason: 'other' }] } }),
+  'invoices:void': () => ({ invoice_id: randomUUID(), reason: 'Entered for the wrong customer' }),
+  'print:returnSlip': () => ({ return_id: randomUUID(), kind: 'receipt' }),
+  // END Phase 7 samples
 };
 
 /** A stand-in for Electron's ipcMain: calls arrive the way the renderer's would. */
@@ -478,6 +495,11 @@ describe('with a real shop', () => {
       // Phase 6 M6: a payment by the owner (its receipt is printed by staff below)
       const ownersPayment = await h()['payments:receive']({ customer_id: shop.demo.customers['rashid']!, amount: 2_000, method: 'bank', reference_no: 'TRX-1', note: 'by his son' });
       const paymentId = ownersPayment.payment.id;
+      // Phase 7: a second sale by the owner (3 packs) and a return of one pack, so staff can preview, look up, print and list real returns
+      const toReturn = await h()['sale:create']({ customer_id: shop.demo.customers['rashid']!, paid_amount: 0, lines: [{ product_id: five.id, qty: 1500 }] });
+      const toReturnLine = toReturn.items[0]!;
+      const ownersReturn = await h()['salesReturn:create']({ invoice_id: toReturn.invoice.id, items: [{ invoice_item_id: toReturnLine.id, qty: 500, condition: 'resellable', reason: 'changed_mind' }] });
+      const returnId = ownersReturn.sales_return.id;
       await shop.signOut();
       await shop.signInAs('staff');
       const ipc = fakeIpc();
@@ -544,6 +566,23 @@ describe('with a real shop', () => {
         ],
         'print:paymentReceipt': [{ payment_id: paymentId }, { payment_id: paymentId, language: 'ur', output: 'pdf' }, { payment_id: randomUUID() }],
         'khata:exportStatement': [{ customer_id: rashid }, { customer_id: rashid, from: day(-30) }],
+        // Phase 7: as staff. Looking and pricing and printing work; completing a return needs the owner's token (APPROVAL_REQUIRED, and a forged one
+        // is APPROVAL_INVALID); approving by password needs the owner's password; voiding is the owner's (NOT_AUTHORIZED). Every reply is scanned.
+        'returns:preview': [
+          { invoice_id: toReturn.invoice.id, items: [{ invoice_item_id: toReturnLine.id, qty: 500, condition: 'resellable', reason: 'changed_mind' }] },
+          { invoice_id: toReturn.invoice.id, items: [{ invoice_item_id: toReturnLine.id, qty: 500, condition: 'damaged' }] },
+          { invoice_id: toReturn.invoice.id, items: [{ invoice_item_id: toReturnLine.id, qty: 99_000, condition: 'resellable', reason: 'other' }] }, // RETURN_EXCEEDS_SOLD
+        ],
+        'returns:forInvoice': [{ invoice_id: toReturn.invoice.id }, { invoice_id: invoiceId }, { invoice_id: randomUUID() }],
+        'returns:list': [{}, { query: 'RET' }, { query: 'rashid', from: day(-30), to: day(0) }],
+        'returns:get': [{ return_id: returnId }, { return_id: randomUUID() }],
+        'print:returnSlip': [{ return_id: returnId, kind: 'receipt' }, { return_id: returnId, kind: 'invoice', language: 'ur', output: 'pdf' }, { return_id: randomUUID(), kind: 'receipt' }],
+        'salesReturn:create': [
+          { invoice_id: toReturn.invoice.id, items: [{ invoice_item_id: toReturnLine.id, qty: 500, condition: 'resellable', reason: 'other' }] },
+          { invoice_id: toReturn.invoice.id, approval_token: 'f'.repeat(64), items: [{ invoice_item_id: toReturnLine.id, qty: 500, condition: 'resellable', reason: 'other' }] },
+        ],
+        'approval:requestReturn': [{ username: 'owner', password: 'not-the-password', return: { invoice_id: toReturn.invoice.id, items: [{ invoice_item_id: toReturnLine.id, qty: 500, condition: 'resellable', reason: 'other' }] } }],
+        'invoices:void': [{ invoice_id: toReturn.invoice.id, reason: 'staff cannot' }],
       };
       const replies: unknown[] = [];
       const replyChannels: Channel[] = [];
@@ -572,16 +611,19 @@ describe('with a real shop', () => {
       expect(replies.filter((_, i) => PHASE_6.test(replyChannels[i]!)).length).toBeGreaterThan(30); // the check looked at real replies
       // The calls were real, as STAFF: these channels really answered with data (not NOT_SIGNED_IN, not INVALID_INPUT), so a clean scan means something.
       for (const channel of ['catalogue:list', 'stock:batchesOf', 'sale:create', 'invoices:list', 'invoices:get', 'invoices:receipt', 'print:document', 'printers:list', 'print:getConfig', 'bills:hold', 'bills:list', 'bills:resume', 'bills:discard',
-        'customers:list', 'customers:get', 'customers:findDuplicates', 'customers:create', 'customers:update', 'customers:getSettings', 'payments:receive', 'khata:statement', 'print:statement', 'print:paymentReceipt', 'khata:exportStatement'] as const) {
+        'customers:list', 'customers:get', 'customers:findDuplicates', 'customers:create', 'customers:update', 'customers:getSettings', 'payments:receive', 'khata:statement', 'print:statement', 'print:paymentReceipt', 'khata:exportStatement',
+        'returns:preview', 'returns:forInvoice', 'returns:list', 'returns:get', 'print:returnSlip'] as const) {
         expect(succeeded.has(channel), `${channel} never succeeded for staff`).toBe(true);
       }
       expect(succeeded.has('print:setConfig')).toBe(false); // owner-only: staff only ever got the refusal
       expect(succeeded.has('customers:setTerms')).toBe(false);
       expect(succeeded.has('khata:adjustOpening')).toBe(false);
       expect(succeeded.has('customers:setSettings')).toBe(false);
+      expect(succeeded.has('invoices:void')).toBe(false); // owner-only: staff only ever got the refusal
+      expect(succeeded.has('salesReturn:create')).toBe(false); // without the owner's token a staff return is never made
       // ...and the Phase 6 error codes really were reached by staff (so the error replies were scanned too)
       const codes = new Set(replies.flatMap((r) => ((r as { ok: boolean; error?: { code: string } }).ok ? [] : [(r as { error: { code: string } }).error.code])));
-      for (const code of ['DUPLICATE_CUSTOMER', 'FIELD_NOT_ALLOWED', 'VERSION_CONFLICT', 'REFERENCE_REQUIRED', 'ADVANCE_NOT_CONFIRMED']) expect(codes.has(code), code).toBe(true);
+      for (const code of ['DUPLICATE_CUSTOMER', 'FIELD_NOT_ALLOWED', 'VERSION_CONFLICT', 'REFERENCE_REQUIRED', 'ADVANCE_NOT_CONFIRMED', 'APPROVAL_REQUIRED', 'APPROVAL_INVALID', 'INVALID_CREDENTIALS', 'RETURN_EXCEEDS_SOLD']) expect(codes.has(code), code).toBe(true);
     });
 
     // The same deep scan, extended to the PRINT OUTPUT: what a staff member sends to the printer or saves as a PDF (the 80 mm receipt and the A4
@@ -658,6 +700,26 @@ describe('with a real shop', () => {
         expect(csv).toContain('Payment · Cash');
         expect(findCostLeaks(clean(csv), COST)).toEqual([]);
         expect(saving.state.asked).toHaveLength(1);
+      });
+
+      // Phase 7: the return slip (80 mm) and the credit note (A4), as staff, English and Urdu, printer and PDF. The returned line was sold from a batch whose
+      // cost is the sentinel, so a slip that selected a cost column would show it.
+      it('printing a return slip and a credit note as staff puts no cost, margin or profit on any page, and says the quantity with its unit', async () => {
+        const { findCostLeaks } = await import('@pos/ui/print');
+        const { five } = await ownerSetsUp();
+        const sold = await h()['sale:create']({ customer_id: shop.demo.customers['rashid']!, paid_amount: 0, lines: [{ product_id: five.id, qty: 1000 }] });
+        const made = await h()['salesReturn:create']({ invoice_id: sold.invoice.id, items: [{ invoice_item_id: sold.items[0]!.id, qty: 500, condition: 'resellable', reason: 'changed_mind' }] });
+        await shop.signOut();
+        await shop.signInAs('staff');
+        for (const kind of KINDS) for (const language of LANGUAGES) for (const output of ['pdf', 'printer'] as const) await h()['print:returnSlip']({ return_id: made.sales_return.id, kind, language, output });
+        const pages = [...printing.state.printed, ...printing.state.pdfs].map((p) => p.html);
+        expect(pages).toHaveLength(8);
+        for (const html of pages) {
+          expect(html).toContain('data-document="return-slip"');
+          expect(findCostLeaks(html, COST), html.slice(0, 160)).toEqual([]);
+          expect(html).not.toMatch(/(?<![A-Za-z])(ml|g)(?![A-Za-z])\s*<\/span>/); // never a base unit as visible text
+        }
+        expect(pages.filter((html) => html.includes('<html lang="ur" dir="rtl">'))).toHaveLength(4);
       });
 
       it('even if the document data DID carry the cost (a field added by mistake), the renderer prints none of it', async () => {

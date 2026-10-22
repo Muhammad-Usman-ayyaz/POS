@@ -1,4 +1,4 @@
-import type { BatchStockView, Brand, CatalogueList, Category, CustomerMatch, DocumentKind, DocumentLanguage, ErrorParams, InvoiceDetail, InvoiceDocumentData, InvoiceList, PrintConfig, PrinterInfo, DomainErrorCode, NewRow, Product, ProductGroup, SaleQuote, SaleResult, SalesReturnResult, Supplier } from '@pos/core';
+import type { InvoiceForReturn, ReturnDetail, ReturnList, ReturnPreview, VoidResult, BatchStockView, Brand, CatalogueList, Category, CustomerMatch, DocumentKind, DocumentLanguage, ErrorParams, InvoiceDetail, InvoiceDocumentData, InvoiceList, PrintConfig, PrinterInfo, DomainErrorCode, NewRow, Product, ProductGroup, SaleQuote, SaleResult, SalesReturnResult, Supplier } from '@pos/core';
 
 // What the shell sends back. Plain data only: it crosses a process boundary (structured clone).
 
@@ -148,6 +148,21 @@ export type CustomerSummaryView = CustomerSummary;
 export type DuplicateMatchView = DuplicateMatch;
 export type CustomerTermsView = CustomerTermsResult;
 export type CustomerSettingsView = CustomerSettings;
+
+// ---------- Phase 7: returns and voids ----------
+/** What a draft return would do (the core's numbers; nothing here carries a cost). */
+export type ReturnPreviewView = ReturnPreview;
+/** The sale with what can still be returned on each line. */
+export type InvoiceForReturnView = InvoiceForReturn;
+export type ReturnListView = ReturnList;
+export type ReturnDetailView = ReturnDetail;
+/** The owner's one-use approval of ONE return: good for a minute, for these lines, quantities, conditions and reasons and the person asking. */
+export interface ReturnApprovalGrant {
+  token: string;
+  /** ISO date-time. */
+  expires_at: string;
+}
+export type VoidInvoiceView = VoidResult;
 export type CustomerPaymentView = CustomerPaymentResult;
 export type StatementView = Statement;
 export type AdjustOpeningView = AdjustOpeningResult;

@@ -11,6 +11,8 @@ import { DomainError } from '@pos/core';
  */
 export const CAPABILITY_ROLES = {
   'returns.approve': ['owner'],
+  /** Void a whole invoice (Q8 default: owner only; open question 7). */
+  'invoices.void': ['owner'],
   'prices.override': ['owner'],
   'credit.override': ['owner'],
   'cost.view': ['owner'],
@@ -75,7 +77,8 @@ export const CHANNEL_POLICY = {
   'sale:create': 'signed-in',
   'customers:search': 'signed-in',
   'approval:request': 'signed-in',
-  'salesReturn:create': { capability: 'returns.approve' },
+  // Staff may START a return; the owner approves it with a one-use token for exactly that return (the handler checks it). The owner needs none.
+  'salesReturn:create': 'signed-in',
 
   // Invoice history and printing: anyone signed in may look up a sale and print it (the counter reprints receipts all day). The data holds no cost.
   // Only choosing the printer and the shop's printed details is the owner's.
@@ -139,6 +142,17 @@ export const CHANNEL_POLICY = {
   'print:paymentReceipt': 'signed-in',
   'khata:exportStatement': 'signed-in',
   // ---------- END Phase 6 M6 ----------
+  // ---------- BEGIN Phase 7 ----------
+  // Returns and voids. Looking at a sale for a return, pricing a draft, the list of returns and one return hold no cost. Printing a slip is the counter's job.
+  // The owner approving a return types their own password (like the sale approvals); voiding a whole invoice is the owner's alone.
+  'returns:preview': 'signed-in',
+  'returns:forInvoice': 'signed-in',
+  'returns:list': 'signed-in',
+  'returns:get': 'signed-in',
+  'approval:requestReturn': 'signed-in',
+  'invoices:void': { capability: 'invoices.void' },
+  'print:returnSlip': 'signed-in',
+  // ---------- END Phase 7 ----------
   // ---------- BEGIN Phase 6 wrap-up ----------
   // Correcting an opening balance is the owner's, the same capability as setting one.
   'khata:adjustOpening': { capability: 'khata.openingBalance' },
