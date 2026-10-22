@@ -22,9 +22,9 @@ const daysAhead = (n: number): string => new Date(Date.now() + n * 86_400_000).t
 
 // ---- fixtures ----
 
-const size = (id: string, label: string, packSize: number) => ({ id, group_id: 'g1', pack_label: label, pack_size: packSize, is_active: 1 });
-const insecticide = (sizes = [size('p1000', '1 L', 1000), size('p500', '500 ml', 500)]) => ({ group: { id: 'g1', name_en: 'Insecticide', name_ur: 'کیڑے مار دوا' }, sizes, matched_size_ids: [], rank: 0, summary: {} });
-const fungicide = () => ({ group: { id: 'g2', name_en: 'Fungicide', name_ur: 'پھپھوندی کش' }, sizes: [size('f250', '250 ml', 250)], matched_size_ids: [], rank: 0, summary: {} });
+const size = (id: string, label: string, packSize: number) => ({ id, group_id: 'g1', pack_label: label, pack_size: packSize, base_unit: 'ml', allow_loose: 0, is_active: 1 });
+const insecticide = (sizes = [size('p1000', '1 L', 1000), size('p500', '0.5 L', 500)]) => ({ group: { id: 'g1', name_en: 'Insecticide', name_ur: 'کیڑے مار دوا' }, sizes, matched_size_ids: [], rank: 0, summary: {} });
+const fungicide = () => ({ group: { id: 'g2', name_en: 'Fungicide', name_ur: 'پھپھوندی کش' }, sizes: [size('f250', '0.25 L', 250)], matched_size_ids: [], rank: 0, summary: {} });
 
 /** What the shop already has: B-014 for the 1 L (Rs 400, expires 12 Mar 2027) and for the 500 ml (Rs 215, same expiry). */
 const BATCHES: Record<string, { batch_id: string; batch_no: string; expiry_date: string; cost_price: number; stock: number }[]> = {
@@ -50,7 +50,7 @@ function fakeShell(options: { override?: Partial<Record<Channel, Handler>>; batc
     },
     'catalogue:list': ({ query }) => {
       const q = String(query ?? '').toLowerCase();
-      const hits = q === '' ? [insecticide(), fungicide()] : q === '8961000250500' ? [insecticide([size('p500', '500 ml', 500)])] : q.includes('insect') ? [insecticide()] : q.includes('fung') ? [fungicide()] : [];
+      const hits = q === '' ? [insecticide(), fungicide()] : q === '8961000250500' ? [insecticide([size('p500', '0.5 L', 500)])] : q.includes('insect') ? [insecticide()] : q.includes('fung') ? [fungicide()] : [];
       return { ok: true, data: { hits, total: hits.length, counts: {} } };
     },
     'stock:batchesOf': ({ productId }) => ({ ok: true, data: state.batches[productId] ?? [] }),
@@ -67,8 +67,12 @@ function fakeShell(options: { override?: Partial<Record<Channel, Handler>>; batc
 }
 
 let now = en.receive;
+let shown: Language = 'en';
+/** Text without the left-to-right isolate marks Urdu numbers are wrapped in. */
+const plain = (text: string | null): string => (text ?? '').replace(/[\u2066-\u2069]/g, '').trim();
 function show(shell: ReturnType<typeof fakeShell>, user: SessionUser = OWNER, language: Language = 'en') {
   now = language === 'ur' ? ur.receive : en.receive;
+  shown = language;
   return render(
     <MemoryRouter initialEntries={['/purchases/receive']}>
       <I18nProvider language={language} onLanguageChange={() => undefined}>
@@ -94,13 +98,31 @@ const ready = async (shell = fakeShell(), user: SessionUser = OWNER, language: L
   return shell;
 };
 
+/** Click the size with that label in the open search results (the Urdu page says L as لیٹر). */
+async function pickSize(sizeLabel: string): Promise<void> {
+  const wanted = shown === 'ur' ? sizeLabel.replace(' L', ' لیٹر') : sizeLabel;
+  const list = await screen.findByRole('list');
+  const choice = await waitFor(() => {
+    const found = within(list).getAllByRole('button').find((b) => plain(b.textContent).endsWith(wanted));
+    if (!found) throw new Error(`no size "${wanted}"`);
+    return found;
+  });
+  fireEvent.click(choice);
+}
+
 /** Open the search, type, and pick the size with that label. */
 async function addLine(typed: string, sizeLabel: string): Promise<void> {
   const opener = screen.queryByRole('button', { name: f.addLine });
   if (opener) fireEvent.click(opener);
   set(screen.getByRole('searchbox', { name: f.searchLabel }), typed);
   // The results only: a line already on the form has a "Remove ... 1 L" button that would match too.
-  const choice = await within(await screen.findByRole('list')).findByRole('button', { name: new RegExp(`${sizeLabel}$`) });
+  const wanted = shown === 'ur' ? sizeLabel.replace(' L', ' لیٹر') : sizeLabel;
+  const list = await screen.findByRole('list');
+  const choice = await waitFor(() => {
+    const found = within(list).getAllByRole('button').find((b) => plain(b.textContent).endsWith(wanted));
+    if (!found) throw new Error(`no size "${wanted}"`);
+    return found;
+  });
   fireEvent.click(choice);
 }
 
@@ -242,7 +264,7 @@ describe('lines', () => {
     set(box, '8961000250500');
     fireEvent.keyDown(box, { key: 'Enter' }); // at once, as a scanner does: the answer is not here yet
     await waitFor(() => expect(document.querySelectorAll('[data-line]')).toHaveLength(1));
-    expect(within(lineOf(1)).getByText('500 ml')).toBeTruthy();
+    expect(within(lineOf(1)).getByText('0.5 L')).toBeTruthy();
     expect(shell.receives()).toHaveLength(0);
   });
 
@@ -251,7 +273,7 @@ describe('lines', () => {
     fireEvent.click(screen.getByRole('button', { name: f.addLine }));
     const box = screen.getByRole('searchbox', { name: f.searchLabel });
     set(box, 'fung');
-    await within(screen.getByRole('list')).findByRole('button', { name: /250 ml$/ }); // the list now has exactly one size
+    await within(screen.getByRole('list')).findByRole('button', { name: /0\.25 L$/ }); // the list now has exactly one size
     set(box, 'insect');
     fireEvent.keyDown(box, { key: 'Enter' }); // the list on screen is still Fungicide's
     await within(screen.getByRole('list')).findByRole('button', { name: /1 L$/ });
@@ -292,7 +314,7 @@ describe('lines', () => {
   it('the line total is packs times cost per pack, and the footer counts lines, packs and the total cost', async () => {
     await ready();
     await fillLine(1, 'insect', '1 L', { batch: 'B-020', expiry: '2027-05-01', packs: '12', cost: '400' });
-    await fillLine(2, 'insect', '500 ml', { batch: 'B-020', expiry: '2027-05-01', packs: '20', cost: '215' });
+    await fillLine(2, 'insect', '0.5 L', { batch: 'B-020', expiry: '2027-05-01', packs: '20', cost: '215' });
     expect(within(lineOf(1)).getByText('Rs 4,800')).toBeTruthy();
     expect(within(lineOf(2)).getByText('Rs 4,300')).toBeTruthy();
     expect(screen.getByText(f.summary(2, 32))).toBeTruthy();
@@ -317,7 +339,7 @@ describe('Receive', () => {
     set(screen.getByLabelText(f.invoiceNo), 'GV-20418');
     set(screen.getByLabelText(f.dateReceived), daysAgo(1));
     await fillLine(1, 'insect', '1 L', { batch: 'B-020', expiry: '2027-05-01', packs: '12', cost: '400' });
-    await fillLine(2, 'insect', '500 ml', { batch: 'B-021', expiry: '2027-06-30', packs: '20', cost: '215.50' });
+    await fillLine(2, 'insect', '0.5 L', { batch: 'B-021', expiry: '2027-06-30', packs: '20', cost: '215.50' });
     await waitFor(() => expect(receiveButton().disabled).toBe(false));
     fireEvent.click(receiveButton());
     expect(await screen.findByText('the product list')).toBeTruthy();
@@ -377,10 +399,10 @@ describe('a batch number that already exists for the size', () => {
   const clashOn500 = async (v: { expiry: string; cost: string }) => {
     const shell = await ready();
     set(screen.getByLabelText(f.supplier), 's1');
-    await fillLine(1, 'insect', '500 ml', { batch: 'B-014', expiry: v.expiry, packs: '20', cost: v.cost });
+    await fillLine(1, 'insect', '0.5 L', { batch: 'B-014', expiry: v.expiry, packs: '20', cost: v.cost });
     return shell;
   };
-  const panel = () => screen.getByRole('group', { name: 'Insecticide 500 ml' });
+  const panel = () => screen.getByRole('group', { name: 'Insecticide 0.5 L' });
 
   it('same number, expiry and cost: no clash (the stock is added to that batch)', async () => {
     await clashOn500({ expiry: '2027-03-12', cost: '215' });
@@ -452,8 +474,8 @@ describe('a batch number that already exists for the size', () => {
     const shell = fakeShell({ batches: { ...BATCHES, p500: [{ batch_id: 'b2', batch_no: 'B-014', expiry_date: '2027-03-12', cost_price: 21_500, stock: 1 }, { batch_id: 'b3', batch_no: 'B-015', expiry_date: '2027-03-12', cost_price: 21_500, stock: 1 }] } });
     await ready(shell);
     set(screen.getByLabelText(f.supplier), 's1');
-    await fillLine(1, 'insect', '500 ml', { batch: 'B-016', expiry: '2027-01-01', packs: '1', cost: '215' }); // another line takes B-016
-    await fillLine(2, 'insect', '500 ml', { batch: 'B-014', expiry: '2027-06-30', packs: '1', cost: '215' });
+    await fillLine(1, 'insect', '0.5 L', { batch: 'B-016', expiry: '2027-01-01', packs: '1', cost: '215' }); // another line takes B-016
+    await fillLine(2, 'insect', '0.5 L', { batch: 'B-014', expiry: '2027-06-30', packs: '1', cost: '215' });
     fireEvent.click(within(await waitFor(() => screen.getByRole('group'))).getByRole('button', { name: f.clash.newBatch }));
     expect(lineField(2, 'batchNo').value).toBe('B-017');
   });
@@ -476,7 +498,7 @@ describe('a batch number that already exists for the size', () => {
     await ready();
     set(screen.getByLabelText(f.supplier), 's1');
     await fillLine(1, 'insect', '1 L', { batch: 'B-050', expiry: '2027-05-01', packs: '2', cost: '400' });
-    await fillLine(2, 'insect', '500 ml', { batch: 'B-050', expiry: '2027-05-01', packs: '3', cost: '215' });
+    await fillLine(2, 'insect', '0.5 L', { batch: 'B-050', expiry: '2027-05-01', packs: '3', cost: '215' });
     await waitFor(() => expect(receiveButton().disabled).toBe(false));
   });
 
@@ -601,7 +623,7 @@ describe('Urdu and right to left', () => {
     set(screen.getByLabelText(ur.receive.supplier), 's1');
     fireEvent.click(screen.getByRole('button', { name: ur.receive.addLine }));
     set(screen.getByRole('searchbox', { name: ur.receive.searchLabel }), 'insect');
-    fireEvent.click(await screen.findByRole('button', { name: /500 ml$/ }));
+    await pickSize('0.5 L');
     await waitFor(() => expect(document.querySelectorAll('[data-line]')).toHaveLength(1));
     set(lineField(1, 'batchNo'), 'B-014');
     set(lineField(1, 'expiry'), '2027-06-30');
@@ -623,7 +645,7 @@ describe('Urdu and right to left', () => {
     expect(received.closest('[data-date-field]')!.querySelector<HTMLInputElement>('input[type=date]')!.max).toBe(today); // the calendar stops at today
     fireEvent.click(screen.getByRole('button', { name: ur.receive.addLine }));
     set(screen.getByRole('searchbox', { name: ur.receive.searchLabel }), 'insect');
-    fireEvent.click(await within(await screen.findByRole('list')).findByRole('button', { name: /1 L$/ }));
+    await pickSize('1 L');
     await waitFor(() => expect(document.querySelectorAll('[data-line]')).toHaveLength(1));
     expect(lineField(1, 'expiry').getAttribute('dir')).toBe('ltr');
     const back = screen.getByRole('link', { name: ur.receive.back }).querySelector('svg')!;
@@ -633,15 +655,15 @@ describe('Urdu and right to left', () => {
     expect(screen.getByRole('link', { name: f.back }).querySelector('svg')!.getAttribute('class')).toContain('lucide-arrow-left');
   });
 
-  it('a Latin size label such as "1 L" is not reversed in right to left, on the line and in the search results', async () => {
+  it('the size is derived from the pack size, so it is Urdu words with the number left to right, on the line and in the search results', async () => {
     await ready(fakeShell(), OWNER, 'ur');
     fireEvent.click(screen.getByRole('button', { name: ur.receive.addLine }));
     set(screen.getByRole('searchbox', { name: ur.receive.searchLabel }), 'insect');
-    const result = await within(await screen.findByRole('list')).findByRole('button', { name: /1 L$/ });
-    expect(within(result).getByText('1 L').getAttribute('dir')).toBe('auto');
+    const result = await waitFor(() => within(screen.getByRole('list')).getAllByRole('button').find((b) => plain(b.textContent).endsWith('1 لیٹر'))!);
+    expect(within(result).getByText((_t, el) => plain(el?.textContent ?? '') === '1 لیٹر' && el?.tagName === 'SPAN' && el.getAttribute('dir') === 'auto')).toBeTruthy();
     fireEvent.click(result);
     await waitFor(() => expect(document.querySelectorAll('[data-line]')).toHaveLength(1));
-    expect(within(lineOf(1)).getByText('1 L').getAttribute('dir')).toBe('auto');
+    expect(within(lineOf(1)).getByText((_t, el) => plain(el?.textContent ?? '') === '1 لیٹر' && el?.getAttribute('dir') === 'auto')).toBeTruthy();
   });
 
   it('a clash that appears is scrolled into view (the totals bar must not hide it)', async () => {
@@ -650,7 +672,7 @@ describe('Urdu and right to left', () => {
     try {
       await ready();
       set(screen.getByLabelText(f.supplier), 's1');
-      await fillLine(1, 'insect', '500 ml', { batch: 'B-014', expiry: '2027-06-30', packs: '20', cost: '215' });
+      await fillLine(1, 'insect', '0.5 L', { batch: 'B-014', expiry: '2027-06-30', packs: '20', cost: '215' });
       await waitFor(() => screen.getByRole('group'));
       expect(scrolled).toHaveBeenCalled();
     } finally {
@@ -675,7 +697,7 @@ describe('touch size and motion', () => {
   it('every button, link and field is at least 44 px tall (by its height classes)', async () => {
     await ready();
     set(screen.getByLabelText(f.supplier), 's1');
-    await fillLine(1, 'insect', '500 ml', { batch: 'B-014', expiry: '2027-06-30', packs: '20', cost: '215' });
+    await fillLine(1, 'insect', '0.5 L', { batch: 'B-014', expiry: '2027-06-30', packs: '20', cost: '215' });
     await waitFor(() => screen.getByRole('group'));
     fireEvent.click(screen.getByRole('button', { name: f.addLine }));
     fireEvent.click(screen.getByRole('button', { name: f.newSupplier }));
@@ -732,7 +754,7 @@ describe('dates are written "12 Oct 2026" and read strictly', () => {
     set(screen.getByLabelText(t.receive.supplier), 's1');
     fireEvent.click(screen.getByRole('button', { name: t.receive.addLine }));
     set(screen.getByRole('searchbox', { name: t.receive.searchLabel }), 'insect');
-    fireEvent.click(await within(await screen.findByRole('list')).findByRole('button', { name: /1 L$/ }));
+    await pickSize('1 L');
     await waitFor(() => expect(document.querySelectorAll('[data-line]')).toHaveLength(1));
     set(lineField(1, 'batchNo'), 'B-020');
     set(lineField(1, 'packs'), '2');

@@ -346,8 +346,8 @@ export function defineStockTests(make: WorldFactory): void {
       it('a refused adjustment leaves no audit row, and says how much stock there is', () => {
         const e = errorOf(() => stock.adjust({ batch_id: ID.bA, qty_delta: -8001, created_by: ID.owner }));
         expect(e.code).toBe('INSUFFICIENT_STOCK');
-        expect(e.params).toEqual({ available: 8000, requested: 8001, packSize: 1000, scope: 'batch' });
-        expect(errorOf(() => stock.writeOff({ batch_id: ID.bA, qty: 9000, kind: 'damage', created_by: ID.owner })).params).toEqual({ available: 8000, requested: 9000, packSize: 1000, scope: 'batch' });
+        expect(e.params).toEqual({ available: 8000, requested: 8001, packSize: 1000, unit: 'ml', scope: 'batch' });
+        expect(errorOf(() => stock.writeOff({ batch_id: ID.bA, qty: 9000, kind: 'damage', created_by: ID.owner })).params).toEqual({ available: 8000, requested: 9000, packSize: 1000, unit: 'ml', scope: 'batch' });
         expect(w.rows('audit_log')).toHaveLength(0);
       });
 

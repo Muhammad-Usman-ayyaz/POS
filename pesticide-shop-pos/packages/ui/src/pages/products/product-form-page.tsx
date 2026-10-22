@@ -75,10 +75,10 @@ function OwnerForm({ api }: { api: Api }) {
     api.brands.list().then(setBrands, () => undefined);
   }, [api]);
 
-  // After "Add a new size", the cursor goes to the new card's label.
+  // After "Add a new size", the cursor goes to the new card pack size.
   useEffect(() => {
     if (!focusKey) return;
-    document.querySelector<HTMLInputElement>(`[data-size-key="${focusKey}"] input[name=label]`)?.focus();
+    document.querySelector<HTMLInputElement>(`[data-size-key="${focusKey}"] input[name=packSize]`)?.focus();
     setFocusKey(null);
   }, [focusKey, draft]);
 
@@ -98,7 +98,7 @@ function OwnerForm({ api }: { api: Api }) {
   const lockedSize = draft?.sizes.find((s) => s.key === lockedKey) ?? null;
   // The locked size said in its unit ("0.5 L"), worked out from what was typed by the units module.
   const lockedParsed = lockedSize && draft ? parseQuantity(baseUnitOf(draft.unit), lockedSize.packSize) : null;
-  const lockedPack = lockedParsed?.ok ? lockedParsed.value : 1;
+  const lockedPack = lockedSize?.saved ? lockedSize.saved.pack_size : lockedParsed?.ok ? lockedParsed.value : 1; // a saved size is shown as saved: its pack size is locked
   const lockedPackLabel = draft ? packText(m, language, baseUnitOf(draft.unit), lockedPack) || stockText(m, language, baseUnitOf(draft.unit), 1, lockedPack) : '';
 
   const run = async (step: SaveStep): Promise<void> => {

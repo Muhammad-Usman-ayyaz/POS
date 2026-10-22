@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ApiError } from '@pos/api-contract';
 import { describe, expect, it } from 'vitest';
-import { describeError, errorCodes, errorText, formatDate, formatMoney, formatQty, ltr, MESSAGES } from '../src/i18n/index.js';
+import { describeError, errorCodes, errorText, formatDate, formatMoney, ltr, MESSAGES, qtyText, stockText } from '../src/i18n/index.js';
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF]/;
 
@@ -95,14 +95,14 @@ describe('the error catalogue', () => {
   });
 
   it('says stock, not batch, when the whole product is short', () => {
-    expect(errorText('INSUFFICIENT_STOCK', { available: 3000, requested: 5000, packSize: 1000, scope: 'product' }, 'en').title).toBe('Only 3 packs left in stock');
-    expect(errorText('INSUFFICIENT_STOCK', { available: 1000, requested: 5000, packSize: 1000, scope: 'product' }, 'en').title).toBe('Only 1 pack left in stock');
-    expect(errorText('INSUFFICIENT_STOCK', { available: 2250, requested: 5000, packSize: 1000, scope: 'product' }, 'en').title).toBe('Only 2 packs and 250 loose left in stock');
+    expect(errorText('INSUFFICIENT_STOCK', { available: 3000, requested: 5000, packSize: 1000, unit: 'ml', scope: 'product' }, 'en').title).toBe('Only 3 packs left in stock');
+    expect(errorText('INSUFFICIENT_STOCK', { available: 1000, requested: 5000, packSize: 1000, unit: 'ml', scope: 'product' }, 'en').title).toBe('Only 1 pack left in stock');
+    expect(errorText('INSUFFICIENT_STOCK', { available: 2250, requested: 5000, packSize: 1000, unit: 'ml', scope: 'product' }, 'en').title).toBe('Only 2 packs and 0.25 L left in stock');
   });
 
   it('says it in Urdu, with the number kept left to right', () => {
-    const text = errorText('INSUFFICIENT_STOCK', { available: 3000, requested: 5000, packSize: 1000, scope: 'batch' }, 'ur');
-    expect(text.title).toBe(`اس بیچ میں صرف ${ltr('3 پیک')} باقی ہے`);
+    const text = errorText('INSUFFICIENT_STOCK', { available: 3000, requested: 5000, packSize: 1000, unit: 'ml', scope: 'batch' }, 'ur');
+    expect(text.title).toBe(`اس بیچ میں صرف ${ltr('3')} پیک باقی ہے`);
     expect(text.title).toContain('\u2066');
     expect(text.title).toContain('\u2069');
   });
@@ -121,7 +121,7 @@ describe('the error catalogue', () => {
   });
 
   it('an ApiError is described by its code and params; anything else is "something went wrong"', () => {
-    const error = new ApiError('RETURN_EXCEEDS_SOLD', 'x', { returnable: 8000, requested: 9000, packSize: 1000 });
+    const error = new ApiError('RETURN_EXCEEDS_SOLD', 'x', { returnable: 8000, requested: 9000, packSize: 1000, unit: 'ml' });
     expect(describeError(error, 'en')).toMatchObject({ code: 'RETURN_EXCEEDS_SOLD', title: 'Only 8 packs can still be returned' });
     expect(describeError(new TypeError('boom at line 3'), 'en')).toMatchObject({ code: 'INTERNAL', title: 'Something went wrong' });
     expect(JSON.stringify(describeError(new Error('secret path C:\\x'), 'en'))).not.toContain('secret');
@@ -133,7 +133,7 @@ describe('the error catalogue', () => {
   });
 
   it('ignores params of the wrong type', () => {
-    expect(errorText('INSUFFICIENT_STOCK', { available: 'lots' as never, packSize: 1000 }, 'en').title).toBe('Only 0 loose left in stock');
+    expect(errorText('INSUFFICIENT_STOCK', { available: 'lots' as never, packSize: 1000 }, 'en').title).toBe('Only 0 pieces left in stock');
   });
 });
 
@@ -145,17 +145,21 @@ describe('formatting', () => {
   });
 
   it.each([
-    [3000, 1000, 'en', '3 packs'],
-    [1000, 1000, 'en', '1 pack'],
-    [250, 1000, 'en', '250 loose'],
-    [2250, 1000, 'en', '2 packs and 250 loose'],
-    [7, 1, 'en', '7'],
-  ] as const)('quantity %i with pack size %i in %s is "%s"', (qty, packSize, language, expected) => {
-    expect(formatQty(qty, packSize, language)).toBe(expected);
+    [3000, 1000, 'ml', 'en', '3 packs'],
+    [1000, 1000, 'ml', 'en', '1 pack'],
+    [250, 1000, 'ml', 'en', '0.25 L'],
+    [2250, 1000, 'g', 'en', '2 packs and 0.25 kg'],
+    [1500, 1, 'g', 'en', '1.5 kg'],
+    [7, 1, 'piece', 'en', '7 pieces'],
+    [1, 1, 'piece', 'en', '1 piece'],
+  ] as const)('stock %i with pack size 1000 in %s (%s) is "%s"', (qty, packSize, unit, language, expected) => {
+    expect(stockText(MESSAGES[language], language, unit, packSize === 1 ? 1 : 1000, qty)).toBe(expected);
   });
 
-  it('quantity in Urdu uses Urdu words and stays left to right', () => {
-    expect(formatQty(2250, 1000, 'ur')).toBe(ltr('2 پیک اور 250 کھلا'));
+  it('quantity in Urdu uses Urdu words and keeps each number left to right', () => {
+    expect(stockText(MESSAGES.ur, 'ur', 'g', 1000, 2250)).toBe(`${ltr('2')} پیک اور ${ltr('0.25')} کلو`);
+    expect(qtyText(MESSAGES.ur, 'ur', 'ml', 3000)).toBe(`${ltr('3')} لیٹر`);
+    expect(qtyText(MESSAGES.ur, 'ur', 'piece', 2)).toBe(`${ltr('2')} عدد`);
   });
 
   it('dates are "30 Nov 2026" or "30 نومبر 2026", with Latin digits', () => {

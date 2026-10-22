@@ -255,7 +255,7 @@ describe('searching and adding', () => {
     await typeIn(searchBox(), 'insect');
     await waitFor(() => expect(chip('p250')).toBeTruthy());
     expect(chip('p250').textContent).toContain('Rs 190');
-    expect(chip('p250').textContent).toContain('3 left');
+    expect(chip('p250').textContent).toContain('3 packs left');
     expect(chip('p5l').disabled).toBe(true);
     expect(chip('p5l').textContent).toContain(T.out);
     await userEvent.setup().click(chip('p5l'));
@@ -651,14 +651,17 @@ describe('the line editor', () => {
     expect(shell.of('sale:quote').at(-1)!.input.lines[0].line_discount).toBe(2_000);
   });
 
-  it('a loose product is shown in grams and moves in steps of 50', async () => {
+  it('a loose product is shown in kg and moves in steps of 0.5 kg', async () => {
     const shell = fakeShell(STAFF);
     show(shell);
     await addSize('fert', 'f1');
     await priced('Rs 200');
-    expect(document.querySelector('[data-line=f1] [data-qty]')!.textContent).toBe('1000');
+    expect(document.querySelector('[data-line=f1] [data-qty]')!.textContent).toBe('1');
+    expect(document.querySelector('[data-line=f1]')!.textContent).toContain('kg');
+    await userEvent.setup().click(screen.getByRole('button', { name: new RegExp(`${T.increase}: `) }));
+    await waitFor(() => expect(document.querySelector('[data-line=f1] [data-qty]')!.textContent).toBe('1.5'));
     await userEvent.setup().click(screen.getByRole('button', { name: new RegExp(`${T.decrease}: `) }));
-    await waitFor(() => expect(document.querySelector('[data-line=f1] [data-qty]')!.textContent).toBe('950'));
+    await waitFor(() => expect(document.querySelector('[data-line=f1] [data-qty]')!.textContent).toBe('1'));
   });
 
   it('removing the last line empties the bill', async () => {
@@ -713,7 +716,7 @@ describe('held bills', () => {
       const dialog = await screen.findByRole('dialog', { name: T.held.title });
       await userEvent.setup().click(within(dialog).getByRole('button', { name: T.held.resume }));
       const note = await screen.findByRole('dialog', { name: T.resumed.title });
-      expect(within(note).getByText(T.resumed.removedLine('Insecticide 250 ml'))).toBeTruthy();
+      expect(within(note).getByText(T.resumed.removedLine('Insecticide 0.25 L'))).toBeTruthy();
       expect(document.querySelector('[data-line=p250]')).toBeNull();
     } finally {
       PRODUCTS.p250!.stock = 750;
@@ -1008,7 +1011,7 @@ describe('held bills in detail', () => {
     try {
       await resumeFirst();
       const note = await screen.findByRole('dialog', { name: T.resumed.title });
-      expect(within(note).getByText(T.resumed.removedLine('Insecticide 250 ml'))).toBeTruthy();
+      expect(within(note).getByText(T.resumed.removedLine('Insecticide 0.25 L'))).toBeTruthy();
       expect(note.querySelector('[data-note=price]')).toBeNull();
       expect(document.querySelector('[data-line=p1l]')).toBeTruthy();
       expect(document.querySelector('[data-line=p250]')).toBeNull();
@@ -1319,7 +1322,7 @@ describe('design: the counter dialogs (docs/design/PosDialogs.dc.html)', () => {
     expect(en.pos.bill.invoice(3)).toBe('New bill · 3 lines');
   });
 
-  it('the line editor: Auto is a chip on the batch that expires first, stock reads "9,000 g", a new discount is a percent, and the cursor is in the quantity', async () => {
+  it('the line editor: Auto is a chip on the batch that expires first, stock reads "9 kg", a new discount is a percent, and the cursor is in the quantity', async () => {
     const shell = fakeShell(STAFF);
     show(shell);
     await addSize('fert', 'f1');
@@ -1330,10 +1333,10 @@ describe('design: the counter dialogs (docs/design/PosDialogs.dc.html)', () => {
     const first = within(dialog).getAllByRole('radio').find((r) => r.textContent!.includes('B-001'))!;
     expect(first.getAttribute('aria-checked')).toBe('true');
     expect(first.textContent).toContain(T.line.auto);
-    expect(first.textContent).toContain('Exp 12 Mar 2027 · 9,000 g');
+    expect(first.textContent).toContain('Exp 12 Mar 2027 · 9 kg');
     expect(within(dialog).getAllByRole('radio').find((r) => r.textContent!.includes('B-002'))!.textContent).not.toContain(T.line.auto);
     expect(within(dialog).getByRole('radio', { name: T.line.percent }).getAttribute('aria-checked')).toBe('true');
-    expect(document.activeElement).toBe(within(dialog).getByLabelText(T.line.quantityUnit('g')));
+    expect(document.activeElement).toBe(within(dialog).getByLabelText(T.line.quantityUnit('kg')));
     expect(dialog.textContent).toContain('Per kg Rs 200'); // a 1 kg loose pack is priced per kg, not "Per g pack"
     expect(dialog.textContent).toContain('Fertilizer · 1 kg');
   });
@@ -1468,11 +1471,12 @@ describe('design: the exact wording of docs/design/Main.dc.html and PosUrdu.dc.h
     ['Clear', en.pos.bill.clear],
     ['Out', en.pos.out],
     ['packs', en.pos.packs],
-    ['Loose · per kg', en.pos.looseBadge('g')],
+    ['Loose · per kg', en.pos.looseBadge('kg')],
     ['Disc. Rs 50', en.pos.discBadge('Rs 50')],
     ['Near expiry · 24 days', en.pos.nearExpiry(24)],
     ['Chak 12 · Retail price', `Chak 12 · ${en.pos.customer.retailPrice}`],
-    ['3 left', en.pos.left(3)],
+    // The design says "3 left"; the standard-units change says what is left in packs ("3 packs left"), so only the word is compared.
+    ['left', en.pos.left('').trim()],
   ];
   const urdu: [string, string][] = [
     ['search placeholder', ur.pos.searchPlaceholder],
@@ -1503,11 +1507,11 @@ describe('design: the exact wording of docs/design/Main.dc.html and PosUrdu.dc.h
     ['صاف کریں', ur.pos.bill.clear],
     ['ختم', ur.pos.out],
     ['پیک', ur.pos.packs],
-    ['کھلی · فی کلو', ur.pos.looseBadge('g')],
+    ['کھلی · فی کلو', ur.pos.looseBadge('کلو')],
     ['رعایت Rs 50', ur.pos.discBadge('Rs 50')],
     ['ایکسپائری قریب · 24 دن', ur.pos.nearExpiry(24)],
     ['چک 12 · پرچون قیمت', `چک 12 · ${ur.pos.customer.retailPrice}`],
-    ['3 باقی', ur.pos.left(3)],
+    ['باقی', ur.pos.left('').trim()],
   ];
 
   it.each(english)('English: "%s" is written in Main.dc.html exactly as the build says it', (_label, text) => {

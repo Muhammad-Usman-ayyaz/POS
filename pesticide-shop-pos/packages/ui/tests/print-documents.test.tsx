@@ -43,7 +43,7 @@ const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s
 describe('the 80 mm receipt', () => {
   it('English: the shop, the invoice, the lines as sold, the discount, the total, what is on Khata and the balance AS OF THE SALE', () => {
     const t = text(renderDocumentMarkup(sale(), 'en'));
-    for (const part of ['Pesticide Club Shop', 'Receipt', 'INV-A-000002', '12 Oct 2026, 10:42', 'Rashid · Chak 12', 'Insecticide 1 L', 'Rs 1,000', '2 × Rs 500', 'Fertilizer · loose', '250 g × Rs 200/kg', 'Fungicide 250 ml', '3 × Rs 350', 'Discount', '− Rs 50', 'Total', 'Rs 2,050', 'Includes tax', 'Paid · Cash', 'On Khata', 'Rs 1,050', 'Your balance now', 'Rs 3,050', 'Pay by', '30 Nov 2026', 'Thank you. Please keep this receipt.']) {
+    for (const part of ['Pesticide Club Shop', 'Receipt', 'INV-A-000002', '12 Oct 2026, 10:42', 'Rashid · Chak 12', 'Insecticide 1 L', 'Rs 1,000', '2 packs × Rs 500/pack', 'Fertilizer · loose', '0.25 kg × Rs 200/kg', 'Fungicide 0.25 L', '3 packs × Rs 350/pack', 'Discount', '− Rs 50', 'Total', 'Rs 2,050', 'Includes tax', 'Paid · Cash', 'On Khata', 'Rs 1,050', 'Your balance now', 'Rs 3,050', 'Pay by', '30 Nov 2026', 'Thank you. Please keep this receipt.']) {
       expect(t, part).toContain(part);
     }
   });
@@ -58,7 +58,7 @@ describe('the 80 mm receipt', () => {
     expect(html).toContain('dir="rtl"');
     expect(html).toContain('lang="ur"');
     const t = text(html);
-    for (const part of ['رسید', 'بل', 'گاہک', 'راشد · Chak 12', 'کیڑے مار دوا 1 لیٹر', 'کھاد · کھلی', '250 گرام × Rs 200/کلو', 'رعایت', 'کل رقم', 'ٹیکس سمیت', 'ادا شدہ · نقد', 'کھاتے میں باقی', 'آپ کا کل بقایا', 'ادائیگی کی تاریخ', 'شکریہ۔ رسید سنبھال کر رکھیں۔', 'Rs 3,050', '30 Nov 2026']) {
+    for (const part of ['رسید', 'بل', 'گاہک', 'راشد · Chak 12', 'کیڑے مار دوا 1 لیٹر', 'کھاد · کھلی', '0.25 کلو × Rs 200/کلو', 'رعایت', 'کل رقم', 'ٹیکس سمیت', 'ادا شدہ · نقد', 'کھاتے میں باقی', 'آپ کا کل بقایا', 'ادائیگی کی تاریخ', 'شکریہ۔ رسید سنبھال کر رکھیں۔', 'Rs 3,050', '30 Nov 2026']) {
       expect(t, part).toContain(part);
     }
     // an amount is never reversed inside the Urdu text: every one sits in a left-to-right isolate
@@ -271,7 +271,7 @@ describe('left-to-right isolation inside Urdu documents', () => {
       expect(html, language).toContain('<td><span class="num">3</span></td>');
       expect(html, language).toContain('<td><span class="num">B-001</span></td>');
       expect(html, language).toContain('<td><span class="num">FG-014</span></td>');
-      expect(html, language).toContain('<td class="c-num"><span class="num">Rs 500</span></td>');
+      expect(html, language).toContain('<td class="c-num"><span class="num">Rs 500/' + (language === 'ur' ? 'پیک' : 'pack') + '</span></td>');
     }
   });
 
@@ -280,8 +280,8 @@ describe('left-to-right isolation inside Urdu documents', () => {
       const html = renderDocumentMarkup(sale(), language);
       expect(html, language).toContain('<span class="num">INV-A-000002</span>');
       expect(html, language).toContain('<span class="num">12 Oct 2026, 10:42</span>');
-      expect(html, language).toContain('<span class="num">2 × Rs 500</span>');
-      expect(html, language).toContain('<span class="num">3 × Rs 350</span>');
+      expect(html, language).toContain(language === 'ur' ? '<span class="num">2 پیک × Rs 500/پیک</span>' : '<span class="num">2 packs × Rs 500/pack</span>');
+      expect(html, language).toContain(language === 'ur' ? '<span class="num">3 پیک × Rs 350/پیک</span>' : '<span class="num">3 packs × Rs 350/pack</span>');
     }
   });
 });
@@ -289,17 +289,20 @@ describe('left-to-right isolation inside Urdu documents', () => {
 describe('quantities', () => {
   const line = sale().lines;
   it('a whole-pack line is "packs x price"; a loose line is "amount x price per pack unit"', () => {
-    expect(lineQuantity(line[0]!, 'en')).toEqual({ loose: false, packs: 2, qtyText: '2', rateText: 'Rs 500' });
-    expect(lineQuantity(line[1]!, 'en')).toEqual({ loose: true, packs: null, qtyText: '250 g', rateText: 'Rs 200/kg' });
-    expect(lineQuantity(line[1]!, 'ur')).toMatchObject({ qtyText: '250 گرام', rateText: 'Rs 200/کلو' });
+    expect(lineQuantity(line[0]!, 'en')).toEqual({ loose: false, packs: 2, qtyText: '2 packs', rateText: 'Rs 500/pack' });
+    expect(lineQuantity(line[0]!, 'ur')).toMatchObject({ qtyText: '2 پیک', rateText: 'Rs 500/پیک' });
+    expect(lineQuantity(line[1]!, 'en')).toEqual({ loose: true, packs: null, qtyText: '0.25 kg', rateText: 'Rs 200/kg' });
+    expect(lineQuantity(line[1]!, 'ur')).toMatchObject({ qtyText: '0.25 کلو', rateText: 'Rs 200/کلو' });
     expect(lineQuantity({ ...line[1]!, qty: 1500 }, 'en').qtyText).toBe('1.5 kg');
-    expect(lineQuantity({ ...line[2]!, qty: 100, unit_price: 35_000 }, 'en')).toMatchObject({ loose: true, qtyText: '100 ml', rateText: 'Rs 350/250 ml' });
+    expect(lineQuantity({ ...line[2]!, qty: 100, unit_price: 35_000 }, 'en')).toMatchObject({ loose: true, qtyText: '0.1 L', rateText: 'Rs 1,400/L' });
   });
 
   it('a product sold by the piece is always whole packs', () => {
     const piece = { ...line[0]!, base_unit: 'piece' as const, pack_size: 1, qty: 3, unit_price: 12_000 };
-    expect(lineQuantity(piece, 'en')).toMatchObject({ loose: false, packs: 3, qtyText: '3', rateText: 'Rs 120' });
-    expect(quantityText(3, 'piece', 'en')).toBe('3 pc');
+    expect(lineQuantity(piece, 'en')).toMatchObject({ loose: false, packs: 3, qtyText: '3 pieces', rateText: 'Rs 120/piece' });
+    expect(quantityText(3, 'piece', 'en')).toBe('3 pieces');
+    expect(quantityText(1, 'piece', 'en')).toBe('1 piece');
+    expect(quantityText(3, 'piece', 'ur')).toBe('3 عدد');
   });
 });
 
@@ -315,6 +318,10 @@ describe('conformance with docs/design (Receipts80.dc.html, InvoiceA4.dc.html)',
     const part = html.slice(start, html.indexOf(to, start + 1));
     return [...part.matchAll(/>([^<>]+)</g)].map((m) => m[1]!.replace(/\s+/g, ' ').trim()).filter((t) => t !== '' && !t.includes('right to left'));
   };
+  const SUPERSEDED: Record<'en' | 'ur', Record<string, string>> = {
+    en: { '2 × Rs 500': '2 packs × Rs 500/pack', '3 × Rs 350': '3 packs × Rs 350/pack', '250 g × Rs 200/kg': '0.25 kg × Rs 200/kg', '250 g': '0.25 kg', 'Fungicide 250 ml': 'Fungicide 0.25 L' },
+    ur: { '2 × Rs 500': '2 پیک × Rs 500/پیک', '3 × Rs 350': '3 پیک × Rs 350/پیک', '250 گرام × Rs 200/کلو': '0.25 کلو × Rs 200/کلو', '250 گرام': '0.25 کلو', 'پھپھوندی کش 250 ملی لیٹر': 'پھپھوندی کش 0.25 لیٹر' },
+  };
   const urduSale = (): InvoiceDocumentData => sale({ customer: { name_en: 'Rashid', name_ur: 'راشد', village: 'چک 12' }, shop: { name: 'Pesticide Club Shop', name_ur: 'پیسٹیسائیڈ کلب شاپ', address: null, phone: null } });
 
   const cases: { file: string; kind: 'receipt' | 'invoice'; language: 'en' | 'ur'; from: string; to: string }[] = [
@@ -329,7 +336,8 @@ describe('conformance with docs/design (Receipts80.dc.html, InvoiceA4.dc.html)',
       expect(wanted.length).toBeGreaterThan(25);
       const data = c.language === 'ur' ? urduSale() : sale();
       const page = text(renderDocumentMarkup(c.kind === 'receipt' ? data : asInvoice(data), c.language));
-      const missing = wanted.filter((w) => !page.includes(w));
+      // The designs were drawn before the standard-units rule (kg, L, piece; never g or ml). These pieces are replaced by what the rule prints now.
+      const missing = wanted.map((w) => SUPERSEDED[c.language][w] ?? w).filter((w) => !page.includes(w));
       expect(missing).toEqual([]);
     });
   }

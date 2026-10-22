@@ -319,7 +319,7 @@ export function defineSaleTests(make: WorldFactory): void {
       it('out of stock says how much there is, in base units, with the pack size', () => {
         const e = errorOf(() => sale({ paid_amount: 950_000, lines: [bottles(19)] }));
         expect(e.code).toBe('INSUFFICIENT_STOCK');
-        expect(e.params).toEqual({ available: 18_000, requested: 19_000, packSize: 1000, scope: 'product' });
+        expect(e.params).toEqual({ available: 18_000, requested: 19_000, packSize: 1000, unit: 'ml', scope: 'product' });
       });
 
       it('a credit limit says the limit, what is owed and what the sale adds', () => {
@@ -336,7 +336,7 @@ export function defineSaleTests(make: WorldFactory): void {
       });
 
       it('a pack-only product says the pack size, and an expired manual batch says its expiry', () => {
-        expect(errorOf(() => sale({ paid_amount: 25_000, lines: [{ product_id: ID.bottle, qty: 500 }] })).params).toEqual({ packSize: 1000 });
+        expect(errorOf(() => sale({ paid_amount: 25_000, lines: [{ product_id: ID.bottle, qty: 500 }] })).params).toEqual({ packSize: 1000, unit: 'ml' });
         expect(errorOf(() => sale({ paid_amount: 50_000, lines: [bottles(1, { batches: [{ batch_id: ID.bExpired, qty: 1000 }] })] })).params).toEqual({ expiry: '2020-01-01' });
       });
     });

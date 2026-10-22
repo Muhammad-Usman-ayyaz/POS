@@ -311,7 +311,7 @@ describe('Invoices: the detail', () => {
     expect(lines[0]).toContain('Rs 500'); // price per pack
     expect(lines[0]).toContain('Rs 91'); // tax inside the line
     expect(lines[0]).toContain('Rs 1,000');
-    expect(lines[1]).toContain('250 g'); // loose
+    expect(lines[1]).toContain('0.25 kg'); // loose, said in kg
     expect(lines[1]).toContain('Rs 200/kg');
     expect(lines[1]).toContain('loose');
     expect(within(dialog).getByText('Rashid · Chak 12')).toBeTruthy();
