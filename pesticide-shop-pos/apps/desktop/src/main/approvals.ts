@@ -67,6 +67,29 @@ export function neededApprovals(user: SessionUser, quote: SaleQuote, lines: read
   return needs.sort();
 }
 
+/** The one action an approval of a return is for. */
+export const RETURN_APPROVAL_ACTION = 'return_approve';
+
+/**
+ * What a return is, for the purpose of an approval: the invoice and, for each line, the quantity, the condition (back to stock or written off) and the
+ * reason. An approval is given for exactly this and is worthless for any other return: another invoice, line, quantity, condition or reason.
+ * The order of the lines does not matter. The optional note is not part of it.
+ */
+export interface ReturnSubject {
+  invoice_id: string;
+  items: readonly { invoice_item_id: string; qty: number; condition: string; reason: string }[];
+}
+
+export function returnSubjectHash(subject: ReturnSubject): string {
+  const normal = {
+    invoice_id: subject.invoice_id,
+    items: [...subject.items]
+      .map((i) => ({ invoice_item_id: i.invoice_item_id, qty: i.qty, condition: i.condition, reason: i.reason }))
+      .sort((a, b) => (a.invoice_item_id < b.invoice_item_id ? -1 : a.invoice_item_id > b.invoice_item_id ? 1 : 0)),
+  };
+  return createHash('sha256').update(`return:${canonical(normal)}`).digest('hex');
+}
+
 interface Grant {
   ownerId: string;
   requestedBy: string;
@@ -77,13 +100,13 @@ interface Grant {
 
 export interface ApprovalStore {
   /** Makes a one-use token for these actions and this cart, good for a minute. */
-  issue(args: { ownerId: string; requestedBy: string; actions: readonly ApprovalAction[]; hash: string; token: string }): { token: string; expires_at: string };
+  issue(args: { ownerId: string; requestedBy: string; actions: readonly string[]; hash: string; token: string }): { token: string; expires_at: string };
   /**
    * Spends a token: it must exist, not have run out, not have been spent, and have been given for exactly these actions and this cart.
    * Any try with a token that exists SPENDS it, right or wrong, so one approval cannot be probed with different carts.
    * Throws APPROVAL_INVALID (with a reason that does not help guessing: the screen only says to ask again).
    */
-  consume(token: string, actions: readonly ApprovalAction[], hash: string, requestedBy: string): { ownerId: string };
+  consume(token: string, actions: readonly string[], hash: string, requestedBy: string): { ownerId: string };
   /** How many are waiting (for tests). */
   open(): number;
 }

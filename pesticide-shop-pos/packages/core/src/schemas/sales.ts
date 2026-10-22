@@ -77,8 +77,15 @@ export const SalesReturn = z.object({
   approved_by: Id,
   return_date: IsoDate,
   reason: z.string().nullable(),
+  /** 'khata_credit' when any of the refund went to the customer's Khata, else 'cash'. The split is `cash_amount` and `khata_amount`. */
   refund_method: RefundMethod,
   total: NonNegPaisa,
+  /** Paisa handed back in cash. `cash_amount + khata_amount = total` (the database checks it). */
+  cash_amount: NonNegPaisa,
+  /** Paisa taken off the customer's Khata balance (a compensating ledger row). */
+  khata_amount: NonNegPaisa,
+  /** The user who started the return (staff may; the owner approves it). Null on returns from before migration 009. */
+  requested_by: Id.nullable(),
   ...syncScope,
   ...editableMeta,
 });
@@ -93,6 +100,8 @@ export const SalesReturnItem = z.object({
   /** The tax inside `refund_amount`, worked out the same running-difference way, so all of a line's tax comes back and never more. */
   tax_refund: NonNegPaisa,
   condition: ReturnCondition,
+  /** Why the line came back (a code from `RETURN_REASONS`). Required when the goods are not resellable. Null on lines from before migration 009. */
+  reason: z.string().nullable(),
   ...syncScope,
   ...lineMeta,
 });

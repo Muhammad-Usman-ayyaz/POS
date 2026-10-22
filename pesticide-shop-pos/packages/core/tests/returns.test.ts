@@ -18,10 +18,10 @@ describe('10 sold, 2 returned', () => {
     const plan = planReturn({
       invoice_status: 'active',
       lines: [tenSold],
-      requested: [{ invoice_item_id: 'ii1', qty: 2000, condition: 'resellable' }],
+      requested: [{ invoice_item_id: 'ii1', qty: 2000, condition: 'resellable', reason: 'other' }],
     });
     expect(plan).toEqual({
-      lines: [{ invoice_item_id: 'ii1', qty: 2000, refund_amount: 100_000, tax_refund: 0, condition: 'resellable', restock: true }],
+      lines: [{ invoice_item_id: 'ii1', qty: 2000, refund_amount: 100_000, tax_refund: 0, condition: 'resellable', reason: 'other', restock: true, write_off: null }],
       total: 100_000,
     });
     expect(returnableQty({ ...tenSold, qty_returned: 2000 })).toBe(8000);
@@ -30,10 +30,10 @@ describe('10 sold, 2 returned', () => {
   it('after that, returning 9 bottles is blocked and returning the last 8 is allowed', () => {
     const afterFirst = { ...tenSold, qty_returned: 2000 };
     expect(
-      code(() => planReturn({ invoice_status: 'active', lines: [afterFirst], requested: [{ invoice_item_id: 'ii1', qty: 9000, condition: 'resellable' }] })),
+      code(() => planReturn({ invoice_status: 'active', lines: [afterFirst], requested: [{ invoice_item_id: 'ii1', qty: 9000, condition: 'resellable', reason: 'other' }] })),
     ).toBe('RETURN_EXCEEDS_SOLD');
 
-    const rest = planReturn({ invoice_status: 'active', lines: [afterFirst], requested: [{ invoice_item_id: 'ii1', qty: 8000, condition: 'resellable' }] });
+    const rest = planReturn({ invoice_status: 'active', lines: [afterFirst], requested: [{ invoice_item_id: 'ii1', qty: 8000, condition: 'resellable', reason: 'other' }] });
     expect(rest.total).toBe(400_000);
     // Rs 1000 + Rs 4000 = the full Rs 5000 the customer paid for the line
     expect(100_000 + rest.total).toBe(tenSold.line_total);
@@ -42,7 +42,7 @@ describe('10 sold, 2 returned', () => {
   it('the error says how many can still be returned', () => {
     const afterFirst = { ...tenSold, qty_returned: 2000 };
     expect(() =>
-      planReturn({ invoice_status: 'active', lines: [afterFirst], requested: [{ invoice_item_id: 'ii1', qty: 9000, condition: 'damaged' }] }),
+      planReturn({ invoice_status: 'active', lines: [afterFirst], requested: [{ invoice_item_id: 'ii1', qty: 9000, condition: 'damaged', reason: 'other' }] }),
     ).toThrow(/only 8000 can still be returned/);
   });
 });
@@ -64,10 +64,10 @@ describe('refundFor', () => {
 
   it('a partial return of a taxed line: 3 packs at Rs 1,180 (tax Rs 180 each), one pack back, then the rest', () => {
     const line: SoldLine = { invoice_item_id: 'x', qty: 3000, line_total: 354_000, tax_amount: 54_000, qty_returned: 0 };
-    const first = planReturn({ invoice_status: 'active', lines: [line], requested: [{ invoice_item_id: 'x', qty: 1000, condition: 'resellable' }] });
+    const first = planReturn({ invoice_status: 'active', lines: [line], requested: [{ invoice_item_id: 'x', qty: 1000, condition: 'resellable', reason: 'other' }] });
     expect(first.lines[0]).toMatchObject({ refund_amount: 118_000, tax_refund: 18_000 }); // the full Rs 1,180, Rs 180 of it tax
     expect(first.total).toBe(118_000);
-    const rest = planReturn({ invoice_status: 'active', lines: [{ ...line, qty_returned: 1000 }], requested: [{ invoice_item_id: 'x', qty: 2000, condition: 'damaged' }] });
+    const rest = planReturn({ invoice_status: 'active', lines: [{ ...line, qty_returned: 1000 }], requested: [{ invoice_item_id: 'x', qty: 2000, condition: 'damaged', reason: 'other' }] });
     expect(rest.lines[0]).toMatchObject({ refund_amount: 236_000, tax_refund: 36_000 });
     expect(first.total + rest.total).toBe(354_000);
     expect(first.lines[0]!.tax_refund + rest.lines[0]!.tax_refund).toBe(54_000);
@@ -115,8 +115,8 @@ describe('planReturn', () => {
       invoice_status: 'active',
       lines,
       requested: [
-        { invoice_item_id: 'a', qty: 1000, condition: 'resellable' },
-        { invoice_item_id: 'b', qty: 1000, condition: 'damaged' },
+        { invoice_item_id: 'a', qty: 1000, condition: 'resellable', reason: 'other' },
+        { invoice_item_id: 'b', qty: 1000, condition: 'damaged', reason: 'other' },
       ],
     });
     expect(plan.lines.map((l) => [l.invoice_item_id, l.refund_amount, l.restock])).toEqual([
@@ -127,12 +127,12 @@ describe('planReturn', () => {
   });
 
   it('expired goods are not restocked either', () => {
-    const plan = planReturn({ invoice_status: 'active', lines, requested: [{ invoice_item_id: 'a', qty: 500, condition: 'expired' }] });
+    const plan = planReturn({ invoice_status: 'active', lines, requested: [{ invoice_item_id: 'a', qty: 500, condition: 'expired', reason: 'other' }] });
     expect(plan.lines[0]?.restock).toBe(false);
   });
 
   it('refuses a voided invoice, an empty return, an item from another invoice, a repeated item and a bad quantity', () => {
-    const ok = [{ invoice_item_id: 'a', qty: 1000, condition: 'resellable' as const }];
+    const ok = [{ invoice_item_id: 'a', qty: 1000, condition: 'resellable' as const, reason: 'other' as const }];
     expect(code(() => planReturn({ invoice_status: 'voided', lines, requested: ok }))).toBe('INVOICE_VOIDED');
     expect(code(() => planReturn({ invoice_status: 'active', lines, requested: [] }))).toBe('EMPTY_RETURN');
     expect(code(() => planReturn({ invoice_status: 'active', lines, requested: [{ ...ok[0]!, invoice_item_id: 'zzz' }] }))).toBe('ITEM_NOT_ON_INVOICE');
@@ -144,7 +144,7 @@ describe('planReturn', () => {
   it('a fully returned line cannot be returned again', () => {
     const done: SoldLine[] = [{ invoice_item_id: 'a', qty: 2000, line_total: 100_000, tax_amount: 0, qty_returned: 2000 }];
     expect(
-      code(() => planReturn({ invoice_status: 'active', lines: done, requested: [{ invoice_item_id: 'a', qty: 1, condition: 'resellable' }] })),
+      code(() => planReturn({ invoice_status: 'active', lines: done, requested: [{ invoice_item_id: 'a', qty: 1, condition: 'resellable', reason: 'other' }] })),
     ).toBe('RETURN_EXCEEDS_SOLD');
   });
 });

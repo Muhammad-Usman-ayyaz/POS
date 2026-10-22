@@ -12,18 +12,25 @@ import {
   createSaleService,
   createSalesReturnService,
   createStockService,
+  DEFAULT_SHOP_TIME_ZONE,
   DomainError,
+  shopDayOf,
   systemClock,
   type Clock,
   type DeviceScope,
   type IdGenerator,
 } from '@pos/core';
-import { PAGE, renderDocumentHtml, renderPaymentReceiptHtml, renderStatementHtml, statementCsv, statementFileName, type DocumentFonts } from '@pos/ui/print';
+import { PAGE, renderDocumentHtml, renderPaymentReceiptHtml, renderReturnSlipHtml, renderStatementHtml, statementCsv, statementFileName, type DocumentFonts } from '@pos/ui/print';
 import {
   createSqliteRepositories,
   createSqliteUnitOfWork,
   findActiveOwnerId,
   getInvoiceDetail,
+  getReturnDetail,
+  invoiceForReturn,
+  listReturns,
+  returnDocumentData,
+  RETURN_SLIP_AUDIT_ACTION,
   getPrintConfig,
   findUserForLogin,
   firstLaunchSetup,
@@ -52,7 +59,7 @@ import {
   type DeviceInfo,
   type Migration,
 } from '@pos/db-sqlite';
-import { createApprovalStore, neededApprovals, subjectHash } from './approvals.js';
+import { createApprovalStore, neededApprovals, RETURN_APPROVAL_ACTION, returnSubjectHash, subjectHash } from './approvals.js';
 import { noPrinting, type PrintDriver } from './printing/driver.js';
 import { noSaveDialog, type SaveDialog } from './printing/save-dialog.js';
 import { documentFonts } from './printing/fonts.js';
@@ -284,6 +291,36 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     })),
   });
 
+  /**
+   * The owner types their own username and password at the counter; the answer is a one-use token for `actions` and the subject `hash`, good for a
+   * minute, for the person asking. Wrong passwords lock the person asking out (shared with the sale approvals). Used by the sale and the return approvals.
+   */
+  const grantApproval = async (
+    requester: SessionUser,
+    username: string,
+    password: string,
+    actions: readonly string[],
+    hash: string,
+  ): Promise<{ token: string; expires_at: string }> => {
+    const key = `approval:${requester.id}`;
+    approvalThrottle.check(key);
+    const record = findUserForLogin(db, username);
+    const passwordOk = record ? await hasher.verify(record.password_hash, password) : (await hasher.verify(await dummyHash(), password), false);
+    const usable = record !== undefined && passwordOk && record.role === 'owner' && record.is_active === 1 && record.deleted_at === null;
+    if (!usable) {
+      const lock = approvalThrottle.fail(key);
+      inTransaction((s) => {
+        audit(s.repos, { userId: requester.id, action: 'approval_failed', rowId: record?.id ?? null, details: { requested_by: requester.id, username, actions } });
+        if (lock) audit(s.repos, { userId: requester.id, action: 'approval_locked', rowId: requester.id, details: { seconds: lock.lockedForSeconds } });
+      });
+      throw new DomainError('INVALID_CREDENTIALS', 'wrong username or password, or not the owner'); // the same answer for every reason
+    }
+    approvalThrottle.succeed(key);
+    const grant = approvals.issue({ ownerId: record.id, requestedBy: requester.id, actions, hash, token: Buffer.from(random(32)).toString('hex') });
+    inTransaction((s) => audit(s.repos, { userId: record.id, action: 'approval_granted', rowId: record.id, details: { requested_by: requester.id, actions, bill: hash.slice(0, 12) } }));
+    return grant;
+  };
+
   const rawHandlers: Handlers = {
     // ---------- start-up ----------
     'app:getState': async () => getState(),
@@ -451,30 +488,89 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     // The answer is a token for exactly these actions and this cart that works once, for one minute. Wrong passwords lock the person asking out.
     'approval:request': async ({ username, password, actions, sale }) => {
       const requester = session.require();
-      const key = `approval:${requester.id}`;
-      approvalThrottle.check(key);
-      const record = findUserForLogin(db, username);
-      const passwordOk = record ? await hasher.verify(record.password_hash, password) : (await hasher.verify(await dummyHash(), password), false);
-      const usable = record !== undefined && passwordOk && record.role === 'owner' && record.is_active === 1 && record.deleted_at === null;
-      if (!usable) {
-        const lock = approvalThrottle.fail(key);
-        inTransaction((s) => {
-          audit(s.repos, { userId: requester.id, action: 'approval_failed', rowId: record?.id ?? null, details: { requested_by: requester.id, username, actions } });
-          if (lock) audit(s.repos, { userId: requester.id, action: 'approval_locked', rowId: requester.id, details: { seconds: lock.lockedForSeconds } });
-        });
-        throw new DomainError('INVALID_CREDENTIALS', 'wrong username or password, or not the owner'); // the same answer for every reason
-      }
-      approvalThrottle.succeed(key);
-      const hash = subjectHash(sale);
-      const grant = approvals.issue({ ownerId: record.id, requestedBy: requester.id, actions, hash, token: Buffer.from(random(32)).toString('hex') });
-      inTransaction((s) => audit(s.repos, { userId: record.id, action: 'approval_granted', rowId: record.id, details: { requested_by: requester.id, actions, bill: hash.slice(0, 12) } }));
+      const grant = await grantApproval(requester, username, password, actions, subjectHash(sale));
       return { ...grant, actions: [...actions].sort() };
     },
 
-    'salesReturn:create': async (input) => {
+    // The same for a RETURN: a one-use token for exactly this invoice, these lines, quantities, conditions and reasons, and the person asking.
+    'approval:requestReturn': async ({ username, password, return: draft }) => {
+      const requester = session.require();
+      return grantApproval(requester, username, password, [RETURN_APPROVAL_ACTION], returnSubjectHash(draft));
+    },
+
+    // Staff may START a return; the owner approves it. The owner's own return needs no token. Anyone else needs the owner's one-use token for EXACTLY this
+    // return (the invoice, lines, quantities, conditions and reasons) and the person asking. The approver and the person who started it come from the
+    // session / the token, never from the request. A token is spent by the try, right or wrong.
+    'salesReturn:create': async ({ approval_token, ...input }) => {
       const user = session.require();
-      requireCapability(user, 'returns.approve');
-      return services().salesReturn.create({ ...input, approved_by: user.id });
+      let approver = user.id;
+      let spent = false;
+      if (user.role !== 'owner') {
+        if (!approval_token) throw new DomainError('APPROVAL_REQUIRED', 'the owner has to approve this return', { actions: RETURN_APPROVAL_ACTION });
+        approver = approvals.consume(approval_token, [RETURN_APPROVAL_ACTION], returnSubjectHash(input), user.id).ownerId;
+        spent = true;
+      }
+      return services().salesReturn.create({
+        ...input,
+        approved_by: approver,
+        requested_by: user.id,
+        ...(spent ? { approval_used: { approved_by: approver, requested_by: user.id } } : {}),
+      });
+    },
+
+    // The core's own numbers for a draft return (the screen does no money arithmetic). Writes nothing; no cost.
+    'returns:preview': async (input) => {
+      session.require();
+      return services().salesReturn.preview(input);
+    },
+
+    // The sale with what can still be returned on each line. "Today" is the shop's day (Asia/Karachi), for the expired-batch check.
+    'returns:forInvoice': async ({ invoice_id }) => {
+      session.require();
+      const data = invoiceForReturn(db, invoice_id, shopDayOf(clock.now().toISOString(), DEFAULT_SHOP_TIME_ZONE));
+      if (!data) throw new DomainError('NOT_FOUND', 'there is no such invoice');
+      return data;
+    },
+
+    'returns:list': async (input) => {
+      session.require();
+      return listReturns(db, input);
+    },
+
+    'returns:get': async ({ return_id }) => {
+      session.require();
+      const data = getReturnDetail(db, return_id);
+      if (!data) throw new DomainError('NOT_FOUND', 'there is no such return');
+      return data;
+    },
+
+    // Voiding a whole invoice is the owner's alone (the guard checks the capability; the core checks that the person is an active owner).
+    'invoices:void': async ({ invoice_id, reason }) => {
+      const user = session.require();
+      requireCapability(user, 'invoices.void');
+      return services().salesReturn.voidInvoice({ invoice_id, reason, voided_by: user.id });
+    },
+
+    // The return slip (80 mm) or credit note (A4). COPY from the second print of the same kind for the same return, counted in the audit log.
+    'print:returnSlip': async ({ return_id, kind, language, output }) => {
+      const user = session.require();
+      const data = returnDocumentData(db, return_id, kind);
+      if (!data) throw new DomainError('NOT_FOUND', 'there is no such return');
+      const config = getPrintConfig(db);
+      const chosen = language ?? (kind === 'receipt' ? config.receipt_language : config.invoice_language);
+      const html = renderReturnSlipHtml(data, chosen, fonts);
+      const page = PAGE[kind];
+      const outcome = await deliver(html, { widthMm: page.widthMm, heightMm: page.heightMm }, `${data.return.return_no}-${kind === 'receipt' ? 'slip' : 'credit-note'}${data.is_copy ? '-copy' : ''}-${chosen}.pdf`, output);
+      inTransaction((tx) =>
+        audit(tx.repos, {
+          userId: user.id,
+          action: RETURN_SLIP_AUDIT_ACTION,
+          table: 'sales_returns',
+          rowId: return_id,
+          details: { kind, language: chosen, result: outcome.printed ? 'printed' : 'pdf_saved', fallback: outcome.fallback, copy: data.is_copy },
+        }),
+      );
+      return { status: outcome.printed ? 'printed' : 'pdf_saved', pdf_path: outcome.pdfPath, fallback: outcome.fallback, kind, language: chosen, is_copy: data.is_copy };
     },
 
     // ---------- invoice history and printing: for anyone signed in. Nothing here holds a cost (the queries never select it). ----------

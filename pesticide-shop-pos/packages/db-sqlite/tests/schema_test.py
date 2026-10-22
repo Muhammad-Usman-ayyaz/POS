@@ -124,7 +124,7 @@ check("invoice total matches its lines", one("SELECT COUNT(*) c FROM v_invoice_m
 
 # return 2 bottles, resellable, credited to Khata
 ret = ins("sales_returns", return_no="RET-A-000001", invoice_id=inv, approved_by=owner,
-          refund_method="khata_credit", total=100_000)
+          refund_method="khata_credit", total=100_000, khata_amount=100_000)
 ins("sales_return_items", sales_return_id=ret, invoice_item_id=ii, qty=2_000, refund_amount=100_000, condition="resellable")
 ins("stock_movements", batch_id=b1, qty_delta=2_000, movement_type="sale_return", ref_type="return", ref_id=ret, created_by=owner)
 ins("ledger_entries", party_type="customer", party_id=cust, entry_type="return", amount_delta=-100_000, ref_type="return", ref_id=ret)
@@ -185,14 +185,14 @@ ins("stock_movements", batch_id=b2, qty_delta=-250, movement_type="sale", ref_ty
 check("250 g sold loose, 9750 g left", stock(b2) == 9_750, stock(b2))
 
 print("\n--- void ---")
+expect_fail("voided invoice without a reason is blocked",
+            lambda: db.execute("UPDATE invoices SET status='voided', void_reason=NULL WHERE id=?", (inv2,)),
+            "check constraint")
 db.execute("UPDATE invoices SET status='voided', void_reason='entered by mistake', voided_by=? WHERE id=?", (owner, inv2))
 check("invoice can be voided with a reason", one("SELECT status FROM invoices WHERE id=?", inv2)["status"] == "voided")
-expect_fail("voided invoice without a reason is blocked",
-            lambda: db.execute("UPDATE invoices SET status='voided', void_reason=NULL WHERE id=?", (inv,)),
-            "check constraint")
 expect_fail("return against a voided invoice is blocked",
             lambda: ins("sales_returns", return_no="RET-A-000002", invoice_id=inv2, approved_by=owner,
-                        refund_method="cash", total=1),
+                        refund_method="cash", total=1, cash_amount=1),
             "voided")
 expect_fail("adding a line to a voided invoice is blocked",
             lambda: ins("invoice_items", invoice_id=inv2, product_id=loose, batch_id=b2, qty=10,
@@ -326,7 +326,7 @@ expect_fail("a return line cannot be edited afterwards (tax_refund included)",
             lambda: db.execute("UPDATE sales_return_items SET tax_refund = 1"), "append-only")
 taxed_line = ins("invoice_items", invoice_id=inv, product_id=bottle, batch_id=b1, qty=10_000, unit_price=50_000, cost_price=40_000,
                  line_total=490_000, tax_rate_bp=1800, tax_amount=74_746, name_en="Taxed test line")
-tax_ret = ins("sales_returns", return_no="RET-A-000099", invoice_id=inv, approved_by=owner, refund_method="khata_credit", total=1)
+tax_ret = ins("sales_returns", return_no="RET-A-000099", invoice_id=inv, approved_by=owner, refund_method="khata_credit", total=1, khata_amount=1)
 expect_fail("a return cannot refund one paisa more tax than the line was charged",
             lambda: ins("sales_return_items", sales_return_id=tax_ret, invoice_item_id=taxed_line, qty=2_000, refund_amount=98_000, tax_refund=74_747, condition="resellable"), "cannot pass the tax")
 ins("sales_return_items", sales_return_id=tax_ret, invoice_item_id=taxed_line, qty=2_000, refund_amount=98_000, tax_refund=74_000, condition="resellable")
@@ -436,6 +436,27 @@ after_rows = [tuple(r) for r in mig.execute("SELECT id, amount_delta, entry_date
 check("migration 008 leaves old ledger rows untouched", before_rows == after_rows, (before_rows, after_rows))
 check("old ledger rows keep a NULL seq", [r[0] for r in mig.execute("SELECT seq FROM ledger_entries")] == [None, None])
 check("old customers have NULL land_size and crop", tuple(mig.execute("SELECT land_size, crop FROM customers").fetchone()) == (None, None))
+
+print("\n--- returns and voids (migration 009) ---")
+cols_sr = {r["name"] for r in db.execute("PRAGMA table_info(sales_returns)")}
+check("sales_returns has cash_amount, khata_amount and requested_by", {"cash_amount", "khata_amount", "requested_by"} <= cols_sr)
+check("sales_return_items has a reason column", "reason" in {r["name"] for r in db.execute("PRAGMA table_info(sales_return_items)")})
+expect_fail("a return whose cash and Khata do not add up to the total is refused",
+            lambda: ins("sales_returns", return_no="RET-A-000777", invoice_id=inv, approved_by=owner, refund_method="cash", total=100, cash_amount=60, khata_amount=30),
+            "must equal total")
+w_ret = ins("sales_returns", return_no="RET-A-000778", invoice_id=inv, approved_by=owner, refund_method="cash", total=1, cash_amount=1)
+expect_fail("written-off goods need a reason",
+            lambda: ins("sales_return_items", sales_return_id=w_ret, invoice_item_id=ii, qty=1, refund_amount=1, condition="damaged"),
+            "need a reason")
+ins("sales_return_items", sales_return_id=w_ret, invoice_item_id=ii, qty=1, refund_amount=1, condition="damaged", reason="leaked")
+check("written-off goods with a reason are accepted", one("SELECT COUNT(*) c FROM sales_return_items WHERE reason='leaked'")["c"] == 1)
+expect_fail("an invoice that already has returns cannot be voided",
+            lambda: db.execute("UPDATE invoices SET status='voided', void_reason='x', voided_by=? WHERE id=?", (owner, inv)),
+            "has returns")
+expect_fail("a voided invoice cannot become active again",
+            lambda: db.execute("UPDATE invoices SET status='active' WHERE id=?", (inv2,)), "cannot be made active again")
+expect_fail("a voided invoice keeps its void reason",
+            lambda: db.execute("UPDATE invoices SET void_reason='other' WHERE id=?", (inv2,)), "cannot be changed")
 
 print("\n--- integrity ---")
 check("PRAGMA integrity_check is ok", one("PRAGMA integrity_check")[0] == "ok")

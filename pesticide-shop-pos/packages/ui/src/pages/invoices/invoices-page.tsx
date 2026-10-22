@@ -23,7 +23,7 @@ const DATE_BOX = 'h-14 w-44 rounded-lg border-field-line px-4 text-lg font-norma
  * Invoice history: every sale, newest first, found by invoice number, customer (English or Urdu) or phone, narrowed by date and status.
  * Staff and owner see the same screen (nothing here carries cost). A row opens the sale, where it can be printed again or saved as a PDF.
  */
-export function InvoicesPage({ api }: { api: Api; user: SessionUser }) {
+export function InvoicesPage({ api, user }: { api: Api; user: SessionUser }) {
   const { m, language } = useI18n();
   const t = m.invoices;
   const [query, setQuery] = useState('');
@@ -186,7 +186,7 @@ export function InvoicesPage({ api }: { api: Api; user: SessionUser }) {
         )}
       </div>
 
-      {shown && <InvoiceDetailDialog api={api} row={shown} onClose={() => setSelected(null)} onPrinted={search.refresh} />}
+      {shown && <InvoiceDetailDialog api={api} row={shown} isOwner={user.role === 'owner'} onClose={() => setSelected(null)} onPrinted={search.refresh} />}
     </div>
   );
 }

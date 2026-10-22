@@ -238,7 +238,7 @@ export function defineCustomerKhataTests(make: WorldFactory): void {
         w.setNow(w.at(-5));
         const received = pay(10_000, { method: 'jazzcash', reference_no: 'JC-9', note: 'part payment' });
         w.setNow(w.at(-3));
-        const ret = s.salesReturn.create({ invoice_id: sale.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sale.items[0]!.id, qty: 1000, condition: 'resellable' }] });
+        const ret = s.salesReturn.create({ invoice_id: sale.invoice.id, approved_by: ID.owner, items: [{ invoice_item_id: sale.items[0]!.id, qty: 1000, condition: 'resellable', reason: 'other' }] });
         w.setNow(w.at(-2));
         rawLedger({ entry_type: 'adjustment', amount_delta: 1234, entry_date: `${w.day(-2)}T09:00:00.000Z` });
         w.setNow(w.at(0));

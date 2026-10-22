@@ -202,8 +202,8 @@ describe('the whole path: typed client -> IPC -> validation -> real handlers -> 
   it('the owner cannot type the tax of a refund either: tax_refund on a return line is refused, and nothing is written', async () => {
     await api.auth.login({ username: 'owner', password: OWNER.password });
     const spoof = (input: unknown) => (api.salesReturn.create as (i: unknown) => Promise<unknown>)(input).catch((e: unknown) => e);
-    const line = { invoice_item_id: '00000000-0000-4000-8000-000000000001', qty: 1000, condition: 'resellable' };
-    const error = await spoof({ invoice_id: '00000000-0000-4000-8000-000000000002', refund_method: 'khata_credit', items: [{ ...line, tax_refund: 1 }] });
+    const line = { invoice_item_id: '00000000-0000-4000-8000-000000000001', qty: 1000, condition: 'resellable', reason: 'other' };
+    const error = await spoof({ invoice_id: '00000000-0000-4000-8000-000000000002', items: [{ ...line, tax_refund: 1 }] });
     expect(error).toMatchObject({ code: 'INVALID_INPUT' });
     expect(shop.count('sales_returns')).toBe(0);
   });

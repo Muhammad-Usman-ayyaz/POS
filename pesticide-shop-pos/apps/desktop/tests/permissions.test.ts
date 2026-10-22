@@ -19,7 +19,7 @@ const failureOf = async (promise: Promise<unknown>): Promise<DomainError> => {
 describe('the permission table', () => {
   it('has one line per capability, and by default every one is owner-only', () => {
     expect(capabilities.sort()).toEqual([
-      'catalogue.edit', 'cost.view', 'credit.override', 'customers.settings', 'customers.terms', 'directory.add', 'khata.openingBalance', 'prices.override', 'print.configure', 'profit.view', 'returns.approve',
+      'catalogue.edit', 'cost.view', 'credit.override', 'customers.settings', 'customers.terms', 'directory.add', 'invoices.void', 'khata.openingBalance', 'prices.override', 'print.configure', 'profit.view', 'returns.approve',
       'stock.adjust', 'stock.openingStock', 'stock.receive', 'stock.writeOff',
     ]);
     for (const capability of capabilities) {
@@ -103,7 +103,7 @@ describe('enforced in the handlers', () => {
       expect(footprint()).toEqual(before);
     });
 
-    it('cannot approve a return (NOT_AUTHORIZED), even for a real invoice', async () => {
+    it('cannot COMPLETE a return without the owner (APPROVAL_REQUIRED), even for a real invoice: staff may only start one', async () => {
       await shop.signOut();
       await shop.signInAs('owner');
       const sold = await h()['sale:create']({ customer_id: shop.demo.customers['sajid']!, paid_amount: 0, lines: [{ product_id: product, qty: 1000 }] });
@@ -112,10 +112,23 @@ describe('enforced in the handlers', () => {
 
       const before = footprint();
       const error = await failureOf(
-        h()['salesReturn:create']({ invoice_id: sold.invoice.id, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty: 1000, condition: 'resellable' }] }),
+        h()['salesReturn:create']({ invoice_id: sold.invoice.id, items: [{ invoice_item_id: sold.items[0]!.id, qty: 1000, condition: 'resellable', reason: 'other' }] }),
       );
+      expect(error.code).toBe('APPROVAL_REQUIRED');
+      expect(error.params).toEqual({ actions: 'return_approve' }); // refused by the handler, before the core service runs
+      expect(footprint()).toEqual(before);
+    });
+
+    it('cannot void an invoice (NOT_AUTHORIZED naming invoices.void), even for a real invoice', async () => {
+      await shop.signOut();
+      await shop.signInAs('owner');
+      const sold = await h()['sale:create']({ paid_amount: 50_000, lines: [{ product_id: product, qty: 1000 }] });
+      await shop.signOut();
+      await shop.signInAs('staff');
+      const before = footprint();
+      const error = await failureOf(h()['invoices:void']({ invoice_id: sold.invoice.id, reason: 'staff tries' }));
       expect(error.code).toBe('NOT_AUTHORIZED');
-      expect(error.params).toEqual({ capability: 'returns.approve' }); // refused by the handler, before the core service runs
+      expect(error.params).toEqual({ capability: 'invoices.void' });
       expect(footprint()).toEqual(before);
     });
 
@@ -191,7 +204,7 @@ describe('enforced in the handlers', () => {
 
     it('can approve a return, and the approval is recorded', async () => {
       const sold = await h()['sale:create']({ customer_id: shop.demo.customers['sajid']!, paid_amount: 0, lines: [{ product_id: product, qty: 2000 }] });
-      const back = await h()['salesReturn:create']({ invoice_id: sold.invoice.id, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty: 1000, condition: 'resellable' }] });
+      const back = await h()['salesReturn:create']({ invoice_id: sold.invoice.id, items: [{ invoice_item_id: sold.items[0]!.id, qty: 1000, condition: 'resellable', reason: 'other' }] });
       expect(back.sales_return.approved_by).toBe(shop.ownerId);
       expect(shop.runtime.db.prepare("SELECT user_id, row_id FROM audit_log WHERE action = 'return_approved'").get()).toEqual({ user_id: shop.ownerId, row_id: back.sales_return.id });
     });
@@ -221,7 +234,7 @@ describe('enforced in the handlers', () => {
       const before = footprint();
       const inputs: Partial<{ [C in Channel]: Input<C> }> = {
         'sale:create': { paid_amount: 0, lines: [{ product_id: product, qty: 1000 }] },
-        'salesReturn:create': { invoice_id: product, refund_method: 'khata_credit', items: [{ invoice_item_id: product, qty: 1, condition: 'resellable' }] },
+        'salesReturn:create': { invoice_id: product, items: [{ invoice_item_id: product, qty: 1, condition: 'resellable', reason: 'other' }] },
         'stock:batchesOf': { productId: product },
         'stock:openingStock': { product_id: product, batch_no: 'X', expiry_date: day(10), cost_price: 1, qty: 1 },
         'stock:adjust': { batch_id: batch, qty_delta: 1 },
@@ -244,7 +257,7 @@ describe('enforced in the handlers', () => {
 
     it('covers every channel: each one is public, listed above, or covered by catalogue-api.test.ts (catalogue, receiving stock, quick-add, lists, the customer reads and writes), bills-api.test.ts (held bills) or customers-api.test.ts (customers)', () => {
       const publicChannels: Channel[] = ['app:getState', 'setup:createShop', 'auth:login', 'auth:logout', 'auth:me', 'auth:resetOwnerPassword', 'prefs:setLanguage'];
-      const coveredElsewhere = channels.filter((c) => !business.includes(c) && (/^(catalogue|suppliers|categories|brands|customers|approval|invoices|print|printers|bills):/.test(c) || c === 'stock:receive' || c === 'sale:quote' || c === 'khata:exportStatement'));
+      const coveredElsewhere = channels.filter((c) => !business.includes(c) && (/^(catalogue|suppliers|categories|brands|customers|approval|invoices|print|printers|bills|returns):/.test(c) || c === 'stock:receive' || c === 'sale:quote' || c === 'khata:exportStatement'));
       expect([...publicChannels, ...business, ...coveredElsewhere].sort()).toEqual([...channels].sort());
     });
   });

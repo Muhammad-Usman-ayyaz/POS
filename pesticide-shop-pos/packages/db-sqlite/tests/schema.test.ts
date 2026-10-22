@@ -110,7 +110,7 @@ describe('sale, return and views', () => {
   describe('return of 2 bottles, resellable, credited to Khata', () => {
     beforeAll(() => {
       id.ret = ins('sales_returns', {
-        return_no: 'RET-A-000001', invoice_id: id.inv, approved_by: id.owner, refund_method: 'khata_credit', total: 100_000,
+        return_no: 'RET-A-000001', invoice_id: id.inv, approved_by: id.owner, refund_method: 'khata_credit', total: 100_000, khata_amount: 100_000,
       });
       ins('sales_return_items', { sales_return_id: id.ret, invoice_item_id: id.ii, qty: 2_000, refund_amount: 100_000, condition: 'resellable' });
       ins('stock_movements', { batch_id: id.b1, qty_delta: 2_000, movement_type: 'sale_return', ref_type: 'return', ref_id: id.ret, created_by: id.owner });
@@ -166,12 +166,11 @@ describe('sale, return and views', () => {
       });
 
       it('an invoice can be voided with a reason, and voided invoices refuse further changes', () => {
+        expect(exec("UPDATE invoices SET status='voided', void_reason=NULL WHERE id=?", id.inv2)).toThrow(/check constraint/i);
         db.prepare("UPDATE invoices SET status='voided', void_reason='entered by mistake', voided_by=? WHERE id=?").run(id.owner, id.inv2);
         expect(one('SELECT status FROM invoices WHERE id=?', id.inv2).status).toBe('voided');
-
-        expect(exec("UPDATE invoices SET status='voided', void_reason=NULL WHERE id=?", id.inv)).toThrow(/check constraint/i);
         expect(() =>
-          ins('sales_returns', { return_no: 'RET-A-000002', invoice_id: id.inv2, approved_by: id.owner, refund_method: 'cash', total: 1 }),
+          ins('sales_returns', { return_no: 'RET-A-000002', invoice_id: id.inv2, approved_by: id.owner, refund_method: 'cash', total: 1, cash_amount: 1 }),
         ).toThrow(/voided/i);
         expect(() =>
           ins('invoice_items', { invoice_id: id.inv2, product_id: id.loose, batch_id: id.b2, qty: 10, unit_price: 20_000, cost_price: 15_000, line_total: 200 }),

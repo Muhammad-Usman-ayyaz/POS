@@ -61,6 +61,9 @@ class FakeStore {
       if (delta < 0 && this.stockOf(row.batch_id as string) + delta < 0) throw new Error('insufficient stock in batch');
     }
     if (table === 'ledger_entries' && row.amount_delta === 0) throw new Error('ledger_entries: amount_delta cannot be 0');
+    // migration 009 triggers: the fake refuses what the database refuses, so a service bug cannot hide behind it
+    if (table === 'sales_returns' && (row.cash_amount as number) + (row.khata_amount as number) !== (row.total as number)) throw new Error('sales_returns: cash_amount + khata_amount must equal total');
+    if (table === 'sales_return_items' && row.condition !== 'resellable' && String(row.reason ?? '').trim() === '') throw new Error('sales_return_items: goods that are not resellable are written off and need a reason');
     if (table === 'payments' && (row.amount as number) <= 0) throw new Error('payments: amount must be positive');
     if (table === 'ledger_entries') {
       if ('seq' in row) throw new Error('service set seq on ledger_entries: the repository owns that column');
@@ -285,6 +288,15 @@ function createRepositories(store: FakeStore): Repositories {
         store.insert('invoices', row);
       },
       insertItem: (row) => store.insert('invoice_items', row),
+      markVoided: (id, reason, voidedBy) => {
+        store.needTx('void invoice');
+        const inv = store.data.invoices.find((i) => i.id === id);
+        if (!inv || inv.status !== 'active') throw new Error('void: no active invoice ' + id);
+        // the database refuses this (trigger trg_invoices_void_no_returns): the fake behaves the same
+        if (store.data.sales_returns.some((r) => r.invoice_id === id)) throw new Error('invoices: an invoice that has returns cannot be voided');
+        store.writes++;
+        Object.assign(inv, { status: 'voided', void_reason: reason, voided_by: voidedBy });
+      },
     },
     salesReturns: {
       returnedQtyByItem: (invoiceId) => {
@@ -297,6 +309,8 @@ function createRepositories(store: FakeStore): Repositories {
         }
         return result;
       },
+      khataCreditedSoFar: (invoiceId) => (store.needTx('sales returns'), store.data.sales_returns.filter((r) => r.invoice_id === invoiceId).reduce((n, r) => n + (r.khata_amount as number), 0)),
+      hasReturns: (invoiceId) => (store.needTx('sales returns'), store.data.sales_returns.some((r) => r.invoice_id === invoiceId)),
       insert: (row) => store.insert('sales_returns', row),
       insertItem: (row) => store.insert('sales_return_items', row),
     },

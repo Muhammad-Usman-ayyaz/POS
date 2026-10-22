@@ -379,3 +379,44 @@ The owner's rule: weight in kg, volume in litres, counted things in pieces. Gram
 | printed receipts: quantity and rate | 2 packs × Rs 500/pack, 0.25 kg × Rs 200/kg, 3 pieces × Rs 120/piece | 2 پیک × Rs 500/پیک، 0.25 کلو × Rs 200/کلو، 3 عدد × Rs 120/عدد | |
 
 Numbers inside Urdu text are wrapped in left-to-right isolates, so "0.25 کلو" keeps its digits in order.
+
+## Phase 7: returns, voids and the return slip (the developer's Urdu, not yet reviewed)
+
+Screen text in `packages/ui/src/i18n/messages/ur.ts` under `returns.*` and the slip text in `packages/ui/src/print/return-labels.ts`. Please check the words; the right-hand column is for your correction.
+
+| Key | English | Urdu | Reviewed? |
+|---|---|---|---|
+| `returns.tabNew` / `tabList` | New return / Past returns | نئی واپسی / پچھلی واپسیاں | |
+| `returns.findLabel`, `searchPlaceholder`, `recent` | Find invoice / Invoice number or customer name / Recent invoices | بل تلاش کریں / بل نمبر یا گاہک کا نام / حالیہ بل | |
+| `returns.chipNone` / `chipSome` / `chipAll` / `chipVoided` | Nothing returned yet / Partly returned / All returned / VOIDED | ابھی کچھ واپس نہیں ہوا / کچھ واپس ہو چکا / سب واپس ہو چکا / منسوخ | |
+| `returns.voidedBanner` | This invoice is voided (...). Goods cannot be returned against it. | یہ بل منسوخ ہے (...)۔ اس کے مقابلے میں مال واپس نہیں ہو سکتا۔ | |
+| `returns.colSold` / `colReturned` / `colQty` / `colRefund` | Sold / Already returned / Return qty / Refund | فروخت / پہلے واپس / واپسی کی مقدار / رقم واپس | |
+| `returns.less` / `more` | Less / More | کم / زیادہ | |
+| `returns.each`, `discountShared` | Rs 500 each / Rs 50 disc. shared | Rs 500 فی پیک / Rs 50 رعایت تقسیم | |
+| `returns.resellable` / `backToStock` | Resellable / Back to stock | دوبارہ بکنے کے قابل / اسٹاک میں واپس | |
+| `returns.damaged` / `expired` / `writtenOff` | Damaged / Expired / Written off | خراب / میعاد ختم / ضائع | |
+| `returns.expiredBatch` | This batch has expired: the goods cannot go back on the shelf. | اس بیچ کی میعاد ختم ہو چکی ہے: مال شیلف پر واپس نہیں جا سکتا۔ | |
+| `returns.reasons.*` | Customer changed mind / Wrong item / Damaged / Leaked in transit / Expired / Other | گاہک نے ارادہ بدل دیا / غلط چیز / خراب / راستے میں لیک ہو گئی / میعاد ختم / دیگر | |
+| `returns.reasonLabel` / `chooseReason` / `noteLabel` | Reason / Choose reason / Note (optional) | وجہ / وجہ چنیں / نوٹ (اختیاری) | |
+| `returns.ownerDecides` | The owner confirms this when approving. | منظوری کے وقت مالک اس کی تصدیق کرے گا۔ | |
+| `returns.summaryTitle`, `summaryNone`, `shared` | Refund summary / Choose what comes back... / Worked out from the original price, with the discount shared across the line. | واپسی کا خلاصہ / چنیں کیا واپس آ رہا ہے... / اصل قیمت سے حساب: رعایت پوری لائن میں تقسیم ہے۔ | |
+| `returns.refund`, `includesTax` | Refund / includes tax Rs 37 | واپسی رقم / Rs 37 ٹیکس سمیت | |
+| `returns.methodLabel`, `cashBack`, `khataReduce` | Refund method / Cash back / Reduce customer's Khata balance | رقم واپس کرنے کا طریقہ / نقد واپس / گاہک کا کھاتہ کم کریں | |
+| `returns.cashBackHint`, `khataReduceHint` | Hand Rs 833 to the customer / Rashid owes less | گاہک کو Rs 833 دیں / راشد کے ذمے کم | |
+| `returns.methodRule`, `methodRuleKhata` | Decided by the sale: what the customer paid comes back in cash, what is still on Khata is taken off it. / The shop setting gives Khata credit for everything on a customer sale. | فروخت کے مطابق طے ہوتا ہے: جو گاہک نے دیا وہ نقد واپس، جو کھاتے میں باقی ہے وہ کھاتے سے کم۔ / دکان کی سیٹنگ کے مطابق گاہک کی ہر فروخت پر کھاتے میں کریڈٹ ملتا ہے۔ | |
+| `returns.khataBefore` / `khataAfter` | Khata before / Khata after | پہلے کھاتہ / بعد میں کھاتہ | |
+| `returns.stock`, `stockBack`, `stockOff` | Stock / ... goes back to the shelf / ... is written off | اسٹاک / ... شیلف پر واپس جاتا ہے / ... ضائع کیا جاتا ہے | |
+| `returns.needsOwner`, `ownerApproval`, `complete` | Returns need owner approval. / Owner approval / Complete return | واپسی کے لیے مالک کی منظوری ضروری ہے۔ / مالک کی منظوری / واپسی مکمل کریں | |
+| `returns.unchangedNote` | Original invoice stays unchanged. A credit note is created. | اصل بل میں تبدیلی نہیں ہوتی۔ کریڈٹ نوٹ بنتا ہے۔ | |
+| `returns.issues.*` | Choose a reason for every item. / This size can only come back in whole packs. / An expired batch cannot be marked resellable. | ہر آئٹم کی وجہ چنیں۔ / یہ سائز صرف پورے پیک میں واپس ہو سکتا ہے۔ / میعاد ختم بیچ کو دوبارہ بکنے کے قابل نہیں لکھا جا سکتا۔ | |
+| `returns.approval.*` | Owner approval / Return / The owner types their own username and password. This approval works once, for this return only. / Confirm what happens to the goods / Owner username / Owner password / The password is sent once and is not kept. / Cancel / Approve and complete / Checking... | مالک کی منظوری / واپسی / مالک اپنا یوزر نام اور پاس ورڈ خود لکھے۔ یہ منظوری ایک بار، صرف اسی واپسی کے لیے چلتی ہے۔ / تصدیق کریں کہ مال کا کیا ہوگا / مالک کا یوزر نام / مالک کا پاس ورڈ / پاس ورڈ ایک بار بھیجا جاتا ہے اور محفوظ نہیں رکھا جاتا۔ / منسوخ / منظور کریں اور مکمل کریں / جانچ ہو رہی ہے... | |
+| `returns.done.*` | Return complete / Credit note RET-A-000001 for INV-A-000002 / Refund total / Included tax / Refunded to / Cash / Khata / Cash and Khata / Rashid owes now / ... has an advance of / ... owes nothing now / Invoice ... is unchanged. / Another return | واپسی مکمل / کریڈٹ نوٹ ... برائے ... / کل واپسی رقم / شامل ٹیکس / رقم کی واپسی / نقد / کھاتہ / نقد اور کھاتہ / راشد کے ذمے اب / ... کا ایڈوانس / ... کے ذمے اب کچھ نہیں / بل ... میں کوئی تبدیلی نہیں۔ / ایک اور واپسی | |
+| `returns.print.*` | Print slip (80 mm) / Print credit note (A4) / Save slip PDF / Save credit note PDF | پرچی چھاپیں (80 ملی میٹر) / کریڈٹ نوٹ چھاپیں (A4) / پرچی PDF محفوظ کریں / کریڈٹ نوٹ PDF محفوظ کریں | |
+| `returns.void.*` | Void a whole invoice (owner only) / Use this when the entire sale was a mistake. / Owner only / Reason (required) / This cannot be undone. It creates reversing entries for stock, payment and Khata. The invoice is marked Void and stays on record. / Cancel / Void invoice / Voiding... / This invoice already has returns... / This invoice is already voided. | پورا بل منسوخ کریں (صرف مالک) / یہ تب استعمال کریں جب پوری فروخت غلطی تھی۔ / صرف مالک / وجہ (ضروری) / یہ واپس نہیں ہو سکتا۔ اسٹاک، ادائیگی اور کھاتے کی الٹی اندراجات بنتی ہیں۔ بل منسوخ لکھا جاتا ہے اور ریکارڈ میں رہتا ہے۔ / منسوخ / بل منسوخ کریں / منسوخ ہو رہا ہے... / اس بل پر واپسیاں ہو چکی ہیں... / یہ بل پہلے ہی منسوخ ہے۔ | |
+| `returns.void.done` | Invoice ... is voided. Stock is back on the shelf. Rs ... was taken off the Khata. Hand back Rs ... in cash. | بل ... منسوخ ہو گیا۔ اسٹاک شیلف پر واپس آ گیا۔ Rs ... کھاتے سے کم ہوئے۔ Rs ... نقد واپس دیں۔ | |
+| `returns.list.*` | No returns yet / Credit note / Paid back / Started by / Printed / Cash / Khata / Approved by ... | ابھی کوئی واپسی نہیں / کریڈٹ نوٹ / کیسے واپس / شروع کرنے والا / چھپا / نقد / کھاتہ / منظور کنندہ | |
+| `customerSettings.refundToKhata`, `refundToKhataHint` | Refunds go to Khata / Off (the default): when a customer returns goods, what they paid comes back in cash and only what they still owe comes off their Khata. On: everything on a customer sale is credited to their Khata. Walk-in sales are always cash. | واپسی کی رقم کھاتے میں / بند (عام طور پر): گاہک مال واپس کرے تو جو اس نے دیا وہ نقد واپس ملتا ہے اور صرف جو اس کے ذمے ہے وہ کھاتے سے کم ہوتا ہے۔ کھلا: ... | |
+| `returns.fromInvoice.*` | Return items / Void invoice | آئٹم واپس کریں / بل منسوخ کریں | |
+| errors `RETURN_REASON_REQUIRED`, `EXPIRED_NOT_RESELLABLE`, `VOID_REASON_REQUIRED`, `VOID_HAS_RETURNS` | Choose a reason for every item / This batch has expired, so the goods cannot go back on the shelf / A reason is needed to void a bill / This bill already has returns, so it cannot be voided | ہر آئٹم کی وجہ چنیں / اس بیچ کی میعاد ختم ہو چکی ہے، مال شیلف پر واپس نہیں جا سکتا / بل منسوخ کرنے کی وجہ لکھنا ضروری ہے / اس بل پر واپسیاں ہو چکی ہیں، اس لیے اسے منسوخ نہیں کیا جا سکتا | |
+| Printed slip (`return-labels.ts`) | RETURN SLIP / CREDIT NOTE / COPY / Credit note / Invoice / Customer / Approved by / Refund total / Included tax / Refunded to / Cash back / Taken off Khata / Owes now / Advance / Clear / Back to stock / Written off / Invoice ... is unchanged. / Thank you. Please keep this slip. | واپسی کی پرچی / کریڈٹ نوٹ / COPY · نقل / کریڈٹ نوٹ / بل / گاہک / منظور کنندہ / کل واپسی رقم / ٹیکس سمیت / رقم کی واپسی / نقد واپس / کھاتے سے کم / اب ان کے ذمے / ایڈوانس / حساب صاف / واپس اسٹاک میں / ضائع کیا گیا / بل ... میں کوئی تبدیلی نہیں۔ / شکریہ۔ یہ پرچی سنبھال کر رکھیں۔ | |
+| Slip reasons and columns | # / Item / Batch / Qty / Rate / Tax / Refund / Reason / Stock | نمبر / آئٹم / بیچ / مقدار / ریٹ / ٹیکس / واپسی / وجہ / اسٹاک | |

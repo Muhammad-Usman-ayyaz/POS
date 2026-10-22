@@ -167,7 +167,7 @@ export function defineCatalogueTests(make: WorldFactory): void {
         stockSize(s1l.id, 5000);
         const sold = s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: s1l.id, qty: 2000 }] });
         s.catalogue.updateSize({ actor_id: owner, product_id: s1l.id, changes: { retail_price: 99_999 } }); // the price changes after the sale
-        const back = s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty: 1000, condition: 'resellable' }] });
+        const back = s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: owner, items: [{ invoice_item_id: sold.items[0]!.id, qty: 1000, condition: 'resellable', reason: 'other' }] });
         expect(back.sales_return.total).toBe(50_000 * 1); // one 1 L pack at the old price Rs 500
         expect(s.stock.batchesOf(s1l.id).reduce((sum, b) => sum + b.stock, 0)).toBe(4000);
       });
@@ -951,7 +951,7 @@ export function defineCatalogueTests(make: WorldFactory): void {
         const sold = s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: x.sizes[1]!.id, qty: 1500 }] });
         expect(stockOfFirst(cat, 'insecticide x')[1]).toEqual(['500 ml', 8500, 8500]);
 
-        s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty: 500, condition: 'resellable' }] });
+        s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: owner, items: [{ invoice_item_id: sold.items[0]!.id, qty: 500, condition: 'resellable', reason: 'other' }] });
         expect(stockOfFirst(cat, 'insecticide x')[1]).toEqual(['500 ml', 9000, 9000]);
 
         s.stock.adjust({ batch_id: batch, qty_delta: -1000, created_by: owner });

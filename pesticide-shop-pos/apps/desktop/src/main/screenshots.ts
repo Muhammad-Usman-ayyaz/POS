@@ -872,6 +872,92 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await posPickerScreens(name, language, false);
   }
 
+  // ---------- Phase 7: returns and voids (numbers 200 and up; the Phase 6 layout judge applies to them) ----------
+  /** Picks a value in the n-th <select data-reason> (the same in both languages: the value is the reason code). */
+  function pickReason(n: number, value: string): Promise<unknown> {
+    return js(`(() => { const el = document.querySelectorAll('[data-return-line] select[data-reason]')[${n}];
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, ${JSON.stringify(value)});
+      el.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  }
+  /** Presses More on the n-th return line (the last button of its stepper) `times` times. */
+  function more(n: number, times: number): Promise<unknown> {
+    return js(`(async () => { for (let i = 0; i < ${times}; i++) { const line = document.querySelectorAll('[data-return-line]')[${n}];
+      const buttons = [...line.querySelectorAll('button')].filter((b) => b.textContent.trim() === '+'); buttons[0].click(); await new Promise((r) => setTimeout(r, 60)); } })()`);
+  }
+  async function openInvoiceForReturn(invoiceNo: string): Promise<void> {
+    await go('/returns');
+    await js(`document.querySelector('[data-page=returns] [role=tab]')?.click()`); // the New return tab (the page may still be on Past returns)
+    await waitFor('[data-find-invoice]');
+    await fill('#return-search', invoiceNo); // the list shows the 5 newest invoices: search for the one wanted
+    await waitFor(`[data-find-row="${invoiceNo}"]`);
+    await click(`[data-find-row="${invoiceNo}"]`);
+    await waitFor('[data-return-lines]');
+    await sleep(300);
+  }
+
+  /** Owner: the empty page, a sale opened, a partial return with a reason, the void card, the finished return, the list, and a voided invoice. */
+  async function ownerReturnsScreens(language: 'en' | 'ur', prefix: number, returnInvoice: string, voidInvoice: string): Promise<void> {
+    await go('/pos');
+    await go('/returns');
+    await waitFor('[data-find-invoice]');
+    await waitFor('[data-find-row]');
+    await shot(`${prefix}-returns-start-${language}`);
+    await openInvoiceForReturn(returnInvoice);
+    await shot(`${prefix + 1}-returns-invoice-${language}`);
+    await more(0, 1);
+    await pickReason(0, 'changed_mind');
+    if (await js<boolean>(`document.querySelectorAll('[data-return-line]').length > 1`)) {
+      await js(`(() => { const input = document.querySelectorAll('[data-return-line]')[1].querySelector('input[data-qty]');
+        if (!input) return; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '0.1'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      await sleep(200);
+      if (await js<boolean>(`!!document.querySelectorAll('[data-return-line]')[1].querySelector('select[data-reason]')`)) await pickReason(1, 'leaked');
+    }
+    await waitFor('[data-refund-total]');
+    await sleep(500);
+    await shot(`${prefix + 2}-returns-refund-${language}`);
+    await js(`document.querySelector('[data-void-card]')?.scrollIntoView()`);
+    await sleep(300);
+    await shot(`${prefix + 3}-returns-void-card-${language}`);
+    await js(`document.querySelector('main').scrollTo(0, 0)`);
+    await click('[data-complete]:not([disabled])');
+    await waitFor('[data-return-complete] [data-done-total]');
+    await sleep(300);
+    await shot(`${prefix + 4}-returns-complete-${language}`);
+    await click('[role=tab][aria-selected=false]');
+    await waitFor('[data-returns-list] [data-return-row]');
+    await shot(`${prefix + 5}-returns-list-${language}`);
+    await click('[data-return-row] button');
+    await waitFor('[data-return-detail]');
+    await shot(`${prefix + 6}-returns-detail-${language}`);
+    await js(`[...document.querySelectorAll('[role=dialog] button')].at(-1).click()`);
+    await openInvoiceForReturn(voidInvoice);
+    await js(`document.querySelector('[data-void-card]').scrollIntoView()`);
+    await fill('#void-reason', language === 'en' ? 'Entered for the wrong customer' : 'غلط گاہک کے نام پر لکھا گیا');
+    await sleep(200);
+    await shot(`${prefix + 7}-returns-void-reason-${language}`);
+    await click('[data-void-confirm]');
+    await waitFor('[data-void-done]');
+    await sleep(300);
+    await shot(`${prefix + 8}-returns-voided-${language}`);
+  }
+
+  /** Staff: start a return and ask the owner (the approval box with the stock decision), then the page as staff sees it (no void card). */
+  async function staffReturnsScreens(language: 'en' | 'ur', prefix: number, invoiceNo: string): Promise<void> {
+    await openInvoiceForReturn(invoiceNo);
+    await more(0, 1);
+    await pickReason(0, 'wrong_item');
+    await waitFor('[data-refund-total]');
+    await sleep(500);
+    await shot(`${prefix}-staff-returns-refund-${language}`);
+    await click('[data-ask-owner]:not([disabled])');
+    await waitFor('[role=dialog] [data-approval-lines]');
+    await fill('#return-approval-username', 'owner');
+    await sleep(200);
+    await shot(`${prefix + 1}-staff-returns-approval-${language}`);
+    await js(`[...document.querySelectorAll('[role=dialog] button')].find((b) => !b.disabled && b.type === 'button' && !b.hasAttribute('aria-pressed')).click()`);
+    await sleep(300);
+  }
+
   async function walk(): Promise<void> {
   // ---------- first launch ----------
   await waitFor('#shopName');
@@ -907,6 +993,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await invoiceDetailScreen('en', 95);
   await settingsScreen('en', 96, 'owner');
   await ownerCustomerScreens('en', 110, 148);
+  await ownerReturnsScreens('en', 200, 'INV-A-000002', 'INV-A-000004');
 
   // ---------- Urdu: right to left ----------
   await setLanguage('ur');
@@ -921,6 +1008,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await invoiceDetailScreen('ur', 105);
   await settingsScreen('ur', 106, 'owner');
   await ownerCustomerScreens('ur', 160, 195);
+  await ownerReturnsScreens('ur', 220, 'INV-A-000005', 'INV-A-000006');
   await setLanguage('en');
 
   // ---------- the same screen for staff: no cost, no Receive stock, no Add, no Edit ----------
@@ -937,11 +1025,16 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   await settingsScreen('en', 99, 'staff'); // nor can they change settings: they see the calm message
   await staffLimitScreens(97);
   await staffCustomerScreens('en', 149, 159);
+  await staffReturnsScreens('en', 240, 'INV-A-000003');
   await go('/purchases/receive'); // nor can they open Receive stock: they land on Purchases, which has no link to it
   await waitFor('[data-page=purchases]');
   await shot('49-staff-receive-redirect-en');
   await setLanguage('ur');
   await productsScreens('ur', '45');
+  await setLanguage('ur');
+  await staffReturnsScreens('ur', 242, 'INV-A-000007');
+  await setLanguage('en');
+  await setLanguage('ur');
   await staffCustomerScreens('ur', 196, 199);
   await setLanguage('en');
 

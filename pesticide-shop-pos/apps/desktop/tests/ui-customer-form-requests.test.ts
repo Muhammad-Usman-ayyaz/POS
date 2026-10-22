@@ -30,7 +30,7 @@ const rashid = () => shop.demo.customers['rashid']!;
 describe('create', () => {
   it('staff: the contact-only request is accepted; the customer starts with the shop default limit and retail', async () => {
     await setup('owner');
-    await call('customers:setSettings', R.buildCustomerSettingsRequest(await call('customers:getSettings'), { defaultLimit: '5000', showFarmer: false }));
+    await call('customers:setSettings', R.buildCustomerSettingsRequest(await call('customers:getSettings'), { defaultLimit: '5000', showFarmer: false, refundToKhata: false }));
     await as('staff');
     const request = R.buildCreateRequest(draft({ creditLimit: '999', priceType: 'wholesale' }), { owner: false, showFarmer: true });
     expect(request).toEqual({ fields: { name_en: 'Imran Khan', phone: '0321 7654321', village: 'Chak 45' } }); // typed terms never leave a staff form
@@ -150,20 +150,20 @@ describe('the Customers settings', () => {
   it('owner: only what changed is sent; rupees become paisa; the reply is what the form shows next', async () => {
     await setup('owner');
     let saved = await call('customers:getSettings');
-    expect(saved).toEqual({ default_credit_limit: 0, show_farmer_fields: false });
+    expect(saved).toEqual({ default_credit_limit: 0, show_farmer_fields: false, refund_paid_part_to_khata: false });
     expect(R.buildCustomerSettingsRequest(saved, R.settingsDraftFrom(saved))).toEqual({});
-    const onlyLimit = R.buildCustomerSettingsRequest(saved, { defaultLimit: '7500', showFarmer: false });
+    const onlyLimit = R.buildCustomerSettingsRequest(saved, { defaultLimit: '7500', showFarmer: false, refundToKhata: false });
     expect(onlyLimit).toEqual({ default_credit_limit: 750_000 });
     saved = await call('customers:setSettings', onlyLimit);
-    expect(saved).toEqual({ default_credit_limit: 750_000, show_farmer_fields: false });
-    const onlyToggle = R.buildCustomerSettingsRequest(saved, { defaultLimit: '7500', showFarmer: true });
+    expect(saved).toEqual({ default_credit_limit: 750_000, show_farmer_fields: false, refund_paid_part_to_khata: false });
+    const onlyToggle = R.buildCustomerSettingsRequest(saved, { defaultLimit: '7500', showFarmer: true, refundToKhata: false });
     expect(onlyToggle).toEqual({ show_farmer_fields: true });
-    expect(await call('customers:setSettings', onlyToggle)).toEqual({ default_credit_limit: 750_000, show_farmer_fields: true });
+    expect(await call('customers:setSettings', onlyToggle)).toEqual({ default_credit_limit: 750_000, show_farmer_fields: true, refund_paid_part_to_khata: false });
   });
 
   it('staff may read the settings (the form needs the default) but not change them', async () => {
     await setup('staff');
-    expect(await call('customers:getSettings')).toEqual({ default_credit_limit: 0, show_farmer_fields: false });
+    expect(await call('customers:getSettings')).toEqual({ default_credit_limit: 0, show_farmer_fields: false, refund_paid_part_to_khata: false });
     expect((await failure('customers:setSettings', { default_credit_limit: 100 })).code).toBe('NOT_AUTHORIZED');
   });
 });

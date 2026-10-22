@@ -293,6 +293,11 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
       listItems: (invoiceId) => all<InvoiceItem>('invoices', 'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY rowid', invoiceId),
       insert: (row) => insert('invoices', row),
       insertItem: (row) => insert('invoice_items', row),
+      markVoided: (id, reason, voidedBy) => {
+        needTx('void invoice');
+        const changed = stmt("UPDATE invoices SET status = 'voided', void_reason = ?, voided_by = ? WHERE id = ? AND status = 'active'").run(reason, voidedBy, id).changes;
+        if (changed !== 1) throw new Error('void: no active invoice ' + id);
+      },
     },
 
     salesReturns: {
@@ -308,6 +313,10 @@ export function createSqliteRepositories(db: Db, scope: DeviceScope): Repositori
         );
         return new Map(rows.map((r) => [r.invoice_item_id, r.qty]));
       },
+      khataCreditedSoFar: (invoiceId) =>
+        sum('sales returns', 'SELECT COALESCE(SUM(khata_amount), 0) AS total FROM sales_returns WHERE invoice_id = ? AND deleted_at IS NULL', invoiceId),
+      hasReturns: (invoiceId) =>
+        sum('sales returns', 'SELECT COUNT(*) AS total FROM sales_returns WHERE invoice_id = ? AND deleted_at IS NULL', invoiceId) > 0,
       insert: (row) => insert('sales_returns', row),
       insertItem: (row) => insert('sales_return_items', row),
     },

@@ -129,6 +129,19 @@ export function CustomerSettingsSection({ api }: { api: Api }) {
               />
               <p className="mt-1.5 text-sm text-muted">{s.showFarmerHint}</p>
             </div>
+            <div className="sm:col-span-2">
+              <span className={LABEL}>{s.refundToKhata}</span>
+              <Seg
+                label={s.refundToKhata}
+                value={draft.refundToKhata ? 'on' : 'off'}
+                options={[
+                  { value: 'on' as const, label: s.on },
+                  { value: 'off' as const, label: s.off },
+                ]}
+                onChange={(v) => setDraft({ ...draft, refundToKhata: v === 'on' })}
+              />
+              <p className="mt-1.5 text-sm text-muted">{s.refundToKhataHint}</p>
+            </div>
           </section>
           <div className="flex items-center justify-end gap-4">
             {!changed && <p className="text-sm text-muted">{s.nothingChanged}</p>}
