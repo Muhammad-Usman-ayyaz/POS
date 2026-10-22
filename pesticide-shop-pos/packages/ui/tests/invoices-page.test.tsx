@@ -11,6 +11,7 @@ import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
 import { InvoicesPage, PAGE_SIZE } from '../src/pages/invoices/invoices-page.js';
 import { scanSource, timeZoneViolations } from './source-scan.js';
+import { smallUnitsIn, UNIT_WORDS, visibleText, withoutMarks } from './unit-scan.js';
 
 // The zone the invoice screens use comes from ONE constant (pages/invoices/time-zone.ts). Tests may move it to prove every date follows it.
 const zone = vi.hoisted(() => ({ value: 'Asia/Karachi' }));
@@ -311,7 +312,7 @@ describe('Invoices: the detail', () => {
     expect(lines[0]).toContain('Rs 500'); // price per pack
     expect(lines[0]).toContain('Rs 91'); // tax inside the line
     expect(lines[0]).toContain('Rs 1,000');
-    expect(lines[1]).toContain('250 g'); // loose
+    expect(lines[1]).toContain('0.25 kg'); // loose, said in kg
     expect(lines[1]).toContain('Rs 200/kg');
     expect(lines[1]).toContain('loose');
     expect(within(dialog).getByText('Rashid · Chak 12')).toBeTruthy();
@@ -520,4 +521,18 @@ describe('Invoices: dates that read the same in English and Urdu (docs/design: "
       cleanup();
     }
   });
+});
+
+describe('standard units on the invoice detail (English and Urdu)', () => {
+  for (const language of ['en', 'ur'] as const) {
+    it(`${language}: the lines as sold are in kg / L / pieces, never g or ml (old names are converted)`, async () => {
+      show(fakeShell(), STAFF, language);
+      await openSecond();
+      const dialog = screen.getByRole('dialog');
+      const lines = visibleText(dialog);
+      expect(smallUnitsIn(lines)).toEqual([]);
+      expect(UNIT_WORDS[language].test(withoutMarks(lines))).toBe(true);
+      expect(withoutMarks(lines)).toContain(language === 'ur' ? '0.25 کلو' : '0.25 kg');
+    });
+  }
 });

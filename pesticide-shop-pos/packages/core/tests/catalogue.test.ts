@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCatalogueIndex, NO_STOCK, normalizeSearchText, searchCatalogue, searchIndex, sizeDisplayName, sizeFlags, summarizeSizes, tidyText, type GroupWithSizes, type ListedSize, type ProductGroup, type SizeStatus, type SizeWithStock } from '../src/index.js';
+import { buildCatalogueIndex, NO_STOCK, normalizeSearchText, searchCatalogue, searchIndex, sizeDisplayName, sizeFlags, storedPackLabel, summarizeSizes, tidyText, type GroupWithSizes, type ListedSize, type ProductGroup, type SizeStatus, type SizeWithStock } from '../src/index.js';
 
 describe('sizeDisplayName', () => {
   it('joins the group name and the pack label with one space', () => {
@@ -228,7 +228,7 @@ describe('buildCatalogueIndex + searchIndex give the same answers as the plain, 
         continue;
       }
       const matched = sizes.filter((s) => {
-        const hay = normalizeSearchText([group.name_en, group.name_ur, s.name_en, s.name_ur, s.pack_label].filter((t): t is string => !!t).join(' '));
+        const hay = normalizeSearchText([group.name_en, group.name_ur, s.name_en, s.name_ur, s.pack_label, storedPackLabel(s.base_unit, s.pack_size)].filter((t): t is string => !!t).join(' '));
         return words.every((w) => hay.includes(w));
       });
       if (matched.length === 0) continue;

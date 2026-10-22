@@ -151,6 +151,9 @@ Triggers write `change_log` on every insert and update. Set `synced_at` after a 
 - `customers.search` also matches a typed phone number by digits only.
 - `customerSettings.get` / `set`: `default_credit_limit` (non-negative whole paisa) and `customers.show_farmer_fields`. `set` is owner only and writes one `customer_setting_changed` audit row (`field`, `from`, `to`) per setting that really changed.
 
+## Storage stays in base units (the units change)
+
+Quantities and pack sizes are still integers in grams, millilitres and pieces; nothing stored changed. kg and L exist only at the display and keyboard edge, converted by `packages/core/src/units.ts` (kg = 1000 g, L = 1000 ml). The unit of a product is its `base_unit`, so there is no new column. `sale:quote`, `sale:create`, `stock:receive` and the held-bill channels keep sending and returning integer base quantities. No migration was added.
 ## Opening balance correction (Phase 6 wrap-up, option A)
 `khata.adjustOpening({ customer_id, delta, reason, created_by })` (channel `khata:adjustOpening`, owner only, capability `khata.openingBalance`):
 - The customer must already have an `opening` ledger row (else `NO_OPENING_BALANCE`). `delta` is a non-zero whole number of paisa (plus: owes more; minus: owes less; at most Rs 10 billion); `reason` is 1 to 200 characters.

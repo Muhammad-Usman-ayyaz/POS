@@ -13,6 +13,8 @@ export interface AllocateRequest {
   /** Wanted, in base units. */
   qty: number;
   pack_size: number;
+  /** The stored unit (g, ml or piece). Only carried into error params so a screen can say the quantity in kg, L or pieces. */
+  base_unit?: string;
   allow_loose: boolean;
   /** `YYYY-MM-DD`. Passed in so this stays pure and testable. A batch is expired only when expiry_date < today. */
   today: string;
@@ -24,10 +26,12 @@ export interface Allocation {
   qty: number;
 }
 
+const unitParam = (req: AllocateRequest): { unit: string } | Record<string, never> => (req.base_unit ? { unit: req.base_unit } : {});
+
 function checkRequest(req: AllocateRequest): void {
   if (!Number.isInteger(req.qty) || req.qty <= 0) throw new DomainError('INVALID_QUANTITY', `quantity must be a positive integer: ${req.qty}`);
   if (!req.allow_loose && req.qty % req.pack_size !== 0) {
-    throw new DomainError('WHOLE_PACKS_ONLY', `this product is sold in whole packs of ${req.pack_size}`, { packSize: req.pack_size });
+    throw new DomainError('WHOLE_PACKS_ONLY', `this product is sold in whole packs of ${req.pack_size}`, { packSize: req.pack_size, ...unitParam(req) });
   }
 }
 
@@ -61,7 +65,7 @@ export function allocateBatches(req: AllocateRequest): Allocation[] {
 
   if (remaining > 0) {
     const available = req.qty - remaining;
-    throw new DomainError('INSUFFICIENT_STOCK', `only ${available} available, ${req.qty} requested`, { available, requested: req.qty, packSize: req.pack_size, scope: 'product' });
+    throw new DomainError('INSUFFICIENT_STOCK', `only ${available} available, ${req.qty} requested`, { available, requested: req.qty, packSize: req.pack_size, ...unitParam(req), scope: 'product' });
   }
   return result;
 }
@@ -84,10 +88,10 @@ export function validateManualAllocation(req: AllocateRequest, manual: readonly 
     if (!batch) throw new DomainError('BATCH_NOT_AVAILABLE', `batch is not one of this product's batches: ${m.batch_id}`);
     if (isExpired(batch, req.today)) throw new DomainError('BATCH_EXPIRED', `batch expired on ${batch.expiry_date}`, { expiry: batch.expiry_date });
     if (!req.allow_loose && m.qty % req.pack_size !== 0) {
-      throw new DomainError('WHOLE_PACKS_ONLY', `this product is sold in whole packs of ${req.pack_size}`, { packSize: req.pack_size });
+      throw new DomainError('WHOLE_PACKS_ONLY', `this product is sold in whole packs of ${req.pack_size}`, { packSize: req.pack_size, ...unitParam(req) });
     }
     if (m.qty > batch.stock) {
-      throw new DomainError('INSUFFICIENT_STOCK', `batch has ${batch.stock}, ${m.qty} requested`, { available: batch.stock, requested: m.qty, packSize: req.pack_size, scope: 'batch' });
+      throw new DomainError('INSUFFICIENT_STOCK', `batch has ${batch.stock}, ${m.qty} requested`, { available: batch.stock, requested: m.qty, packSize: req.pack_size, ...unitParam(req), scope: 'batch' });
     }
     total += m.qty;
   }

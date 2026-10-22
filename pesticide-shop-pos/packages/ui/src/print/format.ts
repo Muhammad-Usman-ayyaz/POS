@@ -1,6 +1,6 @@
 // How the numbers on a document are said. Pure functions of the document data.
 
-import { formatPaisa, type DocumentLanguage, type DocumentLine, type DocumentUnit, type InvoiceDocumentData } from '@pos/core';
+import { formatPaisa, legacyLabelToDisplay, pricePerUnit, quantityLabel, unitWord, type DocumentLanguage, type DocumentLine, type DocumentUnit, type InvoiceDocumentData } from '@pos/core';
 import { formatDate } from '../i18n/format.js';
 import { LABELS } from './labels.js';
 
@@ -23,51 +23,46 @@ export function formatDateTime(isoUtc: string, timeZone: string): string {
 
 export const formatDueDate = (isoDate: string): string => formatDate(isoDate, 'en');
 
-/** `1.5` not `1.500`: up to three decimals, trailing zeros dropped. */
-function trimmed(n: number): string {
-  return String(Math.round(n * 1000) / 1000);
-}
-
-/** An amount of a base unit: 250 g, 1.5 kg, 500 ml, 2 L, 3 pc. Urdu uses the Urdu unit words. */
+/** An amount of a base unit in the standard unit: 0.25 kg, 1.5 kg, 0.5 L, 2 L, 3 pieces. Urdu uses the Urdu unit words. Done by the units module. */
 export function quantityText(qty: number, unit: DocumentUnit, language: DocumentLanguage): string {
-  const labels = LABELS[language];
-  if (unit !== 'piece' && qty >= 1000) return `${trimmed(qty / 1000)} ${labels.bigUnits[unit]}`;
-  return `${qty} ${labels.units[unit]}`;
+  return quantityLabel(unit, qty, LABELS[language].units);
 }
 
-/** The unit a pack is priced per, after the slash: "/kg" for a 1000 g pack, "/500 ml" for a 500 ml pack. */
-function perPackText(line: DocumentLine, language: DocumentLanguage): string {
-  const labels = LABELS[language];
-  if (line.base_unit !== 'piece' && line.pack_size === 1000) return labels.bigUnits[line.base_unit];
-  if (line.pack_size === 1) return labels.perUnit[line.base_unit];
-  return `${line.pack_size} ${labels.perUnit[line.base_unit]}`;
-}
-
-/** A line sold in whole packs ("2 × Rs 500") or loose ("250 g × Rs 200/kg"). */
+/** A line sold in whole packs ("2 packs" at "Rs 500/pack") or loose ("1.5 kg" at "Rs 450/kg"). */
 export interface LineQuantity {
   loose: boolean;
   /** Whole packs when sealed, else null. */
   packs: number | null;
-  /** "2" when sealed, "250 g" when loose. */
+  /** "2 packs" or "3 pieces" when sealed, "1.5 kg" when loose. */
   qtyText: string;
-  /** "Rs 500" when sealed, "Rs 200/kg" when loose. */
+  /** "Rs 500/pack" when sealed, "Rs 450/kg" when loose (the price of one kg, L or piece, worked out in integer paisa by the units module). */
   rateText: string;
 }
 
 export function lineQuantity(line: DocumentLine, language: DocumentLanguage): LineQuantity {
+  const labels = LABELS[language];
   const loose = line.pack_size > 1 && line.qty % line.pack_size !== 0;
   if (!loose) {
     const packs = line.qty / line.pack_size;
-    return { loose: false, packs, qtyText: String(packs), rateText: money(line.unit_price) };
+    // A pack of one piece (or of a single unit) is said in its unit; a bigger pack is said in packs.
+    if (line.pack_size === 1) {
+      const per = pricePerUnit(line.base_unit, 1, line.unit_price);
+      return { loose: false, packs, qtyText: quantityLabel(line.base_unit, line.qty, labels.units), rateText: `${money(per.paisa)}/${unitWord(per.unit, 1, labels.units)}` };
+    }
+    return { loose: false, packs, qtyText: `${packs} ${packs === 1 ? labels.pack : labels.packs}`, rateText: `${money(line.unit_price)}/${labels.pack}` };
   }
-  return { loose: true, packs: null, qtyText: quantityText(line.qty, line.base_unit, language), rateText: `${money(line.unit_price)}/${perPackText(line, language)}` };
+  const per = pricePerUnit(line.base_unit, line.pack_size, line.unit_price);
+  return { loose: true, packs: null, qtyText: quantityText(line.qty, line.base_unit, language), rateText: `${money(per.paisa)}/${unitWord(per.unit, 1, labels.units)}` };
 }
+
+/** Old text that still carries the old small units (a sale-time name) shown in kg and L, in the words of the document language. */
+export const legacyOf = (text: string, language: DocumentLanguage): string => legacyLabelToDisplay(text, { kg: LABELS[language].units.kg, L: LABELS[language].units.L });
 
 /** The name as it was when sold, in the language of the document (the other language when that one is missing). */
 export function lineName(line: Pick<DocumentLine, 'name_en' | 'name_ur'>, language: DocumentLanguage): string {
   const first = language === 'ur' ? line.name_ur : line.name_en;
   const second = language === 'ur' ? line.name_en : line.name_ur;
-  return first?.trim() || second?.trim() || '';
+  return legacyOf(first?.trim() || second?.trim() || '', language);
 }
 
 /** "Rashid · Chak 12": the customer's name, then the village. null for a walk-in sale. */

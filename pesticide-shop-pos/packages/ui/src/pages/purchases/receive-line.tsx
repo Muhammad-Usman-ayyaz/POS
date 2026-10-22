@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button.js';
 import { DateField } from '../../components/ui/date-field.js';
 import { Input } from '../../components/ui/input.js';
 import { Badge } from '../../components/ui/primitives.js';
-import { errorText, formatDate, formatMoney, ltr, useI18n } from '../../i18n/index.js';
+import { errorText, formatDate, formatMoney, legacyText, ltr, packText, unitName, useI18n } from '../../i18n/index.js';
 import { cn } from '../../lib/cn.js';
 import { checkLine, lineTotal, type Clash, type LineDraft } from './receive-state.js';
 
@@ -33,7 +33,8 @@ export function ReceiveLine({ line, clash, touched, hinted, onChange, onTouch, o
   const id = (name: string) => `${line.key}-${name}`;
   const problems = checkLine(line);
   const shown = (field: LineField) => (touched.has(`${line.key}.${field}`) ? problems[field] : undefined);
-  const name = (language === 'ur' ? (line.nameUr ?? line.nameEn) : (line.nameEn ?? line.nameUr)) ?? '';
+  const name = legacyText(m, (language === 'ur' ? (line.nameUr ?? line.nameEn) : (line.nameEn ?? line.nameUr)) ?? '');
+  const sizeText = packText(m, language, line.baseUnit, line.packSize);
   const flagged = clash !== null;
   const [expiryNotADate, setExpiryNotADate] = useState(false); // the box holds text that is not a date: DateField says so itself
   // When a clash appears, bring it into view: the totals bar at the bottom of the screen can cover it.
@@ -47,7 +48,7 @@ export function ReceiveLine({ line, clash, touched, hinted, onChange, onTouch, o
   const field = (key: LineField, label: string, input: React.ReactNode) => (
     <div className="flex min-w-0 flex-col gap-1">
       <label htmlFor={id(key)} className="sr-only">
-        {`${label} · ${name} ${line.label}`.trim()}
+        {`${label} · ${name} ${sizeText}`.trim()}
       </label>
       {input}
       {shown(key) && !(key === 'expiry' && expiryNotADate) ? (
@@ -65,9 +66,9 @@ export function ReceiveLine({ line, clash, touched, hinted, onChange, onTouch, o
       <div className={cn('grid items-start gap-3', LINE_COLUMNS)}>
         <div className="min-w-0 pt-3">
           <p className="break-words text-lg font-bold">{name}</p>
-          {line.label !== '' && (
+          {sizeText !== '' && (
             <Badge tone="neutral" dir="auto" className="mt-1 bg-row-line/60 py-0.5 text-xs">
-              {line.label}
+              {sizeText}
             </Badge>
           )}
         </div>
@@ -98,7 +99,15 @@ export function ReceiveLine({ line, clash, touched, hinted, onChange, onTouch, o
         {field(
           'packs',
           f.columns.packs,
-          <Input id={id('packs')} name="packs" inputMode="numeric" value={line.packs} invalid={!!shown('packs')} onBlur={() => onTouch('packs')} onChange={(e) => onChange({ packs: e.target.value })} className={cn('num text-end', inputClass(!!shown('packs')))} />,
+          <>
+            <Input id={id('packs')} name="packs" inputMode={line.by === 'packs' ? 'numeric' : 'decimal'} value={line.packs} invalid={!!shown('packs')} onBlur={() => onTouch('packs')} onChange={(e) => onChange({ packs: e.target.value })} className={cn('num text-end', inputClass(!!shown('packs')))} />
+            {line.allowLoose && (
+              <select aria-label={`${f.columns.packs} · ${name} ${sizeText}`.trim()} name="by" value={line.by} onChange={(e) => onChange({ by: e.target.value as 'packs' | 'amount' })} className="h-11 rounded-md border border-field-line bg-card px-2 text-sm">
+                <option value="packs">{m.units.packs}</option>
+                <option value="amount">{unitName(m, line.baseUnit, 2)}</option>
+              </select>
+            )}
+          </>,
         )}
 
         {field(
@@ -116,7 +125,7 @@ export function ReceiveLine({ line, clash, touched, hinted, onChange, onTouch, o
           {formatMoney(lineTotal(line), language)}
         </p>
 
-        <Button variant="ghost" className="size-11 min-w-11 px-0 text-danger-ink" aria-label={f.removeLine(`${name} ${line.label}`.trim())} onClick={onRemove}>
+        <Button variant="ghost" className="size-11 min-w-11 px-0 text-danger-ink" aria-label={f.removeLine(`${name} ${sizeText}`.trim())} onClick={onRemove}>
           <X aria-hidden className="size-5" />
         </Button>
       </div>
@@ -128,7 +137,7 @@ export function ReceiveLine({ line, clash, touched, hinted, onChange, onTouch, o
       )}
 
       {clash && (
-        <div ref={panel} role="group" aria-label={`${name} ${line.label}`.trim()} className="mt-3 flex scroll-mb-44 flex-wrap items-center justify-between gap-4 rounded-lg border border-warn-ink/30 bg-warn-bg px-4 py-3 text-warn-ink">
+        <div ref={panel} role="group" aria-label={`${name} ${sizeText}`.trim()} className="mt-3 flex scroll-mb-44 flex-wrap items-center justify-between gap-4 rounded-lg border border-warn-ink/30 bg-warn-bg px-4 py-3 text-warn-ink">
           <div className="min-w-0 flex-1 basis-80">
             {clash.kind === 'duplicate' ? (
               <>

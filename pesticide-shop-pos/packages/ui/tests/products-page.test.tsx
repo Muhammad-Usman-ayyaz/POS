@@ -5,8 +5,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../src/index.js';
-import { formatRange, formatTaxRate, formatTotal, minInPacks, withoutIsolates } from '../src/pages/products/catalogue-format.js';
+import { qtyText, stockText } from '../src/i18n/units.js';
+import { formatRange, formatTaxRate, withoutIsolates } from '../src/pages/products/catalogue-format.js';
 import { ProductsPage } from '../src/pages/products/products-page.js';
+import { smallUnitsIn, UNIT_WORDS, visibleText, withoutMarks } from './unit-scan.js';
 import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
 
@@ -92,7 +94,7 @@ function catalogue(withCost = true) {
       { id: 'f1l', label: '1 L', packSize: 1000, stock: 4000, retail: 16_000, wholesale: 15_000, nextExpiry: '2027-06-01', ...(withCost ? { cost: 12_000 } : {}) },
     ]),
     group('g3', 'DAP fertilizer', 'ڈی اے پی کھاد', 'c3', [{ id: 'd50', label: '', packSize: 50_000, stock: 700_000, retail: 1_250_000, wholesale: 1_220_000, unit: 'g', nextExpiry: '2028-08-15', ...(withCost ? { cost: SENTINEL_COST } : {}) }]),
-    group('g4', 'Rodenticide', 'چوہے مار دوا', null, [{ id: 'r100', label: '100 g', packSize: 100, stock: 100, retail: 13_000, wholesale: 11_500, unit: 'g', nextExpiry: '2026-09-15', flags: { expired: true } }]),
+    group('g4', 'Rodenticide', 'چوہے مار دوا', null, [{ id: 'r100', label: '100 g', packSize: 100, stock: 400, retail: 13_000, wholesale: 11_500, unit: 'g', nextExpiry: '2026-09-15', flags: { expired: true } }]),
   ];
   return { hits, total: hits.length, counts: { products: 4, low: 1, near_expiry: 1, expired: 1 } };
 }
@@ -135,7 +137,7 @@ function show(shell: ReturnType<typeof fakeShell>, user: SessionUser = OWNER, la
   );
 }
 
-const rowOf = (text: string): HTMLElement => screen.getByText(text).closest('tr') as HTMLElement;
+const rowOf = (text: string): HTMLElement => screen.getByText((content, el) => el?.tagName !== 'SCRIPT' && content.replace(/[⁦-⁩]/g, '') === text && el!.matches('span, td, p')).closest('tr') as HTMLElement;
 /** The row of a product, found by its open/close button (the name also appears as a category). */
 const groupRow = (name: string): HTMLElement => screen.getByRole('button', { name: new RegExp(`sizes of ${name}$`) }).closest('tr') as HTMLElement;
 const loaded = async () => await screen.findByRole('button', { name: 'Show the sizes of Insecticide' });
@@ -147,25 +149,24 @@ afterEach(cleanup);
 
 describe('the formats the screen uses', () => {
   it('a whole product in litres or kilograms, pieces stay pieces', () => {
-    expect(formatTotal(22_750, 'ml', en.products)).toBe('22.75 L');
-    expect(formatTotal(700_000, 'g', en.products)).toBe('700 kg');
-    expect(formatTotal(9_750, 'g', en.products)).toBe('9.75 kg');
-    expect(formatTotal(1, 'piece', en.products)).toBe('1 piece');
-    expect(formatTotal(40, 'piece', en.products)).toBe('40 pieces');
-    expect(formatTotal(0, 'ml', en.products)).toBe('0 L');
-    expect(formatTotal(1_234_000, 'ml', en.products)).toBe('1,234 L');
+    expect(qtyText(en, 'en', 'ml', 22_750)).toBe('22.75 L');
+    expect(qtyText(en, 'en', 'g', 700_000)).toBe('700 kg');
+    expect(qtyText(en, 'en', 'g', 9_750)).toBe('9.75 kg');
+    expect(qtyText(en, 'en', 'piece', 1)).toBe('1 piece');
+    expect(qtyText(en, 'en', 'piece', 40)).toBe('40 pieces');
+    expect(qtyText(en, 'en', 'ml', 0)).toBe('0 L');
+    expect(qtyText(en, 'en', 'ml', 1_234_000)).toBe('1234 L');
   });
 
-  it('the same total in Urdu words, with no left-to-right marks (words and numbers follow the right-to-left order)', () => {
-    const text = formatTotal(22_750, 'ml', ur.products);
-    expect(text).toBe('22.75 لیٹر');
-    expect(withoutIsolates('⁦2 پیک اور 250 کھلا⁩')).toBe('2 پیک اور 250 کھلا');
+  it('the same total in Urdu words, with the number kept left to right', () => {
+    expect(withoutIsolates(qtyText(ur, 'ur', 'ml', 22_750))).toBe('22.75 لیٹر');
+    expect(withoutIsolates('⁦2 پیک اور 0.25 کلو⁩')).toBe('2 پیک اور 0.25 کلو');
   });
 
-  it('minimum stock is shown in packs (it is stored in base units)', () => {
-    expect(minInPacks(1250, 250)).toBe('5');
-    expect(minInPacks(5000, 1000)).toBe('5');
-    expect(minInPacks(500, 1000)).toBe('0.5');
+  it('minimum stock is said in packs, or in kg / L when it is less than a pack (it is stored in base units)', () => {
+    expect(stockText(en, 'en', 'ml', 250, 1250)).toBe('5 packs');
+    expect(stockText(en, 'en', 'ml', 1000, 5000)).toBe('5 packs');
+    expect(stockText(en, 'en', 'ml', 1000, 500)).toBe('0.5 L');
   });
 
   it('a tax rate in basis points becomes a percentage', () => {
@@ -219,28 +220,28 @@ describe('Products: the owner', () => {
   it('the sizes are folded away until the row is opened', async () => {
     show(fakeShell());
     await loaded();
-    expect(screen.queryByText('250 ml')).toBeNull();
+    expect(screen.queryByText('0.25 L')).toBeNull();
     const toggle = screen.getByRole('button', { name: 'Show the sizes of Insecticide' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(toggle);
     expect(screen.getByRole('button', { name: 'Hide the sizes of Insecticide' }).getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByText('250 ml')).toBeTruthy();
+    expect(screen.getByText('0.25 L')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Hide the sizes of Insecticide' }));
-    expect(screen.queryByText('250 ml')).toBeNull();
+    expect(screen.queryByText('0.25 L')).toBeNull();
   });
 
   it('a size row shows stock, cost, retail, wholesale, tax, next expiry and its badge', async () => {
     show(fakeShell());
     await loaded();
     fireEvent.click(screen.getByRole('button', { name: 'Show the sizes of Insecticide' }));
-    const small = rowOf('250 ml');
+    const small = rowOf('0.25 L');
     expect(within(small).getByText('3 packs')).toBeTruthy();
     expect(within(small).getByText('Rs 130')).toBeTruthy(); // cost
     expect(within(small).getByText('Rs 190')).toBeTruthy(); // retail
     expect(within(small).getByText('Rs 170')).toBeTruthy(); // wholesale
     expect(within(small).getByText('0%')).toBeTruthy();
     expect(within(small).getByText('18 Jan 2027')).toBeTruthy();
-    expect(within(small).getByText('Low stock · min 5')).toBeTruthy();
+    expect(within(small).getByText('Low stock · min 5 packs')).toBeTruthy();
     const litre = rowOf('1 L');
     expect(within(litre).getByText('12 packs')).toBeTruthy();
     expect(within(litre).getByText('17%')).toBeTruthy();
@@ -251,8 +252,18 @@ describe('Products: the owner', () => {
     show(fakeShell());
     await loaded();
     fireEvent.click(screen.getByRole('button', { name: 'Show the sizes of DAP fertilizer' }));
+    expect(screen.getByText('50 kg')).toBeTruthy(); // the label comes from the pack size and unit, not from the stored text
+    expect(within(rowOf('50 kg')).getByText('14 packs')).toBeTruthy();
+  });
+
+  it('a single piece has no size label: it is called "Single size"', async () => {
+    const data = catalogue();
+    Object.assign(data.hits[2]!.sizes[0] as any, { base_unit: 'piece', pack_size: 1, stock_total: 14, stock_sellable: 14 });
+    show(fakeShell({ data }));
+    await loaded();
+    fireEvent.click(screen.getByRole('button', { name: 'Show the sizes of DAP fertilizer' }));
     expect(screen.getByText('Single size')).toBeTruthy();
-    expect(within(rowOf('Single size')).getByText('14 packs')).toBeTruthy();
+    expect(within(rowOf('Single size')).getByText('14 pieces')).toBeTruthy();
   });
 
   it('a size with an expired batch says Expired; a size with no batches shows dashes', async () => {
@@ -261,7 +272,7 @@ describe('Products: the owner', () => {
     show(fakeShell({ data }));
     await loaded();
     fireEvent.click(screen.getByRole('button', { name: 'Show the sizes of Rodenticide' }));
-    const row = rowOf('100 g');
+    const row = rowOf('0.1 kg');
     expect(within(row).getByText('Expired')).toBeTruthy();
     expect(within(row).getAllByText('—').length).toBeGreaterThanOrEqual(2); // no cost came back, and no expiry
   });
@@ -270,10 +281,10 @@ describe('Products: the owner', () => {
     show(fakeShell());
     await loaded();
     fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
-    expect(screen.getAllByText('250 ml')).toHaveLength(2); // Insecticide and Fungicide
-    expect(screen.getByText('100 g')).toBeTruthy();
+    expect(screen.getAllByText('0.25 L')).toHaveLength(2); // Insecticide and Fungicide
+    expect(screen.getByText('0.1 kg')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
-    expect(screen.queryByText('250 ml')).toBeNull();
+    expect(screen.queryByText('0.25 L')).toBeNull();
   });
 
   it('shows Add product, Receive stock, the Cost column and an Edit button of at least 44 px on each product', async () => {
@@ -326,10 +337,10 @@ describe('Products: staff', () => {
     show(fakeShell({ data: catalogue(false) }), STAFF);
     await loaded();
     fireEvent.click(screen.getByRole('button', { name: 'Show the sizes of Insecticide' }));
-    const small = rowOf('250 ml');
+    const small = rowOf('0.25 L');
     expect(within(small).getByText('3 packs')).toBeTruthy();
     expect(within(small).getByText('Rs 190')).toBeTruthy();
-    expect(within(small).getByText('Low stock · min 5')).toBeTruthy();
+    expect(within(small).getByText('Low stock · min 5 packs')).toBeTruthy();
     expect(screen.getByRole('columnheader', { name: /Wholesale/ })).toBeTruthy();
   });
 
@@ -560,11 +571,11 @@ describe('Products: Urdu and right to left', () => {
     show(fakeShell(), OWNER, 'ur');
     await screen.findByText('کیڑے مار دوا');
     fireEvent.click(screen.getByRole('button', { name: ur.products.showSizes('کیڑے مار دوا') }));
-    const row = rowOf('250 ml');
-    expect(within(row).getByText(ur.products.badgeLow('5'))).toBeTruthy();
+    const row = rowOf('0.25 لیٹر');
+    expect(within(row).getByText(ur.products.badgeLow(stockText(ur, 'ur', 'ml', 250, 1250)))).toBeTruthy();
     expect(row.textContent).toContain('18 Jan 2027'); // English month names with Latin digits, as in the design
     expect(within(row).getByText('18 Jan 2027').className).toContain('num');
-    expect(within(row).getByText(/پیک/).className).not.toContain('num');
+    for (const el of within(row).getAllByText(/پیک/)) expect(el.className).not.toContain('num');
     expect(row.querySelectorAll('.num').length).toBeGreaterThanOrEqual(5); // prices, tax and the date stay left to right
   });
 
@@ -572,7 +583,7 @@ describe('Products: Urdu and right to left', () => {
     show(fakeShell(), OWNER, 'ur');
     await screen.findByText('کیڑے مار دوا');
     fireEvent.click(screen.getByRole('button', { name: ur.products.showSizes('کیڑے مار دوا') }));
-    expect(screen.getByText('250 ml').getAttribute('dir')).toBe('auto');
+    expect(screen.getByText(/0\.25/).getAttribute('dir')).toBe('auto');
   });
 
   it('uses only logical (start/end) classes: nothing is pinned to the left or right', async () => {
@@ -606,4 +617,20 @@ describe('Products: motion', () => {
     const classes = [...document.querySelectorAll('[class]')].map((e) => e.getAttribute('class') ?? '').join(' ');
     expect(classes).not.toMatch(/\banimate-|\bduration-|\btransition\b/);
   });
+});
+
+describe('standard units on the Products screen (English and Urdu)', () => {
+  for (const language of ['en', 'ur'] as const) {
+    it(`${language}: the list, every expanded product and its sizes show kg / L / pieces and never g or ml`, async () => {
+      show(fakeShell(), OWNER, language);
+      await screen.findByRole('button', { name: /Expand all|سب کھولیں/ });
+      expect(smallUnitsIn(visibleText(document.body))).toEqual([]);
+      fireEvent.click(screen.getByRole('button', { name: /Expand all|سب کھولیں/ }));
+      const text = withoutIsolates(visibleText(document.body));
+      expect(smallUnitsIn(text)).toEqual([]);
+      expect(UNIT_WORDS[language].test(text)).toBe(true);
+      expect(text).toContain(language === 'ur' ? 'لیٹر' : '0.25 L');
+      expect(text).toContain(language === 'ur' ? 'کلو' : '50 kg');
+    });
+  }
 });

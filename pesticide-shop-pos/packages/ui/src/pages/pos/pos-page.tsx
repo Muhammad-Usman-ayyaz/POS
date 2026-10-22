@@ -2,7 +2,7 @@ import { ApiError, type Api, type ApprovalAction, type SaleQuoteView, type SaleV
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ErrorNotice, useToast } from '../../components/feedback.js';
 import { Button } from '../../components/ui/button.js';
-import { useI18n } from '../../i18n/index.js';
+import { legacyText, packText, useI18n } from '../../i18n/index.js';
 import { ApprovalDialog, OverLimitDialog, type OverLimitFacts } from './approval-dialogs.js';
 import { CustomerCard, PaymentPanel } from './bill-panel.js';
 import { HeldBillsDialog, ResumedDialog, SaleDoneDialog, type ResumeNote } from './bill-dialogs.js';
@@ -305,7 +305,7 @@ export function PosPage({ api, user, receiptActions }: { api: Api; user: Session
       const batchNow = new Map(repriced.lines.map((l) => [l.product_id, l.batches[0] ? { no: l.batches[0].batch_no, expiry: l.batches[0].expiry_date } : null]));
       const kept: CartLine[] = [];
       lines.forEach((line, index) => {
-        const name = `${pickName(line.nameEn, line.nameUr, language)}${line.label ? ` ${line.label}` : ''}`;
+        const name = `${legacyText(m, pickName(line.nameEn, line.nameUr, language))}${packText(m, language, line.baseUnit, line.packSize) ? ` ${packText(m, language, line.baseUnit, line.packSize)}` : ''}`;
         if (gone.has(index)) {
           notes.push({ kind: 'removed', name });
           return;

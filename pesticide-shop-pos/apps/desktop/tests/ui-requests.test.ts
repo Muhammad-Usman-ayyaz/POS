@@ -43,10 +43,10 @@ async function makeBooster(): Promise<{ groupId: string; small: string; litre: s
     ...P.newDraft(),
     nameEn: 'Booster',
     nameUr: 'بوسٹر',
-    unit: 'ml',
+    unit: 'L',
     sizes: [
-      { ...P.blankSize(), label: '250 ml', packSize: '250', retail: '118', wholesale: '110.50', taxPct: '18', minPacks: '5' },
-      { ...P.blankSize(), label: '1 L', packSize: '1000', retail: '500', wholesale: '450', taxPct: '0' },
+      { ...P.blankSize(), packSize: '0.25', retail: '118', wholesale: '110.50', taxPct: '18', minPacks: '5' },
+      { ...P.blankSize(), packSize: '1', retail: '500', wholesale: '450', taxPct: '0' },
     ],
   };
   expect(P.hasProblems(P.checkDraft(draft))).toBe(false);
@@ -68,14 +68,14 @@ describe('the product form against the real shell', () => {
     const draft = P.draftFromSaved(before);
     draft.nameEn = 'Booster Plus';
     draft.sizes = draft.sizes.map((s) => (s.id === small ? { ...s, retail: '125.50', taxPct: '17' } : s.id === litre ? { ...s, active: false } : s));
-    draft.sizes.push({ ...P.blankSize(), label: '5 L', packSize: '5000', retail: '2300', wholesale: '2100', taxPct: '0', minPacks: '2' });
+    draft.sizes.push({ ...P.blankSize(), packSize: '5', retail: '2300', wholesale: '2100', taxPct: '0', minPacks: '2' });
     const steps = P.buildSaveSteps(draft, before);
     expect(steps.map((s) => s.kind)).toEqual(['updateGroup', 'updateSize', 'addSize', 'setSizeActive']);
     await run(steps);
 
     const after = await load(groupId);
     expect(after.group.name_en).toBe('Booster Plus');
-    expect(after.sizes.find((s) => s.id === small)).toMatchObject({ retail_price: 12_550, tax_rate_bp: 1700, name_en: 'Booster Plus 250 ml' });
+    expect(after.sizes.find((s) => s.id === small)).toMatchObject({ retail_price: 12_550, tax_rate_bp: 1700, name_en: 'Booster Plus 0.25 L' });
     expect(after.sizes.find((s) => s.id === litre)!.is_active).toBe(0);
     expect(after.sizes.find((s) => s.pack_label === '5 L')).toMatchObject({ pack_size: 5000, min_stock: 10_000, retail_price: 230_000 });
   });
@@ -95,20 +95,20 @@ describe('the product form against the real shell', () => {
     const size = draft.sizes.find((s) => s.id === small)!;
     expect(size.batchCount).toBe(1);
     expect(P.isLocked(size)).toBe(true);
-    draft.sizes = draft.sizes.map((s) => (s.id === small ? { ...s, packSize: '300', label: '250 ml bottle' } : s));
+    draft.sizes = draft.sizes.map((s) => (s.id === small ? { ...s, packSize: '0.3' } : s));
     const steps = P.buildSaveSteps(draft, saved);
     expect(JSON.stringify(steps)).not.toContain('pack_size');
-    await run(steps); // the label change goes through
+    await run(steps); // nothing else changed, so nothing is sent
     const refused = await failure(call('catalogue:updateSize', { product_id: small, changes: { pack_size: 300 } }));
     expect(refused.code).toBe('PACK_SIZE_LOCKED');
-    expect((await load(groupId)).sizes.find((s) => s.id === small)).toMatchObject({ pack_size: 250, pack_label: '250 ml bottle' });
+    expect((await load(groupId)).sizes.find((s) => s.id === small)).toMatchObject({ pack_size: 250, pack_label: '0.25 L' });
   });
 });
 
 describe('Receive stock against the real shell', () => {
   const header = async () => ({ supplierId: (await call('suppliers:list', {}))[0]!.id as string, invoiceNo: 'GV-20418', date: R.todayText() });
   const lineFor = (productId: string, packSize: number, over: Partial<R.LineDraft> = {}): R.LineDraft => ({
-    key: `k-${Math.random()}`, productId, nameEn: 'Booster', nameUr: null, label: '', packSize, batchNo: 'B-100', expiry: day(300), packs: '12', cost: '400', ...over,
+    key: `k-${Math.random()}`, productId, nameEn: 'Booster', nameUr: null, packSize, baseUnit: 'ml' as const, allowLoose: false, by: 'packs' as const, batchNo: 'B-100', expiry: day(300), packs: '12', cost: '400', ...over,
   });
   const batchesOf = async (productId: string): Promise<R.ExistingBatch[]> =>
     (await call('stock:batchesOf', { productId, includeCost: true })).map((b: any) => ({ batch_no: b.batch_no, expiry_date: b.expiry_date, cost_price: b.cost_price }));

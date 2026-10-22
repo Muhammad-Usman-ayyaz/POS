@@ -24,8 +24,10 @@ import {
   type SizePick,
 } from '../src/pages/pos/pos-state.js';
 
-const litre: SizePick = { productId: '11111111-1111-4111-8111-111111111111', nameEn: 'Insecticide', nameUr: null, label: '1 L', packSize: 1000, allowLoose: false, baseUnit: 'ml' };
-const kilo: SizePick = { productId: '22222222-2222-4222-8222-222222222222', nameEn: 'Fertilizer', nameUr: null, label: '1 kg', packSize: 1000, allowLoose: true, baseUnit: 'g' };
+const litre: SizePick = { productId: '11111111-1111-4111-8111-111111111111', nameEn: 'Insecticide', nameUr: null, packSize: 1000, allowLoose: false, baseUnit: 'ml' };
+const kilo: SizePick = { productId: '22222222-2222-4222-8222-222222222222', nameEn: 'Fertilizer', nameUr: null, packSize: 1000, allowLoose: true, baseUnit: 'g' };
+const looseLitre: SizePick = { productId: '44444444-4444-4444-8444-444444444444', nameEn: 'Oil', nameUr: null, packSize: 1000, allowLoose: true, baseUnit: 'ml' };
+const looseSeed: SizePick = { productId: '55555555-5555-4555-8555-555555555555', nameEn: 'Seed packets', nameUr: null, packSize: 10, allowLoose: true, baseUnit: 'piece' };
 const bill: BillDraft = { customerId: '33333333-3333-4333-8333-333333333333', priceType: 'retail', method: 'bank', reference: ' TX-9 ', dueDate: '2026-11-30' };
 
 describe('the cart', () => {
@@ -39,9 +41,12 @@ describe('the cart', () => {
 
   it('steps a sealed size by whole packs, a loose size in small steps, and never below one step', () => {
     expect(stepOf(litre)).toBe(1000);
-    expect(stepOf(kilo)).toBe(50);
+    expect(stepOf(kilo)).toBe(500); // 0.5 kg
+    expect(stepOf(looseLitre)).toBe(100); // 0.1 L
+    expect(stepOf(looseSeed)).toBe(1); // 1 piece
     const [line] = addSize([], kilo);
-    expect(stepQty([line!], line!.key, -1)[0]!.qty).toBe(950);
+    expect(stepQty([line!], line!.key, 1)[0]!.qty).toBe(1500);
+    expect(stepQty([{ ...line!, qty: 1500 }], line!.key, -1)[0]!.qty).toBe(1000);
     const one = addSize([], litre);
     expect(stepQty(one, one[0]!.key, -1)[0]!.qty).toBe(1000);
   });

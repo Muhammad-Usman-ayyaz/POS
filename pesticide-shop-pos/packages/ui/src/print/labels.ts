@@ -1,7 +1,7 @@
 // The words printed on receipts and invoices, in English and Urdu. Plain data: no React, no i18n context (a document is rendered
 // in the language chosen for THAT document, whatever language the screen is in). Urdu wording is listed in docs/urdu-review.md.
 
-import type { DocumentLanguage, DocumentUnit } from '@pos/core';
+import type { DocumentLanguage, UnitWords } from '@pos/core';
 
 export interface DocumentLabels {
   receipt: string;
@@ -32,11 +32,10 @@ export interface DocumentLabels {
   authorisedSignature: string;
   voided: string;
   methods: Record<'cash' | 'bank' | 'easypaisa' | 'jazzcash', string>;
-  units: Record<DocumentUnit, string>;
-  /** Used after a slash in a rate: "Rs 200/kg". */
-  perUnit: Record<DocumentUnit, string>;
-  /** A bigger unit for amounts of 1000 or more of ml or g. */
-  bigUnits: Record<'ml' | 'g', string>;
+  /** The words for kg, L and piece(s). The numbers come from the units module in packages/core. */
+  units: UnitWords;
+  pack: string;
+  packs: string;
 }
 
 export const LABELS: Record<DocumentLanguage, DocumentLabels> = {
@@ -68,9 +67,9 @@ export const LABELS: Record<DocumentLanguage, DocumentLabels> = {
     authorisedSignature: 'Authorised signature',
     voided: 'VOIDED',
     methods: { cash: 'Cash', bank: 'Bank', easypaisa: 'Easypaisa', jazzcash: 'JazzCash' },
-    units: { ml: 'ml', g: 'g', piece: 'pc' },
-    perUnit: { ml: 'ml', g: 'g', piece: 'pc' },
-    bigUnits: { ml: 'L', g: 'kg' },
+    units: { kg: 'kg', L: 'L', piece: { one: 'piece', other: 'pieces' } },
+    pack: 'pack',
+    packs: 'packs',
   },
   ur: {
     receipt: 'رسید',
@@ -101,8 +100,8 @@ export const LABELS: Record<DocumentLanguage, DocumentLabels> = {
     authorisedSignature: 'مجاز دستخط',
     voided: 'منسوخ',
     methods: { cash: 'نقد', bank: 'بینک', easypaisa: 'ایزی پیسہ', jazzcash: 'جیز کیش' },
-    units: { ml: 'ملی لیٹر', g: 'گرام', piece: 'عدد' },
-    perUnit: { ml: 'ملی لیٹر', g: 'گرام', piece: 'عدد' },
-    bigUnits: { ml: 'لیٹر', g: 'کلو' },
+    units: { kg: 'کلو', L: 'لیٹر', piece: { one: 'عدد', other: 'عدد' } },
+    pack: 'پیک',
+    packs: 'پیک',
   },
 };

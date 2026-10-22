@@ -319,7 +319,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await sleep(300);
     await shot(`${prefix + 4}-add-product-errors-${language}`);
     await fill('#name-en', 'Sample sprayer');
-    await fill('[data-size-key] input[name=packSize]', '1000');
+    await fill('[data-size-key] input[name=packSize]', '1');
     await fill('[data-size-key] input[name=retail]', '118');
     await fill('[data-size-key] input[name=wholesale]', '110');
     await fill('[data-size-key] input[name=tax]', '18');
@@ -344,7 +344,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
       await waitFor('input[type=search]');
       await fill('input[type=search]', 'Insecticide');
       await js(`new Promise((r) => setTimeout(r, 700))`);
-      await js(`[...document.querySelectorAll('ul button')].find((b) => b.textContent.trim().endsWith(${JSON.stringify(label)})).click()`);
+      await js(`[...document.querySelectorAll('ul button')].find((b) => b.textContent.replace(/[⁦-⁩]/g, '').trim().endsWith(${JSON.stringify(language === 'ur' ? label.replace('L', 'لیٹر') : label)})).click()`);
       await sleep(250);
     };
     await go('/pos');
@@ -361,20 +361,20 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await fill('input[type=search]', 'Insecticide');
     await js(`new Promise((r) => setTimeout(r, 700))`);
     await shot(`${prefix + 2}-receive-search-${language}`);
-    await js(`[...document.querySelectorAll('ul button')].find((b) => b.textContent.trim().endsWith('1 L')).click()`);
+    await js(`[...document.querySelectorAll('ul button')].find((b) => b.textContent.replace(/[⁦-⁩]/g, '').trim().endsWith(${JSON.stringify(language === 'ur' ? '1 لیٹر' : '1 L')})).click()`);
     await sleep(250);
     await fillLine(1, 'batchNo', 'B-020');
     await fillLine(1, 'expiry', '2027-05-01');
     await fillLine(1, 'packs', '12');
     await fillLine(1, 'cost', '400');
-    await addSize('500 ml');
+    await addSize('0.5 L');
     await fillLine(2, 'batchNo', 'B-021');
     await fillLine(2, 'expiry', '2027-06-30');
     await fillLine(2, 'packs', '20');
     await fillLine(2, 'cost', '215');
     await sleep(300);
     await shot(`${prefix + 3}-receive-lines-${language}`);
-    // The demo's 500 ml batch (INS-001, Rs 215, expires 18 Jan 2027): a different expiry with the same cost, then a different cost.
+    // The demo's 0.5 L batch (INS-001, Rs 215, expires 18 Jan 2027): a different expiry with the same cost, then a different cost.
     await fillLine(2, 'batchNo', 'INS-001');
     await sleep(300);
     await shot(`${prefix + 4}-receive-clash-expiry-${language}`);
@@ -409,7 +409,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await fill('input[type=search]', query);
     await waitFor('[data-size]');
     await pause(700);
-    await js(`(() => { const b = [...document.querySelectorAll('[data-size]:not([disabled])')].find((x) => x.querySelector('span').textContent.trim().startsWith(${JSON.stringify(label)}));
+    await js(`(() => { const b = [...document.querySelectorAll('[data-size]:not([disabled])')].find((x) => x.querySelector('span').textContent.replace(/[⁦-⁩]/g, '').trim().startsWith(document.documentElement.lang === 'ur' ? ${JSON.stringify(label)}.replace(' L', ' لیٹر').replace(' kg', ' کلو') : ${JSON.stringify(label)}));
       if (!b) throw new Error('no size ' + ${JSON.stringify(label)} + ' for ' + ${JSON.stringify(query)}); b.click(); })()`);
     await js(`new Promise((resolve, reject) => { const t0 = Date.now(); const tick = () => document.querySelectorAll('[data-line]').length > ${before} ? resolve(true) : Date.now() - t0 > 4000 ? reject(new Error('the line was not added')) : setTimeout(tick, 50); tick(); })`);
   }
@@ -486,6 +486,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     }
     await addToBill('Insecticide', '1 L');
     await addToBill('Fungicide');
+    await addToBill('Fertilizer', '1 kg'); // a loose size: the line shows kg
     await addToBill('Weedicide');
     await checkSearchBox(language);
     await chooseCustomer('Rashid', rashid, `${prefix + 1}-pos-customer-picker-${language}`);

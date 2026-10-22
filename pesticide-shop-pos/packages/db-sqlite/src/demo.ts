@@ -27,7 +27,7 @@ export interface DemoIds {
 
 interface DemoSize {
   key: string;
-  /** "500 ml". Empty for a product with a single size. */
+  /** "0.5 L". Empty for a product with a single size. */
   label: string;
   baseUnit: 'ml' | 'g' | 'piece';
   packSize: number;
@@ -67,8 +67,8 @@ const GROUPS: DemoGroup[] = [
   {
     key: 'insecticideX', category: 'Insecticide', nameEn: 'Insecticide X', nameUr: 'کیڑے مار دوا ایکس',
     sizes: [
-      { key: 'insecticide250', label: '250 ml', baseUnit: 'ml', packSize: 250, allowLoose: 0, barcode: '8961000250250', cost: 11_500, retail: 14_500, wholesale: 13_000, stock: 6000, minStock: 1000, expiry: '2027-02-20' },
-      { key: 'insecticide500', label: '500 ml', baseUnit: 'ml', packSize: 500, allowLoose: 0, barcode: '8961000250500', cost: 21_500, retail: 27_000, wholesale: 24_500, stock: 10_000, minStock: 2500, expiry: '2027-01-18' },
+      { key: 'insecticide250', label: '0.25 L', baseUnit: 'ml', packSize: 250, allowLoose: 0, barcode: '8961000250250', cost: 11_500, retail: 14_500, wholesale: 13_000, stock: 6000, minStock: 1000, expiry: '2027-02-20' },
+      { key: 'insecticide500', label: '0.5 L', baseUnit: 'ml', packSize: 500, allowLoose: 0, barcode: '8961000250500', cost: 21_500, retail: 27_000, wholesale: 24_500, stock: 10_000, minStock: 2500, expiry: '2027-01-18' },
       { key: 'insecticide1l', label: '1 L', baseUnit: 'ml', packSize: 1000, allowLoose: 0, barcode: '8961000251000', cost: 40_000, retail: 50_000, wholesale: 45_000, stock: 12_000, minStock: 5000, expiry: '2027-03-12' },
     ],
   },
@@ -76,14 +76,14 @@ const GROUPS: DemoGroup[] = [
     key: 'fertilizer', category: 'Fertilizer', nameEn: 'Fertilizer', nameUr: 'کھاد',
     sizes: [
       { key: 'fertilizer1kg', label: '1 kg', baseUnit: 'g', packSize: 1000, allowLoose: 1, cost: 15_000, retail: 20_000, wholesale: 18_000, stock: 9750, minStock: 2000, expiry: '2027-09-30' },
-      { key: 'fertilizer50kg', label: '50 kg bag', baseUnit: 'g', packSize: 50_000, allowLoose: 0, cost: 380_000, retail: 410_000, wholesale: 400_000, stock: 250_000, minStock: 100_000, expiry: '2028-05-01' },
+      { key: 'fertilizer50kg', label: '50 kg', baseUnit: 'g', packSize: 50_000, allowLoose: 0, cost: 380_000, retail: 410_000, wholesale: 400_000, stock: 250_000, minStock: 100_000, expiry: '2028-05-01' },
     ],
   },
-  { key: 'fungicide', category: 'Fungicide', nameEn: 'Fungicide 250ml', nameUr: 'پھپھوندی کش', sizes: [{ key: 'fungicide250', label: '', baseUnit: 'ml', packSize: 250, allowLoose: 0, cost: 28_000, retail: 35_000, wholesale: 32_000, stock: 2250, minStock: 500, expiry: 24 }] },
-  { key: 'weedicide', category: 'Weedicide', nameEn: 'Weedicide 1L', nameUr: 'جڑی بوٹی مار دوا', sizes: [{ key: 'weedicide1l', label: '', baseUnit: 'ml', packSize: 1000, allowLoose: 0, cost: 62_000, retail: 78_000, wholesale: 72_000, stock: 3000, minStock: 5000, expiry: '2027-06-04' }] },
-  { key: 'dap', category: 'Fertilizer', nameEn: 'DAP fertilizer 50kg', nameUr: 'ڈی اے پی کھاد', sizes: [{ key: 'dap50', label: '', baseUnit: 'g', packSize: 50_000, allowLoose: 0, cost: 1_180_000, retail: 1_250_000, wholesale: 1_220_000, stock: 700_000, minStock: 100_000, expiry: '2028-08-15' }] },
-  { key: 'vegseed', category: 'Seeds', nameEn: 'Vegetable seed 1kg', nameUr: 'سبزی کا بیج', sizes: [{ key: 'vegseed1kg', label: '', baseUnit: 'g', packSize: 1000, allowLoose: 0, cost: 190_000, retail: 240_000, wholesale: 220_000, stock: 2000, minStock: 4000, expiry: '2026-12-10' }] },
-  { key: 'rodenticide', category: 'Rodenticide', nameEn: 'Rodenticide 100g', nameUr: 'چوہے مار دوا', sizes: [{ key: 'rodenticide100', label: '', baseUnit: 'g', packSize: 100, allowLoose: 0, cost: 9000, retail: 13_000, wholesale: 11_500, stock: 100, minStock: 100, expiry: -17 }] },
+  { key: 'fungicide', category: 'Fungicide', nameEn: 'Fungicide 0.25 L', nameUr: 'پھپھوندی کش', sizes: [{ key: 'fungicide250', label: '', baseUnit: 'ml', packSize: 250, allowLoose: 0, cost: 28_000, retail: 35_000, wholesale: 32_000, stock: 2250, minStock: 500, expiry: 24 }] },
+  { key: 'weedicide', category: 'Weedicide', nameEn: 'Weedicide 1 L', nameUr: 'جڑی بوٹی مار دوا', sizes: [{ key: 'weedicide1l', label: '', baseUnit: 'ml', packSize: 1000, allowLoose: 0, cost: 62_000, retail: 78_000, wholesale: 72_000, stock: 3000, minStock: 5000, expiry: '2027-06-04' }] },
+  { key: 'dap', category: 'Fertilizer', nameEn: 'DAP fertilizer 50 kg', nameUr: 'ڈی اے پی کھاد', sizes: [{ key: 'dap50', label: '', baseUnit: 'g', packSize: 50_000, allowLoose: 0, cost: 1_180_000, retail: 1_250_000, wholesale: 1_220_000, stock: 700_000, minStock: 100_000, expiry: '2028-08-15' }] },
+  { key: 'vegseed', category: 'Seeds', nameEn: 'Vegetable seed 1 kg', nameUr: 'سبزی کا بیج', sizes: [{ key: 'vegseed1kg', label: '', baseUnit: 'g', packSize: 1000, allowLoose: 0, cost: 190_000, retail: 240_000, wholesale: 220_000, stock: 2000, minStock: 4000, expiry: '2026-12-10' }] },
+  { key: 'rodenticide', category: 'Rodenticide', nameEn: 'Rodenticide 0.1 kg', nameUr: 'چوہے مار دوا', sizes: [{ key: 'rodenticide100', label: '', baseUnit: 'g', packSize: 100, allowLoose: 0, cost: 9000, retail: 13_000, wholesale: 11_500, stock: 100, minStock: 100, expiry: -17 }] },
 ];
 
 const CUSTOMERS: { key: string; nameEn: string; nameUr: string; village: string; limit: number; owes: number }[] = [

@@ -8,6 +8,7 @@ import { I18nProvider, ToastProvider } from '../src/index.js';
 import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
 import { ProductFormPage } from '../src/pages/products/product-form-page.js';
+import { smallUnitsIn, UNIT_WORDS, visibleText, withoutMarks } from './unit-scan.js';
 
 const OWNER: SessionUser = { id: 'u1', name: 'Owner', username: 'owner', role: 'owner' };
 const STAFF: SessionUser = { id: 'u2', name: 'Salesman', username: 'staff', role: 'staff' };
@@ -179,7 +180,7 @@ describe('switching between products', () => {
 
 describe('Add product', () => {
   const fillFirstSize = () => {
-    set(field(1, 'packSize'), '250');
+    set(field(1, 'packSize'), '0.25');
     set(field(1, 'retail'), '118');
     set(field(1, 'wholesale'), '110.50');
     set(field(1, 'tax'), '18');
@@ -202,9 +203,11 @@ describe('Add product', () => {
     await screen.findByLabelText(f.nameEn);
     expect(screen.getAllByRole('combobox').map((c) => c.id)).toEqual(['category', 'brand', 'unit']);
     expect(within(card(1)).queryByRole('combobox')).toBeNull();
-    expect(within(card(1)).getByText('ml')).toBeTruthy();
-    set(screen.getByLabelText(f.baseUnit), 'g');
-    expect(within(card(1)).getByText('g')).toBeTruthy();
+    expect(within(card(1)).getByText('L')).toBeTruthy();
+    set(screen.getByLabelText(f.baseUnit), 'kg');
+    expect(within(card(1)).getByText('kg')).toBeTruthy();
+    // the choices are kg, L and piece: the small stored units are never offered
+    expect([...(screen.getByLabelText(f.baseUnit) as HTMLSelectElement).options].map((o) => o.value)).toEqual(['kg', 'L', 'piece']);
   });
 
   it('saves ONE createGroup call: prices in paisa, tax 18 stored as 1800, the alert in base units; then goes back to the list', async () => {
@@ -224,7 +227,7 @@ describe('Add product', () => {
         name_ur: 'کیڑے مار دوا',
         category_id: 'c1',
         brand_id: null,
-        sizes: [{ pack_label: '', sku: null, barcode: null, base_unit: 'ml', pack_size: 250, allow_loose: 0, retail_price: 11_800, wholesale_price: 11_050, tax_rate_bp: 1800, min_stock: 1250 }],
+        sizes: [{ pack_label: '0.25 L', sku: null, barcode: null, base_unit: 'ml', pack_size: 250, allow_loose: 0, retail_price: 11_800, wholesale_price: 11_050, tax_rate_bp: 1800, min_stock: 1250 }],
       },
     });
   });
@@ -273,7 +276,7 @@ describe('Add product', () => {
     await screen.findByLabelText(f.nameEn);
     fireEvent.click(screen.getByRole('button', { name: f.addSize }));
     expect(screen.getAllByRole('region')).toHaveLength(2);
-    expect(document.activeElement).toBe(field(2, 'label')); // the cursor is on the new size's label
+    expect(document.activeElement).toBe(field(2, 'packSize')); // the cursor is on the new size's pack size
     fireEvent.click(screen.getByRole('button', { name: f.removeLabel(2) }));
     expect(screen.getAllByRole('region')).toHaveLength(1);
   });
@@ -282,7 +285,7 @@ describe('Add product', () => {
     show(fakeShell(), '/products/new');
     await screen.findByLabelText(f.nameEn);
     const box = field(1, 'loose');
-    expect(within(card(1)).getByText('Sell by ml')).toBeTruthy();
+    expect(within(card(1)).getByText('Sell by L')).toBeTruthy();
     expect(box.checked).toBe(false);
     fireEvent.click(box);
     expect(box.checked).toBe(true);
@@ -319,20 +322,24 @@ describe('Add product', () => {
     expect(screen.getByText(f.problems.wholesaleInvalid)).toBeTruthy();
   });
 
-  it('two sizes need labels; one size does not', async () => {
+  it('two sizes need no typed label: each one is saved with the label derived from its pack size', async () => {
     const shell = fakeShell();
     show(shell, '/products/new');
     set(await screen.findByLabelText(f.nameEn), 'X');
-    set(field(1, 'packSize'), '250');
+    set(field(1, 'packSize'), '0.25');
     set(field(1, 'retail'), '1');
     set(field(1, 'wholesale'), '1');
     fireEvent.click(screen.getByRole('button', { name: f.addSize }));
-    set(field(2, 'packSize'), '500');
+    set(field(2, 'packSize'), '0.5');
     set(field(2, 'retail'), '1');
     set(field(2, 'wholesale'), '1');
     fireEvent.click(screen.getByRole('button', { name: f.save }));
-    expect((await screen.findAllByText(f.problems.labelRequired)).length).toBe(2);
-    expect(shell.writes()).toHaveLength(0);
+    await screen.findByText('the product list');
+    expect(shell.writes()).toHaveLength(1);
+    expect((shell.writes()[0]!.input as any).sizes.map((s: any) => [s.pack_label, s.pack_size, s.base_unit])).toEqual([
+      ['0.25 L', 250, 'ml'],
+      ['0.5 L', 500, 'ml'],
+    ]);
   });
 
   it('a refusal from the shell is shown in words, and the form stays as it was typed', async () => {
@@ -427,7 +434,6 @@ describe('Edit product', () => {
     expect((screen.getByLabelText(f.category) as HTMLSelectElement).value).toBe('c1');
     expect((screen.getByLabelText(f.brand) as HTMLSelectElement).value).toBe('b1');
     expect(screen.getAllByRole('region')).toHaveLength(4);
-    expect(field(1, 'label').value).toBe('250 ml');
     expect(field(1, 'retail').value).toBe('190');
     expect(field(1, 'wholesale').value).toBe('170');
     expect(field(1, 'minPacks').value).toBe('5'); // 1250 ml of a 250 ml pack
@@ -466,9 +472,10 @@ describe('Edit product', () => {
     expect(field(1, 'packSize')).toBeNull();
     const lock = within(card(1)).getByRole('button', { name: new RegExp(f.packSize) });
     expect(within(lock).getByText(f.locked)).toBeTruthy();
-    expect(lock.textContent).toContain('250 ml');
+    expect(lock.textContent).toContain('0.25 L'); // derived from the pack size, not the stored text
+    expect(lock.textContent).not.toMatch(/\bml\b/);
     // a size with no batches is an ordinary field
-    expect(field(3, 'packSize').value).toBe('1000');
+    expect(field(3, 'packSize').value).toBe('1');
     expect(field(3, 'packSize').readOnly).toBe(false);
     expect(field(3, 'packSize').disabled).toBe(false);
   });
@@ -481,7 +488,7 @@ describe('Edit product', () => {
     expect(within(dialog).getByRole('button', { name: 'Add a new size' })).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Keep current size' })).toBeTruthy();
     expect(dialog.getAttribute('aria-modal')).toBe('true');
-    expect(within(dialog).getByText(f.lockBody('250 ml', '3 packs', 2))).toBeTruthy();
+    expect(within(dialog).getByText(f.lockBody('0.25 L', '3 packs', 2))).toBeTruthy();
     expect(within(dialog).getByText(f.lockNextLead)).toBeTruthy();
     expect(dialog.textContent).toContain(f.lockNext);
     expect(within(dialog).getByRole('button', { name: f.addNewSize })).toBeTruthy();
@@ -502,14 +509,14 @@ describe('Edit product', () => {
     expect(document.activeElement).toBe(lock);
   });
 
-  it('"Add a new size" closes the message and opens a NEW size row, with the cursor on its label', async () => {
+  it('"Add a new size" closes the message and opens a NEW size row, with the cursor on its pack size', async () => {
     const shell = await editReady();
     fireEvent.click(within(card(1)).getByRole('button', { name: new RegExp(f.packSize) }));
     fireEvent.click(screen.getByRole('button', { name: f.addNewSize }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getAllByRole('region')).toHaveLength(5);
     expect(within(card(5)).getByText(f.chipNew)).toBeTruthy();
-    expect(document.activeElement).toBe(field(5, 'label'));
+    expect(document.activeElement).toBe(field(5, 'packSize'));
     expect(shell.writes()).toHaveLength(0); // nothing is saved by opening it
   });
 
@@ -556,7 +563,7 @@ describe('Edit product', () => {
 
   it('the pack size of a locked size is never sent', async () => {
     const shell = await editReady();
-    set(field(1, 'label'), '250 ml bottle');
+    set(field(1, 'retail'), '201');
     fireEvent.click(screen.getByRole('button', { name: f.save }));
     await screen.findByText('the product list');
     expect(JSON.stringify(shell.writes())).not.toContain('pack_size');
@@ -567,8 +574,7 @@ describe('Edit product', () => {
     const shell = await editReady();
     set(screen.getByLabelText(f.nameEn), 'Insecticide X');
     fireEvent.click(screen.getByRole('button', { name: f.addSize }));
-    set(field(5, 'label'), '2 L');
-    set(field(5, 'packSize'), '2000');
+    set(field(5, 'packSize'), '2');
     set(field(5, 'retail'), '900');
     set(field(5, 'wholesale'), '850');
     fireEvent.click(within(card(3)).getByRole('button', { name: f.switchOff }));
@@ -583,8 +589,7 @@ describe('Edit product', () => {
     await editReady(shell);
     set(screen.getByLabelText(f.nameEn), 'Insecticide X');
     fireEvent.click(screen.getByRole('button', { name: f.addSize }));
-    set(field(5, 'label'), '1 L');
-    set(field(5, 'packSize'), '1000');
+    set(field(5, 'packSize'), '1');
     set(field(5, 'retail'), '1');
     set(field(5, 'wholesale'), '1');
     shell.state.listed = { ...group(), group: { ...group().group, name_en: 'Insecticide X' } }; // what the shell now holds
@@ -656,9 +661,9 @@ describe('Urdu and right to left', () => {
     expect(within(dialog).getByRole('button', { name: ur.productForm.keepSize })).toBeTruthy();
   });
 
-  it('a Latin size label such as "1 L" is not reversed in right to left (the label field works out its own direction)', async () => {
+  it('the name field works out its own direction in right to left, and a size has no label field to reverse', async () => {
     await editReady(fakeShell(), OWNER, 'ur');
-    expect(field(3, 'label').getAttribute('dir')).toBe('auto');
+    expect(field(3, 'label')).toBeNull();
     expect((screen.getByLabelText(ur.productForm.nameEn) as HTMLInputElement).getAttribute('dir')).toBe('auto');
   });
 
@@ -696,4 +701,21 @@ describe('touch size and motion', () => {
     const classes = [...document.querySelectorAll('[class]')].map((e) => e.getAttribute('class') ?? '').join(' ');
     expect(classes).not.toMatch(/\banimate-|\bduration-|\btransition\b/);
   });
+});
+
+describe('standard units on the product form (English and Urdu)', () => {
+  for (const language of ['en', 'ur'] as const) {
+    it(`${language}: the unit choice is kg / L / piece, the sizes are typed in that unit, no g or ml anywhere`, async () => {
+      await editReady(fakeShell(), OWNER, language);
+      const text = visibleText(document.body);
+      expect(smallUnitsIn(text)).toEqual([]);
+      const unit = document.getElementById('unit') as HTMLSelectElement;
+      expect([...unit.options].map((o) => o.value)).toEqual(['kg', 'L', 'piece']);
+      expect([...unit.options].map((o) => o.textContent)).toEqual(language === 'ur' ? ['کلو', 'لیٹر', 'عدد'] : ['Kilograms (kg)', 'Litres (L)', 'Pieces']);
+      expect(UNIT_WORDS[language].test(withoutMarks(text))).toBe(true);
+      expect(field(3, 'packSize').value).toBe('1');
+      fireEvent.click(screen.getByRole('button', { name: language === 'ur' ? ur.productForm.addSize : en.productForm.addSize }));
+      expect(smallUnitsIn(visibleText(document.body))).toEqual([]);
+    });
+  }
 });

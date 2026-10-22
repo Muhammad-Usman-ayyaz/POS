@@ -1,11 +1,12 @@
 // The POS bill, without any React: the cart, the customer, and the exact requests that are sent. Pure, so the rules that matter can be
 // tested alone. The screen does NO money arithmetic of its own: prices, discounts' effect, tax, totals and credit all come from `sale:quote`.
 import type { ApprovalAction, CustomerMatch, Input } from '@pos/api-contract';
+import { looseStep, type BaseUnitCode } from '@pos/core';
 import { parseRupees } from '../products/product-form-state.js';
 
 export { parseRupees, rupeesText } from '../products/product-form-state.js';
 
-export type BaseUnit = 'ml' | 'g' | 'piece';
+export type BaseUnit = BaseUnitCode;
 export type PriceType = 'retail' | 'wholesale';
 export type PaymentMethod = 'cash' | 'bank' | 'easypaisa' | 'jazzcash';
 export const PAYMENT_METHODS: readonly PaymentMethod[] = ['cash', 'bank', 'easypaisa', 'jazzcash'];
@@ -15,8 +16,7 @@ export interface SizePick {
   productId: string;
   nameEn: string | null;
   nameUr: string | null;
-  label: string;
-  /** Base units per pack. */
+  /** Base units per pack. (The size is shown from this and `baseUnit`, derived by the units module: the stored label text is not kept.) */
   packSize: number;
   allowLoose: boolean;
   baseUnit: BaseUnit;
@@ -39,12 +39,10 @@ export interface CartLine extends SizePick {
 let counter = 0;
 export const newKey = (): string => `cart-${(counter += 1)}`;
 
-/** How far one press of + or - moves the quantity: a whole pack for a sealed size, a small step for a loose one. */
-export function stepOf(size: Pick<SizePick, 'packSize' | 'allowLoose'>): number {
+/** How far one press of + or - moves the quantity, in base units: a whole pack for a sealed size; for a loose one 0.5 kg, 0.1 L or 1 piece (the units module decides). */
+export function stepOf(size: Pick<SizePick, 'packSize' | 'allowLoose' | 'baseUnit'>): number {
   if (!size.allowLoose) return Math.max(1, size.packSize);
-  if (size.packSize >= 500) return 50;
-  if (size.packSize >= 100) return 10;
-  return 1;
+  return looseStep(size.baseUnit);
 }
 
 /** The first quantity of a size added to the bill: one pack. */

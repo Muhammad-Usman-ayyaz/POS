@@ -204,7 +204,7 @@ function planLine(ctx: PlanContext, line: CartLineInput, index: number): Planned
   const all = tx.batches.listForProduct(product.id);
   const costOf = new Map(all.map((b) => [b.id, b.cost_price]));
   const batches: AllocatableBatch[] = all.map((b) => ({ batch_id: b.id, expiry_date: b.expiry_date, stock: b.stock - (taken.get(b.id) ?? 0) }));
-  const request = { qty: line.qty, pack_size: product.pack_size, allow_loose: product.allow_loose === 1, today, batches };
+  const request = { qty: line.qty, pack_size: product.pack_size, base_unit: product.base_unit, allow_loose: product.allow_loose === 1, today, batches };
   const allocations = line.batches ? validateManualAllocation(request, line.batches) : allocateBatches(request);
   for (const a of allocations) taken.set(a.batch_id, (taken.get(a.batch_id) ?? 0) + a.qty);
 

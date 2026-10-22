@@ -99,9 +99,14 @@ describe('tax: percent in the form, basis points stored', () => {
 });
 
 describe('pack size and the low-stock alert in packs', () => {
-  it('a pack size is a whole number above 0', () => {
-    expect(parsePackSize('250')).toBe(250);
-    for (const bad of ['0', '', '-1', '2.5', 'x']) expect(parsePackSize(bad), bad).toBeNull();
+  it('a pack size is typed in the product unit (kg, L or pieces) and stored in base units', () => {
+    expect(parsePackSize('0.25', 'L')).toBe(250);
+    expect(parsePackSize('1', 'L')).toBe(1000);
+    expect(parsePackSize('0.25', 'kg')).toBe(250);
+    expect(parsePackSize('50', 'kg')).toBe(50_000);
+    expect(parsePackSize('10', 'piece')).toBe(10);
+    for (const bad of ['0', '', '-1', '2..5', '2,5', 'x', '0.0001', '1e3']) expect(parsePackSize(bad, 'L'), bad).toBeNull();
+    expect(parsePackSize('2.5', 'piece')).toBeNull();
   });
   it('the alert is typed in packs and stored in base units: 5 packs of 250 ml is 1250 ml', () => {
     expect(parseMinPacks('5', 250)).toBe(1250);
@@ -151,11 +156,17 @@ describe('checking the form', () => {
     expect(checkDraft({ ...filled(), nameEn: '', nameUr: '' }).name).toBe(true);
     expect(checkDraft({ ...filled(), nameEn: '', nameUr: 'کھاد' }).name).toBe(false);
   });
-  it('a label is needed once there are two sizes, not for one', () => {
+  it('no label is typed any more: two sizes are fine, because each label is derived from its pack size', () => {
     expect(hasProblems(checkDraft(filled()))).toBe(false);
-    const two = { ...filled(), sizes: [...filled().sizes, { ...blankSize(), packSize: '500', retail: '270', wholesale: '245' }] };
-    const found = checkDraft(two);
-    expect(Object.values(found.sizes).map((p) => p.label)).toEqual(['labelRequired', 'labelRequired']);
+    const two = { ...filled(), sizes: [...filled().sizes, { ...blankSize(), packSize: '0.5', retail: '270', wholesale: '245' }] };
+    expect(hasProblems(checkDraft(two))).toBe(false);
+  });
+  it('a pack size with too many decimals, or decimals for pieces, is a problem on that size', () => {
+    const d = filled();
+    const found = checkDraft({ ...d, sizes: [{ ...d.sizes[0]!, packSize: '0.2501' }] });
+    expect(Object.values(found.sizes)[0]).toMatchObject({ packSize: 'packInvalid' });
+    const pieces = checkDraft({ ...d, unit: 'piece', sizes: [{ ...d.sizes[0]!, packSize: '2.5' }] });
+    expect(Object.values(pieces.sizes)[0]).toMatchObject({ packSize: 'packInvalid' });
   });
   it('flags a bad pack size, prices, tax and alert on the size they belong to', () => {
     const d = filled();
@@ -172,10 +183,10 @@ describe('what a save sends: a new product', () => {
       nameEn: 'Insecticide',
       nameUr: 'کیڑے مار دوا',
       categoryId: 'c1',
-      unit: 'ml',
+      unit: 'L',
       sizes: [
-        { ...blankSize(), label: '250 ml', packSize: '250', sku: 'INS-250', barcode: '', retail: '118', wholesale: '110.50', taxPct: '18', minPacks: '5', allowLoose: true },
-        { ...blankSize(), label: '1 L', packSize: '1000', retail: '500', wholesale: '450', taxPct: '0', minPacks: '' },
+        { ...blankSize(), packSize: '0.25', sku: 'INS-250', barcode: '', retail: '118', wholesale: '110.50', taxPct: '18', minPacks: '5', allowLoose: true },
+        { ...blankSize(), packSize: '1', retail: '500', wholesale: '450', taxPct: '0', minPacks: '' },
       ],
     };
     const steps = buildSaveSteps(draft, null);
@@ -188,7 +199,7 @@ describe('what a save sends: a new product', () => {
         category_id: 'c1',
         brand_id: null,
         sizes: [
-          { pack_label: '250 ml', sku: 'INS-250', barcode: null, base_unit: 'ml', pack_size: 250, allow_loose: 1, retail_price: 11_800, wholesale_price: 11_050, tax_rate_bp: 1800, min_stock: 1250 },
+          { pack_label: '0.25 L', sku: 'INS-250', barcode: null, base_unit: 'ml', pack_size: 250, allow_loose: 1, retail_price: 11_800, wholesale_price: 11_050, tax_rate_bp: 1800, min_stock: 1250 },
           { pack_label: '1 L', sku: null, barcode: null, base_unit: 'ml', pack_size: 1000, allow_loose: 0, retail_price: 50_000, wholesale_price: 45_000, tax_rate_bp: 0, min_stock: 0 },
         ],
       },
@@ -232,30 +243,46 @@ describe('what a save sends: editing', () => {
 
   it('the pack size and unit of a LOCKED size are never sent, even if the draft was changed', () => {
     const d = draftFromSaved(savedGroup());
-    d.sizes[0] = { ...d.sizes[0]!, packSize: '300', label: '300 ml' };
+    d.sizes[0] = { ...d.sizes[0]!, packSize: '0.3' };
     const steps = buildSaveSteps(d, savedGroup());
-    expect(steps).toEqual([{ kind: 'updateSize', key: 's250', input: { product_id: 's250', changes: { pack_label: '300 ml' } } }]);
+    expect(steps).toEqual([]); // the pack size cannot change, and the label it has is kept as it is
   });
 
   it('the pack size of a size with NO batches can be sent', () => {
     const d = draftFromSaved(savedGroup());
-    d.sizes[1] = { ...d.sizes[1]!, packSize: '600' };
-    expect(buildSaveSteps(d, savedGroup())).toEqual([{ kind: 'updateSize', key: 's500', input: { product_id: 's500', changes: { pack_size: 600 } } }]);
+    d.sizes[1] = { ...d.sizes[1]!, packSize: '0.6' };
+    // The old label "500 ml" no longer matches the size, so the derived one is stored with it.
+    expect(buildSaveSteps(d, savedGroup())).toEqual([{ kind: 'updateSize', key: 's500', input: { product_id: 's500', changes: { pack_label: '0.6 L', pack_size: 600 } } }]);
   });
 
   it('the low-stock alert is converted with the pack size it will have', () => {
     const d = draftFromSaved(savedGroup());
-    d.sizes[1] = { ...d.sizes[1]!, packSize: '600', minPacks: '2' };
-    expect(buildSaveSteps(d, savedGroup())).toEqual([{ kind: 'updateSize', key: 's500', input: { product_id: 's500', changes: { pack_size: 600, min_stock: 1200 } } }]);
+    d.sizes[1] = { ...d.sizes[1]!, packSize: '0.6', minPacks: '2' };
+    expect(buildSaveSteps(d, savedGroup())).toEqual([{ kind: 'updateSize', key: 's500', input: { product_id: 's500', changes: { pack_label: '0.6 L', pack_size: 600, min_stock: 1200 } } }]);
   });
 
   it('a new size is added with the product-level unit, after the saved ones are updated', () => {
     const d = draftFromSaved(savedGroup());
     d.sizes[0] = { ...d.sizes[0]!, retail: '195' };
-    d.sizes.push({ ...blankSize(), label: '1 L', packSize: '1000', retail: '500', wholesale: '450', taxPct: '17' });
+    d.sizes.push({ ...blankSize(), packSize: '1', retail: '500', wholesale: '450', taxPct: '17' });
     const steps = buildSaveSteps(d, savedGroup());
     expect(steps.map((s) => s.kind)).toEqual(['updateSize', 'addSize']);
     expect(steps[1]).toMatchObject({ kind: 'addSize', input: { group_id: 'g1', size: { pack_label: '1 L', base_unit: 'ml', pack_size: 1000, tax_rate_bp: 1700, retail_price: 50_000 } } });
+  });
+
+  it('a saved size whose pack size did not change keeps the label it has (rows are never rewritten)', () => {
+    const d = draftFromSaved(savedGroup());
+    d.sizes[0] = { ...d.sizes[0]!, retail: '200' };
+    expect(JSON.stringify(buildSaveSteps(d, savedGroup()))).not.toContain('pack_label');
+  });
+
+  it('a lone size with no label that gets a second size is given a derived label (every size of a group needs one)', () => {
+    const lone = savedGroup([savedSize({ pack_label: '', batch_count: 0 })]);
+    const d = draftFromSaved(lone);
+    d.sizes.push({ ...blankSize(), packSize: '1', retail: '500', wholesale: '450' });
+    const steps = buildSaveSteps(d, lone);
+    expect(steps[0]).toMatchObject({ kind: 'updateSize', input: { changes: { pack_label: '0.25 L' } } });
+    expect(steps[1]).toMatchObject({ kind: 'addSize', input: { size: { pack_label: '1 L' } } });
   });
 
   it('switching a size off (or on) is its own step, last', () => {

@@ -60,7 +60,7 @@ export function defineSalesReturnTests(make: WorldFactory): void {
         ret(invoice.id, item.id, 2000);
         const e = errorOf(() => ret(invoice.id, item.id, 9000));
         expect(e.code).toBe('RETURN_EXCEEDS_SOLD');
-        expect(e.params).toEqual({ returnable: 8000, requested: 9000, packSize: 1000 });
+        expect(e.params).toEqual({ returnable: 8000, requested: 9000, packSize: 1000, unit: 'ml' });
         expect(w.rows('audit_log')).toHaveLength(1); // only the first, approved return
       });
 

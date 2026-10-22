@@ -4,15 +4,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorNotice } from '../../components/feedback.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
-import { useI18n } from '../../i18n/index.js';
+import type { BaseUnitCode } from '@pos/core';
+import { legacyText, packText, useI18n } from '../../i18n/index.js';
 import { useDebouncedSearch } from '../../lib/use-debounced-search.js';
 
 export interface PickedSize {
   productId: string;
   nameEn: string | null;
   nameUr: string | null;
-  label: string;
   packSize: number;
+  baseUnit: BaseUnitCode;
+  allowLoose: boolean;
 }
 
 const RESULTS = 15;
@@ -37,7 +39,7 @@ export function ProductPicker({ api, onPick, onClose }: { api: Api; onPick: (siz
   const sizes: PickedSize[] = (search.data?.hits ?? []).flatMap((hit) =>
     hit.sizes
       .filter((s) => s.is_active === 1)
-      .map((s) => ({ productId: s.id, nameEn: hit.group.name_en, nameUr: hit.group.name_ur, label: s.pack_label, packSize: s.pack_size })),
+      .map((s) => ({ productId: s.id, nameEn: hit.group.name_en, nameUr: hit.group.name_ur, packSize: s.pack_size, baseUnit: s.base_unit, allowLoose: s.allow_loose === 1 })),
   );
 
   // A scanner types the code and presses Enter at once: the answer for that code may not be here yet. Wait for it, then add the one size.
@@ -77,8 +79,8 @@ export function ProductPicker({ api, onPick, onClose }: { api: Api; onPick: (siz
         {sizes.map((size) => (
           <li key={size.productId}>
             <button type="button" onClick={() => onPick(size)} className="lift flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-start text-base hover:bg-row-hover">
-              <span className="font-semibold">{(language === 'ur' ? (size.nameUr ?? size.nameEn) : (size.nameEn ?? size.nameUr)) ?? ''}</span>
-              {size.label !== '' && <span dir="auto" className="rounded-full bg-row-line/60 px-2 py-0.5 text-sm">{size.label}</span>}
+              <span className="font-semibold">{legacyText(m, (language === 'ur' ? (size.nameUr ?? size.nameEn) : (size.nameEn ?? size.nameUr)) ?? '')}</span>
+              {packText(m, language, size.baseUnit, size.packSize) !== '' && <span dir="auto" className="rounded-full bg-row-line/60 px-2 py-0.5 text-sm">{packText(m, language, size.baseUnit, size.packSize)}</span>}
             </button>
           </li>
         ))}

@@ -14,28 +14,6 @@ export function formatMoney(paisa: number, language: Language = 'en'): string {
   return language === 'ur' ? ltr(text) : text;
 }
 
-const WORDS = {
-  en: { pack: 'pack', packs: 'packs', loose: 'loose', and: 'and' },
-  ur: { pack: 'پیک', packs: 'پیک', loose: 'کھلا', and: 'اور' },
-} as const;
-
-/**
- * A quantity in base units, said the way a shopkeeper says it: "3 packs", "250 loose", "2 packs and 250 loose".
- * A product sold by the piece (pack size 1) is just a number.
- */
-export function formatQty(qty: number, packSize: number, language: Language = 'en'): string {
-  const w = WORDS[language];
-  const text = (() => {
-    if (packSize <= 1) return String(qty);
-    const packs = Math.floor(qty / packSize);
-    const rest = qty - packs * packSize;
-    const packText = `${packs} ${packs === 1 ? w.pack : w.packs}`;
-    if (packs === 0) return `${rest} ${w.loose}`;
-    return rest === 0 ? packText : `${packText} ${w.and} ${rest} ${w.loose}`;
-  })();
-  return language === 'ur' ? ltr(text) : text;
-}
-
 const MONTHS = {
   en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   ur: ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'],

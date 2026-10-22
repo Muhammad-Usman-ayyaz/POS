@@ -2,6 +2,7 @@
 //
 // RULE: no price, tax, total or cost in any of these types (a held bill is a draft of what the cashier chose; the prices come from a new
 // quote on resume). `held_by_name` is read from the users table by the shell's own user id, never from the request.
+import type { BaseUnitCode } from '../units.js';
 
 export interface HeldBillCustomer {
   id: string;
@@ -36,7 +37,7 @@ export interface HeldBillLine {
   pack_label: string;
   pack_size: number;
   allow_loose: boolean;
-  base_unit: 'ml' | 'g' | 'piece';
+  base_unit: BaseUnitCode;
 }
 
 export interface ResumedHeldBill extends HeldBillSummary {
