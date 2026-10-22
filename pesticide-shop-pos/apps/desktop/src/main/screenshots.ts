@@ -409,7 +409,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     await fill('input[type=search]', query);
     await waitFor('[data-size]');
     await pause(700);
-    await js(`(() => { const b = [...document.querySelectorAll('[data-size]:not([disabled])')].find((x) => x.querySelector('span').textContent.trim().startsWith(${JSON.stringify(label)}));
+    await js(`(() => { const b = [...document.querySelectorAll('[data-size]:not([disabled])')].find((x) => x.querySelector('span').textContent.replace(/[⁦-⁩]/g, '').trim().startsWith(document.documentElement.lang === 'ur' ? ${JSON.stringify(label)}.replace(' L', ' لیٹر').replace(' kg', ' کلو') : ${JSON.stringify(label)}));
       if (!b) throw new Error('no size ' + ${JSON.stringify(label)} + ' for ' + ${JSON.stringify(query)}); b.click(); })()`);
     await js(`new Promise((resolve, reject) => { const t0 = Date.now(); const tick = () => document.querySelectorAll('[data-line]').length > ${before} ? resolve(true) : Date.now() - t0 > 4000 ? reject(new Error('the line was not added')) : setTimeout(tick, 50); tick(); })`);
   }
@@ -486,6 +486,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
     }
     await addToBill('Insecticide', '1 L');
     await addToBill('Fungicide');
+    await addToBill('Fertilizer', '1 kg'); // a loose size: the line shows kg
     await addToBill('Weedicide');
     await checkSearchBox(language);
     await chooseCustomer('Rashid', rashid, `${prefix + 1}-pos-customer-picker-${language}`);
