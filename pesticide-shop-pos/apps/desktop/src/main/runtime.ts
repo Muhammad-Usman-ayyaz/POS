@@ -688,6 +688,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return null;
     },
 
+    // ---------- BEGIN Phase 6 wrap-up ----------
+    // The owner is the SESSION user; the renderer sends the customer, the delta and the reason, nothing about who or when.
+    'khata:adjustOpening': async (input) => {
+      const user = session.require();
+      requireCapability(user, 'khata.openingBalance');
+      return services().khata.adjustOpening({ ...input, created_by: user.id });
+    },
+    // ---------- END Phase 6 wrap-up ----------
+
     'reports:profitByDay': async ({ from, to }) => {
       const user = session.require();
       requireCapability(user, 'profit.view');

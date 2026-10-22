@@ -1,5 +1,6 @@
 import { describe } from 'vitest';
 import type { WorldFactory } from '../world.js';
+import { defineAdjustOpeningTests } from './adjust-opening.js';
 import { defineAtomicityTests } from './atomicity.js';
 import { defineCatalogueTests } from './catalogue.js';
 import { defineCatalogueListTests } from './catalogue-list.js';
@@ -34,6 +35,7 @@ export function defineServiceSuites(label: string, make: WorldFactory): void {
     defineCatalogueListTests(make);
     defineDirectoryTests(make);
     defineLedgerSeqTests(make);
+    defineAdjustOpeningTests(make);
     defineAtomicityTests(make);
     defineScenarioTests(make);
   });

@@ -6,7 +6,7 @@ import { DomainError } from '../errors.js';
 import type { Repositories } from '../ports/index.js';
 import { Id, IsoDate } from '../schemas/common.js';
 import type { Customer } from '../schemas/index.js';
-import { activeUser, liveCustomer, parseInput, rowFactory, type ServiceDeps } from './support.js';
+import { activeUser, liveCustomer, ownerUser, parseInput, rowFactory, type ServiceDeps } from './support.js';
 
 const OpeningBalanceInput = z.object({
   customer_id: Id,
@@ -15,6 +15,32 @@ const OpeningBalanceInput = z.object({
   created_by: Id,
 });
 export type OpeningBalanceInput = z.input<typeof OpeningBalanceInput>;
+
+/** The largest amount the shell accepts for one entry (Rs 10 billion, in paisa): the same bound as every other money input. */
+const MAX_DELTA = 1_000_000_000_000;
+
+const AdjustOpeningInput = z.strictObject({
+  customer_id: Id,
+  /** Paisa to ADD to what the customer owes (minus: owes less). A whole number, never 0. */
+  delta: z
+    .number()
+    .int()
+    .refine((n) => n !== 0, { message: 'cannot be 0' })
+    .refine((n) => Math.abs(n) <= MAX_DELTA, { message: 'too large' }),
+  /** Why the opening balance was wrong. Required: the audit row keeps it. */
+  reason: z.string().trim().min(1).max(200),
+  /** The signed-in OWNER, set by the shell. */
+  created_by: Id,
+});
+export type AdjustOpeningInput = z.input<typeof AdjustOpeningInput>;
+
+export interface AdjustOpeningResult {
+  /** The id of the one `adjustment` ledger row that was written. */
+  entry_id: string;
+  balance_before: number;
+  /** The customer's balance after the correction: the ledger sum, from the shell. */
+  balance: number;
+}
 
 /** A real calendar day, YYYY-MM-DD. */
 const Day = IsoDate.refine((d) => {
@@ -132,6 +158,45 @@ export function createKhataService(deps: ServiceDeps) {
         tx.ledger.insert(
           rows.ledger({ party_type: 'customer', party_id: input.customer_id, entry_type: 'opening', amount_delta: input.amount, entry_date: nowIso(deps.clock), created_by: input.created_by }),
         );
+      });
+    },
+
+    /**
+     * Corrects a wrong opening balance WITHOUT touching it. OWNER only. The customer must already have an `opening` row (else
+     * NO_OPENING_BALANCE). It writes ONE `adjustment` ledger row for `delta` (plus: owes more, minus: owes less; a whole number, not 0) and ONE audit
+     * row `opening_balance_adjusted` (reason, balance before, balance after, delta), both in this one unit of work. The `opening` row is never edited
+     * and a second `opening` row is never written (the ledger is append-only). Returns the new balance.
+     */
+    adjustOpening(rawInput: AdjustOpeningInput): AdjustOpeningResult {
+      const input = parseInput(AdjustOpeningInput, rawInput);
+      return deps.uow.run((tx) => {
+        ownerUser(tx, input.created_by);
+        liveCustomer(tx, input.customer_id);
+        const opening = tx.ledger.list('customer', input.customer_id).find((e) => e.entry_type === 'opening');
+        if (!opening) throw new DomainError('NO_OPENING_BALANCE', 'this customer has no opening balance to correct');
+        const before = tx.ledger.balance('customer', input.customer_id);
+        const row = rows.ledger({
+          party_type: 'customer',
+          party_id: input.customer_id,
+          entry_type: 'adjustment',
+          amount_delta: input.delta,
+          ref_type: 'opening',
+          ref_id: opening.id,
+          entry_date: nowIso(deps.clock),
+          created_by: input.created_by,
+        });
+        tx.ledger.insert(row);
+        const after = tx.ledger.balance('customer', input.customer_id);
+        tx.audit.insert(
+          rows.audit({
+            user_id: input.created_by,
+            action: 'opening_balance_adjusted',
+            table_name: 'ledger_entries',
+            row_id: row.id,
+            details: { customer_id: input.customer_id, reason: input.reason, before, after, delta: input.delta },
+          }),
+        );
+        return { entry_id: row.id, balance_before: before, balance: after };
       });
     },
 

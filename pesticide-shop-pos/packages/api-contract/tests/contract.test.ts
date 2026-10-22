@@ -68,6 +68,9 @@ const samples: Record<Channel, () => Record<string, unknown>> = {
   'print:paymentReceipt': () => ({ payment_id: id(), language: 'en', output: 'printer' }),
   'khata:exportStatement': () => ({ customer_id: id(), from: '2026-10-01' }),
   // END Phase 6 M6 samples
+  // BEGIN Phase 6 wrap-up samples
+  'khata:adjustOpening': () => ({ customer_id: id(), delta: -25_000, reason: 'Wrote Rs 2,500 too much' }),
+  // END Phase 6 wrap-up samples
 };
 
 describe('the contract', () => {

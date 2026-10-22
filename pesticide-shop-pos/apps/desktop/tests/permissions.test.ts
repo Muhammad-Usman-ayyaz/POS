@@ -66,6 +66,7 @@ describe('enforced in the handlers', () => {
     'writing off stock': () => h()['stock:writeOff']({ batch_id: batch, qty: 1000, kind: 'damage' }),
     'opening stock': () => h()['stock:openingStock']({ product_id: product, batch_no: 'NEW-1', expiry_date: day(300), cost_price: 40_000, qty: 5000 }),
     'an opening balance': () => h()['khata:setOpeningBalance']({ customer_id: shop.demo.customers['sajid']!, amount: 10_000 }),
+    'correcting an opening balance': () => h()['khata:adjustOpening']({ customer_id: shop.demo.customers['sajid']!, delta: -500, reason: 'typo' }),
     'setting customer terms': () => h()['customers:setTerms']({ customer_id: shop.demo.customers['sajid']!, credit_limit: 9_000_000, default_price_type: 'wholesale', expected_version: 1 }),
     'changing the customer settings': () => h()['customers:setSettings']({ default_credit_limit: 9_000_000, show_farmer_fields: true }),
   };
@@ -86,6 +87,7 @@ describe('enforced in the handlers', () => {
       'writing off stock': 'stock.writeOff',
       'opening stock': 'stock.openingStock',
       'an opening balance': 'khata.openingBalance',
+      'correcting an opening balance': 'khata.openingBalance',
       'setting customer terms': 'customers.terms',
       'changing the customer settings': 'customers.settings',
     };
@@ -211,7 +213,7 @@ describe('enforced in the handlers', () => {
 
   describe('nobody signed in', () => {
     const business: Channel[] = [
-      'sale:create', 'salesReturn:create', 'stock:batchesOf', 'stock:openingStock', 'stock:adjust', 'stock:writeOff', 'khata:setOpeningBalance', 'reports:profitByDay', 'auth:regenerateRecoveryCode',
+      'sale:create', 'salesReturn:create', 'stock:batchesOf', 'stock:openingStock', 'stock:adjust', 'stock:writeOff', 'khata:setOpeningBalance', 'khata:adjustOpening', 'reports:profitByDay', 'auth:regenerateRecoveryCode',
       'payments:receive', 'khata:statement', 'customers:setTerms', 'customers:setSettings',
     ];
 
@@ -225,6 +227,7 @@ describe('enforced in the handlers', () => {
         'stock:adjust': { batch_id: batch, qty_delta: 1 },
         'stock:writeOff': { batch_id: batch, qty: 1, kind: 'damage' },
         'khata:setOpeningBalance': { customer_id: product, amount: 1 },
+        'khata:adjustOpening': { customer_id: product, delta: 1, reason: 'x' },
         'reports:profitByDay': { from: day(-1), to: day(0) },
         'auth:regenerateRecoveryCode': { password: 'x' },
         'payments:receive': { customer_id: product, amount: 100, method: 'cash' },
