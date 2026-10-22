@@ -155,6 +155,7 @@ export type ReturnPreviewView = ReturnPreview;
 /** The sale with what can still be returned on each line. */
 export type InvoiceForReturnView = InvoiceForReturn;
 export type ReturnListView = ReturnList;
+export type ReturnListRow = ReturnList['rows'][number];
 export type ReturnDetailView = ReturnDetail;
 /** The owner's one-use approval of ONE return: good for a minute, for these lines, quantities, conditions and reasons and the person asking. */
 export interface ReturnApprovalGrant {

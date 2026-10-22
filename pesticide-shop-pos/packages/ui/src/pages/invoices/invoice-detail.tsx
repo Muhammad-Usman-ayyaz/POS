@@ -10,7 +10,7 @@ import { PrintActions } from './print-actions.js';
 import { SHOP_TIME_ZONE } from './time-zone.js';
 
 /** One past sale: its lines as they were sold, the totals, and the print buttons. */
-export function InvoiceDetailDialog({ api, row, onClose, onPrinted }: { api: Api; row: InvoiceListRow; onClose: () => void; onPrinted: () => void }) {
+export function InvoiceDetailDialog({ api, row, isOwner = false, onClose, onPrinted }: { api: Api; row: InvoiceListRow; isOwner?: boolean; onClose: () => void; onPrinted: () => void }) {
   const { m, language } = useI18n();
   const t = m.invoices.detail;
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
@@ -131,6 +131,16 @@ export function InvoiceDetailDialog({ api, row, onClose, onPrinted }: { api: Api
       <p className="mt-4 text-sm text-muted">{m.invoices.printedTimes(row.print_count)}</p>
       <div className="mt-3 flex flex-wrap justify-end gap-3">
         {detail && <PrintActions api={api} invoiceId={row.id} kinds={['receipt', 'invoice']} onDone={onPrinted} />}
+        {detail && invoice?.status === 'active' && (
+          <Button variant="secondary" asChild>
+            <a data-return-link href={`#/returns?invoice=${row.id}`}>{m.returns.fromInvoice.returnItems}</a>
+          </Button>
+        )}
+        {detail && invoice?.status === 'active' && isOwner && (
+          <Button variant="danger" asChild>
+            <a data-void-link href={`#/returns?invoice=${row.id}`}>{m.returns.fromInvoice.voidInvoice}</a>
+          </Button>
+        )}
         <Button onClick={onClose}>{t.close}</Button>
       </div>
     </Dialog>

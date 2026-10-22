@@ -172,8 +172,10 @@ export interface CustomerSettingsDraft {
   /** Rupees as typed. */
   defaultLimit: string;
   showFarmer: boolean;
+  /** Q8: a returning customer's Khata is credited even for what they paid in cash. */
+  refundToKhata: boolean;
 }
-export const settingsDraftFrom = (s: CustomerSettingsView): CustomerSettingsDraft => ({ defaultLimit: groupedRupeesText(s.default_credit_limit), showFarmer: s.show_farmer_fields });
+export const settingsDraftFrom = (s: CustomerSettingsView): CustomerSettingsDraft => ({ defaultLimit: groupedRupeesText(s.default_credit_limit), showFarmer: s.show_farmer_fields, refundToKhata: s.refund_paid_part_to_khata });
 export const settingsLimitInvalid = (d: CustomerSettingsDraft): boolean => parseRupees(d.defaultLimit) === null;
 
 /** ONLY the settings that changed. Nothing changed gives {}. */
@@ -182,5 +184,6 @@ export function buildCustomerSettingsRequest(saved: CustomerSettingsView, draft:
   const limit = parseRupees(draft.defaultLimit);
   if (limit !== null && limit !== saved.default_credit_limit) out.default_credit_limit = limit;
   if (draft.showFarmer !== saved.show_farmer_fields) out.show_farmer_fields = draft.showFarmer;
+  if (draft.refundToKhata !== saved.refund_paid_part_to_khata) out.refund_paid_part_to_khata = draft.refundToKhata;
   return out;
 }

@@ -820,17 +820,17 @@ describe('Settings, Customers section: the edges', () => {
     click(saveButton());
     await screen.findByText(s.saved);
     expect(limit.value).toBe('8,000');
-    expect(screen.getByRole('radio', { name: s.on }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getAllByRole('radio', { name: s.on })[0]!.getAttribute('aria-checked')).toBe('true');
     expect(saveButton().disabled).toBe(true); // nothing differs from the reply now
   });
 
   it('On and Off are not swapped: a shop with the farmer details on shows On, and Off sends false', async () => {
     const shell = fakeShell({ settings: { show_farmer_fields: true }, override: printCfg });
     await openSection(shell);
-    expect(screen.getByRole('radio', { name: s.on }).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByRole('radio', { name: s.off }).getAttribute('aria-checked')).toBe('false');
-    click(screen.getByRole('radio', { name: s.off }));
-    expect(screen.getByRole('radio', { name: s.off }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getAllByRole('radio', { name: s.on })[0]!.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getAllByRole('radio', { name: s.off })[0]!.getAttribute('aria-checked')).toBe('false');
+    click(screen.getAllByRole('radio', { name: s.off })[0]!);
+    expect(screen.getAllByRole('radio', { name: s.off })[0]!.getAttribute('aria-checked')).toBe('true');
     click(saveButton());
     await screen.findByText(s.saved);
     expect(shell.of('customers:setSettings')[0]!.input).toEqual({ show_farmer_fields: false });
@@ -939,7 +939,7 @@ describe('Settings, Customers section', () => {
     const save = screen.getByRole('button', { name: s.save }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     // only the toggle changes
-    click(screen.getByRole('radio', { name: s.on }));
+    click(screen.getAllByRole('radio', { name: s.on })[0]!);
     click(save);
     expect(await screen.findByText(s.saved)).toBeTruthy();
     expect(shell.of('customers:setSettings')[0]!.input).toEqual({ show_farmer_fields: true });
@@ -948,6 +948,20 @@ describe('Settings, Customers section', () => {
     click(screen.getByRole('button', { name: s.save }));
     await waitFor(() => expect(shell.of('customers:setSettings')).toHaveLength(2));
     expect(shell.of('customers:setSettings')[1]!.input).toEqual({ default_credit_limit: 750_000 });
+  });
+
+  it('Phase 7: the "Refunds go to Khata" switch is the second On / Off, starts Off, and sends ONLY refund_paid_part_to_khata', async () => {
+    const shell = await open(fakeShell({ settings: { default_credit_limit: 500_000, show_farmer_fields: false, refund_paid_part_to_khata: false } as never }));
+    click(await screen.findByRole('button', { name: s.sectionLabel }));
+    await screen.findByText(s.refundToKhata);
+    const offs = screen.getAllByRole('radio', { name: s.off });
+    expect(offs).toHaveLength(2);
+    expect(offs[1]!.getAttribute('aria-checked')).toBe('true');
+    click(screen.getAllByRole('radio', { name: s.on })[1]!);
+    click(screen.getByRole('button', { name: s.save }));
+    expect(await screen.findByText(s.saved)).toBeTruthy();
+    expect(shell.of('customers:setSettings')[0]!.input).toEqual({ refund_paid_part_to_khata: true });
+    expect(document.body.textContent).toContain(s.refundToKhataHint);
   });
 
   it('a garbage limit is refused inline and nothing is sent', async () => {
@@ -963,6 +977,6 @@ describe('Settings, Customers section', () => {
     await open(fakeShell({ override: { 'print:getConfig': () => ({ ok: true, data: { shop_name: 'S', print_format: '80mm', receipt_footer: '', printer_name: null, receipt_language: 'en', invoice_language: 'en', shop_name_ur: null, shop_address: null, shop_phone: null } }), 'printers:list': () => ({ ok: true, data: [] }) } }), OWNER, 'ur');
     click(await screen.findByRole('button', { name: ur.customerSettings.sectionLabel }));
     expect(await screen.findByLabelText(ur.customerSettings.defaultLimit)).toBeTruthy();
-    expect(screen.getByRole('radio', { name: ur.customerSettings.on })).toBeTruthy();
+    expect(screen.getAllByRole('radio', { name: ur.customerSettings.on })[0]!).toBeTruthy();
   });
 });

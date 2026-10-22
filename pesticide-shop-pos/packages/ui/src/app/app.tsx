@@ -20,6 +20,7 @@ import { PaymentReceiptActions, StatementPage, StatementPrintActions } from '../
 import { InvoicesPage } from '../pages/invoices/invoices-page.js';
 import { PrintActions } from '../pages/invoices/print-actions.js';
 import { PosPage } from '../pages/pos/pos-page.js';
+import { ReturnsPage } from '../pages/returns/returns-page.js';
 import { ProductFormPage } from '../pages/products/product-form-page.js';
 import { ProductsPage } from '../pages/products/products-page.js';
 import { PurchasesPage } from '../pages/purchases/purchases-page.js';
@@ -127,6 +128,7 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut, onShopRenamed 
                   </PrintActions>
                 )} />} />
           <Route path="/invoices" element={<InvoicesPage api={api} user={user} />} />
+          <Route path="/returns" element={<ReturnsPage api={api} user={user} />} />
           <Route path="/products" element={<ProductsPage api={api} user={user} />} />
           <Route path="/products/new" element={<ProductFormPage api={api} user={user} />} />
           <Route path="/products/:groupId/edit" element={<ProductFormPage api={api} user={user} />} />
@@ -146,7 +148,7 @@ function SignedIn({ api, user, shopName, deviceText, onSignedOut, onShopRenamed 
           <Route path="/customers/:id" element={<CustomerDetailRoute api={api} user={user} />} />
           {/* END customers detail */}
           <Route path="/settings" element={<SettingsPage api={api} user={user} onShopRenamed={onShopRenamed} />} />
-          {NAV_ITEMS.filter(({ key }) => key !== 'pos' && key !== 'invoices' && key !== 'products' && key !== 'purchases' && key !== 'customers' && key !== 'settings').map(({ key, path }) => (
+          {NAV_ITEMS.filter(({ key }) => key !== 'pos' && key !== 'invoices' && key !== 'returns' && key !== 'products' && key !== 'purchases' && key !== 'customers' && key !== 'settings').map(({ key, path }) => (
             <Route key={key} path={path} element={<PlaceholderPage page={key} />} />
           ))}
           <Route path="*" element={<Navigate to="/pos" replace />} />

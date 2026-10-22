@@ -1,6 +1,6 @@
 # Database rules and service flows
 
-The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later numbered migrations (`002_invoice_payment_method.sql` adds `invoices.payment_method`; `003_user_recovery_code.sql` adds `users.recovery_code_hash`; `004_product_groups.sql` adds product groups and pack sizes; `005_return_tax_and_name_snapshot.sql` adds the invoice line names, `tax_refund` and the low-stock rule; `006_sale_request_id_and_held_bills.sql` adds `invoices.request_id` and `held_bills`). Never edit an applied migration. The database refuses many bad writes by itself (negative stock, selling expired batches, over-returns, editing history). The services below create the rows. The database does NOT create stock or ledger rows automatically.
+The schema is in `packages/db-sqlite/migrations/001_init.sql`, plus later numbered migrations (`002_invoice_payment_method.sql` adds `invoices.payment_method`; `003_user_recovery_code.sql` adds `users.recovery_code_hash`; `004_product_groups.sql` adds product groups and pack sizes; `005_return_tax_and_name_snapshot.sql` adds the invoice line names, `tax_refund` and the low-stock rule; `006_sale_request_id_and_held_bills.sql` adds `invoices.request_id` and `held_bills`; `009_returns_and_voids.sql` adds the cash / Khata split, who started a return, the reason per line, the void guards and the stricter profit view). Never edit an applied migration. The database refuses many bad writes by itself (negative stock, selling expired batches, over-returns, editing history). The services below create the rows. The database does NOT create stock or ledger rows automatically.
 
 ## Units and money
 - `products.base_unit` is ml, g or piece. `pack_size` is base units per pack (1L bottle = 1000 ml).
@@ -63,13 +63,18 @@ Supplier payments (`payToSupplier`) are unchanged.
 - `closing_balance` is always the sum of every ledger row up to and including `to` (brought forward + owes_more - owes_less). Without a `to` the service also compares it with `ledger.balance` and refuses to answer if they ever differ, so a statement can never disagree with `v_customer_balance`. Return and adjustment rows count like any other. **Balance on a date** is this same reply: `khata:statement` with only `to`; `closing_balance` is the balance at the end of that shop day. The screens send the date and show `closing_balance`, with no arithmetic.
 - Nothing is stored for a statement.
 
-## Return (customer brings goods back)
-1. Owner approves. A return must link to an active invoice.
-2. Insert `sales_returns` and `sales_return_items`, each pointing at the exact `invoice_items` row. Quantity may not exceed `v_invoice_item_returnable.qty_returnable`.
-3. Refund amount comes from the original line price, not today's price. Discounts return proportionally. The tax inside the refund is worked out the same running-difference way and stored on the line as `sales_return_items.tax_refund` (migration 005); over all the returns of one line it adds up to exactly the tax charged and never more (a trigger caps it per line). One return line's `tax_refund` can be a paisa more than its own `refund_amount` (the two round separately: a line of 3 units with a total of 2 and tax 1 refunds 1, 0, 1 and its tax 0, 1, 0), so the cap is on the line's total, not on each row.
-4. Resellable items: insert `stock_movements` (`sale_return`, plus qty) on the same batch. Damaged or expired items do not go back into sellable stock.
-5. Khata credit refund: insert `ledger_entries` (`return`, minus refund).
-6. Cash refund and voiding an invoice: ledger and payment entries for these must be designed with the owner before coding. Void is a status change plus reversing rows. Never delete the invoice.
+## Return (customer brings goods back) and Void (migration 009, Phase 7)
+**Return** (`salesReturn.create`, one transaction; staff start it, the owner approves it):
+1. An active owner approves (`approved_by`); the person who started it is `requested_by`. The invoice must be active.
+2. Insert `sales_returns` and `sales_return_items`, each pointing at the exact `invoice_items` row, in the line's own unit (base units; a sealed size in whole packs). Quantity may not exceed `v_invoice_item_returnable.qty_returnable`, over ALL earlier returns of the line.
+3. Refund amount comes from the original line price, not today's price. Discounts return proportionally. The tax inside the refund is worked out the same running-difference way and stored on the line as `sales_return_items.tax_refund` (migration 005); over all the returns of one line it adds up to exactly the tax charged and never more (a trigger caps it per line). One return line's `tax_refund` can be a paisa more than its own `refund_amount` (the two round separately), so the cap is on the line's total, not on each row. Each line also has a required `reason` code.
+4. Stock: every returned quantity is booked back into the batch it was sold from (`sale_return`, plus qty). Goods that are not resellable (`damaged`, `expired`) then get a write-off movement on the same batch (`damage` or `expired`, minus qty), so stock does not grow. A batch that has expired (shop calendar) cannot be resellable.
+5. Money (Q8): `cash_amount` is what is handed back in cash and writes NO ledger row; `khata_amount` is what is taken off the customer's Khata with a `ledger_entries` row (`return`, minus `khata_amount`). `cash_amount + khata_amount = total`. A credit sale is all Khata, a cash sale all cash, a part-paid sale takes the Khata part first (capped at `invoices.total - paid_amount` minus the Khata credited by earlier returns of that invoice); a walk-in sale is always cash. The owner setting `returns.refund_paid_part_to_khata` = 1 credits everything on a customer's sale to Khata.
+6. Audit: `return_approved` (owner, with `requested_by`, `cash_amount`, `khata_amount`), and `approval_used` when a staff return spent a token.
+
+**Void** (`salesReturn.voidInvoice`, owner only, one transaction): `invoices.status` becomes `voided` with `void_reason` and `voided_by` (the lines stay, the invoice stays in the list); each line's quantity goes back on its own batch as a `void` stock movement; if the sale left money on Khata, one compensating `return` ledger row (`ref_type` `void`) takes it off (with the setting on, the whole total). What the customer paid is handed back in cash and written nowhere but the audit row `invoice_voided` (`khata_reversed`, `cash_back`). Refused when the invoice already has returns (trigger `trg_invoices_void_no_returns`) or is already voided. A voided invoice cannot become active again and its reason, person and money cannot change. Never delete the invoice.
+
+**Reports**: `v_profit_by_day` leaves voided invoices out, takes `refund_amount - tax_refund` off revenue for a return, and puts back the cost of resellable goods only (running difference over the cumulative returned quantity). Written-off goods keep their cost: the loss shows.
 
 ## Purchase (stock in)
 1. Create or pick the `batches` row (batch number, expiry, cost price).
@@ -96,7 +101,9 @@ The app must create the `shops`, `branches` and `devices` rows, the owner user, 
 |---|---|---|
 | `login` / `login_failed` | every sign-in; failed ones say why (`unknown_user`, `wrong_password`, `inactive_user`) | the user, or NULL for an unknown name |
 | `price_override` / `credit_limit_override` | an owner approved a different price or a sale over the credit limit | the owner |
-| `return_approved` | an approved sales return | the owner |
+| `return_approved` | an approved sales return (`details`: `return_no`, `invoice_id`, `total`, `refund_method`, `cash_amount`, `khata_amount`, `requested_by`) | the owner |
+| `invoice_voided` | an invoice was voided (`table_name` `invoices`; `details`: `invoice_no`, `total`, `paid_amount`, `reason`, `khata_reversed`, `cash_back`) | the owner |
+| `return_slip_printed` | a return slip or credit note was printed or saved as a PDF (`table_name` `sales_returns`, `row_id` the return; `details`: `kind` receipt (80 mm) or invoice (A4), `language`, `result`, `fallback`, `copy`). The count of these per kind is how a reprint knows it is a COPY | whoever printed it |
 | `price_changed` / `tax_rate_changed` | a size's retail or wholesale price, or its tax rate, was changed (before and after are in `details`) | the owner |
 | `size_changed` | a size's label, SKU, barcode, minimum stock, pack size, unit or loose-selling flag changed, or its label was set because another size joined (`details`: `fields`, and `before` and `after` with the old and new value of each changed field) | the owner |
 | `size_activated` / `size_deactivated` | one size switched on or off on its own (`before` and `after` of `is_active`; a whole-product switch-off is `group_deactivated`) | the owner |
