@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { daysBetween, nowIso, todayUtc } from '../clock.js';
 import { outstandingDebts } from '../domain/khata.js';
+import { isTimeZone } from '../domain/zone-day.js';
 import { buildStatement, type StatementResult } from '../domain/statement.js';
 import { DomainError } from '../errors.js';
 import type { Repositories } from '../ports/index.js';
@@ -55,6 +56,8 @@ const StatementInput = z
     from: Day.optional(),
     /** Last day to show (included). Leave out for everything up to now. */
     to: Day.optional(),
+    /** The shop's time zone, set by the shell from the shop setting (never by the screen: the contract has no such key). Default Asia/Karachi. */
+    time_zone: z.string().max(60).refine(isTimeZone, { message: 'not a time zone' }).optional(),
   })
   .refine((i) => i.from === undefined || i.to === undefined || i.from <= i.to, { message: 'from must not be after to', path: ['from'] });
 export type StatementInput = z.input<typeof StatementInput>;
@@ -125,7 +128,7 @@ export function createKhataService(deps: ServiceDeps) {
      * A customer's statement. Every ledger row (oldest first, ties in insertion order) with the balance after it and what to show
      * beside it: the kind (opening, sale, payment, return, adjustment), the invoice or return number, the payment method,
      * reference and receipt number, and the payment note. With `from`, the first line is "brought forward": the balance before that day.
-     * `to` stops the statement at the end of that day. Dates are whole UTC days, both ends included.
+     * `to` stops the statement at the end of that day. Dates are whole SHOP days (Asia/Karachi by default, `time_zone` from the shell), both ends included: see `buildStatement`.
      * `closing_balance` is always the sum of the ledger up to `to`, so it can never disagree with `v_customer_balance`
      * (with no `to`, the service checks it against `ledger.balance` and refuses to answer if they differ).
      */
@@ -133,7 +136,7 @@ export function createKhataService(deps: ServiceDeps) {
       const input = parseInput(StatementInput, rawInput);
       return deps.uow.run((tx) => {
         const customer = liveCustomer(tx, input.customer_id);
-        const result = buildStatement(tx.ledger.customerStatementRows(customer.id), { from: input.from, to: input.to });
+        const result = buildStatement(tx.ledger.customerStatementRows(customer.id), { from: input.from, to: input.to, timeZone: input.time_zone });
         if (input.to === undefined && result.closing_balance !== tx.ledger.balance('customer', customer.id)) {
           throw new DomainError('INTERNAL', 'statement does not add up to the ledger balance');
         }

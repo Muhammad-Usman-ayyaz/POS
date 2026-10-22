@@ -13,6 +13,7 @@ import type {
   InvoiceListRow,
   PrintConfig,
 } from '@pos/core';
+import { DEFAULT_SHOP_TIME_ZONE, isTimeZone } from '@pos/core';
 import type { Db } from './connection.js';
 import { LEDGER_BEFORE, LEDGER_POSITION_SQL, positionArgs, type LedgerPosition } from './ledger-order.js';
 
@@ -22,7 +23,7 @@ import { LEDGER_BEFORE, LEDGER_POSITION_SQL, positionArgs, type LedgerPosition }
 /** The audit-log action written for each printed document. Counting these is how a reprint knows it is a COPY. */
 export const PRINT_AUDIT_ACTION = 'invoice_printed';
 
-export const DEFAULT_TIME_ZONE = 'Asia/Karachi';
+export const DEFAULT_TIME_ZONE = DEFAULT_SHOP_TIME_ZONE;
 
 interface InvoiceRow {
   id: string;
@@ -170,6 +171,12 @@ const SETTING_KEYS = {
   shop_phone: 'shop.phone',
 } as const satisfies Record<Exclude<keyof PrintConfig, 'shop_name'>, string>;
 export const TIME_ZONE_KEY = 'shop.time_zone';
+
+/** The shop's time zone for statements and documents: the setting `shop.time_zone`, else Asia/Karachi. */
+export const shopTimeZone = (db: Db): string => {
+  const set = readSetting(db, TIME_ZONE_KEY);
+  return set !== null && isTimeZone(set) ? set : DEFAULT_TIME_ZONE; // a mistyped setting must not break statements
+};
 
 export function readSetting(db: Db, key: string): string | null {
   const row = db.prepare('SELECT value FROM settings WHERE "key" = ? AND deleted_at IS NULL').get(key) as { value: string | null } | undefined;

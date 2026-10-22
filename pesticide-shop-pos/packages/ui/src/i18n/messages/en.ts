@@ -621,6 +621,8 @@ export const en = {
     from: 'From',
     to: 'To',
     quickLabel: 'Quick ranges',
+    balanceOnLabel: 'Balance on date',
+    balanceOnResult: (date: string, balance: string) => `On ${date}: ${balance}`,
     thisMonth: 'This month',
     last30: 'Last 30 days',
     all: 'All',

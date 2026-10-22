@@ -623,6 +623,8 @@ export const ur: Messages = {
     from: 'سے',
     to: 'تک',
     quickLabel: 'فوری مدت',
+    balanceOnLabel: 'تاریخ پر بقایا',
+    balanceOnResult: (date: string, balance: string) => `${date} کو: ${balance}`,
     thisMonth: 'اس مہینے',
     last30: 'پچھلے 30 دن',
     all: 'سب',

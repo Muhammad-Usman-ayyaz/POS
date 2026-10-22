@@ -10,6 +10,7 @@ import { cn } from '../../../lib/cn.js';
 import { formatDateTime } from '../../../print/format.js';
 import { SHOP_TIME_ZONE } from '../../invoices/time-zone.js';
 import { Chip } from '../../pos/counter-ui.js';
+import { BalanceOnDate } from '../../khata/balance-on-date.js';
 import { CustomerOpeningDialog } from '../opening/customer-opening-dialog.js';
 import { CustomerPaymentDialog, type PaymentResult } from '../payment/customer-payment-dialog.js';
 import { balanceView, creditChipKind, lastLines, nameFor, pillOf, type StatementLineView } from './customer-detail-state.js';
@@ -205,6 +206,10 @@ function Detail({ api, owner, customerId, receiptActions, statementActions }: { 
             {summary.next_due ? (language === 'ur' ? ltr(formatDate(summary.next_due, language)) : formatDate(summary.next_due, language)) : t.none}
           </p>
         </Card>
+      </div>
+
+      <div className="stagger mb-5" style={{ '--i': 2 } as React.CSSProperties}>
+        <BalanceOnDate api={api} customerId={c.id} />
       </div>
 
       <section aria-label={t.ledgerLabel} className="stagger rounded-lg border border-line bg-card shadow-card" style={{ '--i': 2 } as React.CSSProperties}>

@@ -373,30 +373,45 @@ export function defineCustomerKhataTests(make: WorldFactory): void {
         expect(plain).toMatchObject({ payment_method: 'cash', note: null, receipt_no: 'RCP-A-000002' });
       });
 
-      it.each(['UTC', 'Asia/Karachi', 'America/Los_Angeles', 'Pacific/Auckland'])('range days are UTC days whatever the machine time zone is (%s)', (zone) => {
+      // A statement day is a SHOP day (Asia/Karachi, UTC+5): it begins at 19:00 UTC the evening before. The test must not depend on the machine's own zone.
+      it.each(['UTC', 'Asia/Karachi', 'America/Los_Angeles', 'Pacific/Auckland'])('range days are Karachi days whatever the machine time zone is (%s)', (zone) => {
         const saved = process.env.TZ;
         process.env.TZ = zone;
         try {
-          if (zone !== 'UTC') {
-            const evening = new Date('2026-03-10T23:30:00.000Z');
-            const early = new Date('2026-03-11T00:30:00.000Z');
-            expect(evening.getDate() !== evening.getUTCDate() || early.getDate() !== early.getUTCDate(), `${zone} is in effect`).toBe(true);
-          }
-          rawLedger({ entry_type: 'adjustment', amount_delta: 100, entry_date: `${w.day(-3)}T23:30:00.000Z` });
-          rawLedger({ entry_type: 'adjustment', amount_delta: 10, entry_date: `${w.day(-2)}T00:30:00.000Z` });
+          // day(-3) in Karachi ends at 18:59:59.999 UTC; day(-2) in Karachi begins at 19:00:00.000 UTC of day(-3)
+          rawLedger({ entry_type: 'adjustment', amount_delta: 100, entry_date: `${w.day(-3)}T18:59:59.999Z` }); // the last millisecond of Karachi day -3
+          rawLedger({ entry_type: 'adjustment', amount_delta: 10, entry_date: `${w.day(-3)}T19:00:00.000Z` }); // the first millisecond of Karachi day -2
+          rawLedger({ entry_type: 'adjustment', amount_delta: 1, entry_date: `${w.day(-3)}T23:30:00.000Z` }); // 04:30 on Karachi day -2 (still day -3 in UTC)
           const from = s.khata.statement({ customer_id: ID.customer, from: w.day(-2) });
           expect(from.brought_forward).toBe(100);
-          expect(from.lines.map((l) => [l.label, l.amount_delta])).toEqual([['brought_forward', 100], ['adjustment', 10]]);
+          expect(from.lines.map((l) => [l.label, l.amount_delta])).toEqual([['brought_forward', 100], ['adjustment', 10], ['adjustment', 1]]);
           const to = s.khata.statement({ customer_id: ID.customer, to: w.day(-3) });
-          expect(to.lines.map((l) => l.amount_delta)).toEqual([100]);
+          expect(to.lines.map((l) => l.amount_delta)).toEqual([100]); // a UTC-day cut would also have taken the 10 and the 1
           expect(to.closing_balance).toBe(100);
           const one = s.khata.statement({ customer_id: ID.customer, from: w.day(-3), to: w.day(-3) });
           expect(one.lines.map((l) => l.amount_delta)).toEqual([0, 100]);
-          expect(one.closing_balance).toBe(100);
+          const day2 = s.khata.statement({ customer_id: ID.customer, from: w.day(-2), to: w.day(-2) });
+          expect(day2.lines.map((l) => l.amount_delta)).toEqual([100, 10, 1]);
+          expect(day2.closing_balance).toBe(111);
         } finally {
           if (saved === undefined) delete process.env.TZ;
           else process.env.TZ = saved;
         }
+      });
+
+      it('another shop time zone moves the boundary (the shell passes the setting)', () => {
+        rawLedger({ entry_type: 'adjustment', amount_delta: 100, entry_date: `${w.day(-3)}T23:30:00.000Z` });
+        expect(s.khata.statement({ customer_id: ID.customer, to: w.day(-3), time_zone: 'UTC' }).closing_balance).toBe(100);
+        expect(s.khata.statement({ customer_id: ID.customer, to: w.day(-3), time_zone: 'Asia/Karachi' }).closing_balance).toBe(0);
+        expect(codeOf(() => s.khata.statement({ customer_id: ID.customer, time_zone: 'Mars/Base' }))).toBe('INVALID_INPUT');
+      });
+
+      it('closing_balance with a "to" is the ledger up to the end of that Karachi day (the Balance on a date)', () => {
+        rawLedger({ entry_type: 'adjustment', amount_delta: 500, entry_date: `${w.day(-5)}T10:00:00.000Z` });
+        rawLedger({ entry_type: 'adjustment', amount_delta: 70, entry_date: `${w.day(-4)}T20:00:00.000Z` }); // 01:00 on Karachi day -3
+        expect(s.khata.statement({ customer_id: ID.customer, to: w.day(-4) }).closing_balance).toBe(500);
+        expect(s.khata.statement({ customer_id: ID.customer, to: w.day(-3) }).closing_balance).toBe(570);
+        expect(s.khata.statement({ customer_id: ID.customer, to: w.day(-6) }).closing_balance).toBe(0);
       });
 
       it('a customer with no history has an empty statement', () => {
