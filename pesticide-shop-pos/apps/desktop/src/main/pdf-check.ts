@@ -392,7 +392,7 @@ export async function runPdfCheck(outDir: string, pdfjsBuildDir: string): Promis
       checks.push({ name: `${label}: one PDF page`, ok: report.pages === 1, detail: `${report.pages} page(s)` });
       const flat = report.text.replace(/\s+/g, ' ');
       const common = ['INV-A-000002', '12 Oct 2026, 10:42', 'Rs 1,000', 'Rs 2,050', 'Rs 91', 'Rs 1,050', 'Rs 3,050', '30 Nov 2026'];
-      const missing = [...common, ...(kind === 'invoice' ? ['B-001', 'F-001', 'FG-014', 'Rs 500', 'Rs 200/', 'Rs 350'] : ['2 × Rs 500', '× Rs 350'])].filter((s) => !flat.includes(s));
+      const missing = [...common, ...(kind === 'invoice' ? ['B-001', 'F-001', 'FG-014', 'Rs 500', 'Rs 200/', 'Rs 350'] : ['× Rs 500', '× Rs 350', '0.25'])].filter((s) => !flat.includes(s));
       // No cost in the print output: the same sale, but its data carries a cost on every line (7654321 paisa, a field that must never be printed).
       // The PDF's text layer (pdf.js, and pdftotext when installed) is searched for the amount in every format and for the words cost, margin, profit.
       const dirty = designSale(kind, language);
