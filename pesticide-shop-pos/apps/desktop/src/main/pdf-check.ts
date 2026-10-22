@@ -7,8 +7,8 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BrowserWindow } from 'electron';
-import { baseUnitOf, type InvoiceDocumentData, type PaymentReceiptData, type StatementDocumentData, type StatementDocumentLine } from '@pos/core';
-import { findCostLeaks, PAGE, renderDocumentHtml, renderPaymentReceiptHtml, renderStatementHtml } from '@pos/ui/print';
+import { baseUnitOf, type InvoiceDocumentData, type PaymentReceiptData, type ReturnDocumentData, type StatementDocumentData, type StatementDocumentLine } from '@pos/core';
+import { findCostLeaks, PAGE, renderDocumentHtml, renderPaymentReceiptHtml, renderReturnSlipHtml, renderStatementHtml } from '@pos/ui/print';
 import { createElectronPrintDriver } from './printing/electron-driver.js';
 import { documentFonts } from './printing/fonts.js';
 
@@ -254,6 +254,29 @@ export function urduPaymentReceipt(): PaymentReceiptData {
   };
 }
 
+/** A return slip with Urdu product names ending in a Latin size, a loose line in kg, a write-off, tax, and a Khata part (Phase 7). */
+export function urduReturnSlip(kind: 'receipt' | 'invoice'): ReturnDocumentData {
+  return {
+    kind,
+    shop: { name: 'Pesticide Club Shop', name_ur: 'پیسٹیسائیڈ کلب شاپ', address: null, phone: null },
+    return: { id: '66666666-6666-4666-8666-666666666666', return_no: 'RET-A-000001', return_date: '2026-10-12', created_at: '2026-10-12T06:30:00.000Z', note: null, total: 83_300, tax_total: 3700, cash_amount: 20_000, khata_amount: 63_300, requested_by: 'Salesman', approved_by: 'Owner' },
+    invoice: { id: '77777777-7777-4777-8777-777777777777', invoice_no: 'INV-A-000002', invoice_date: '2026-10-12T05:42:00.000Z', status: 'active', total: 205_000 },
+    customer: { name_en: 'Rashid Ali', name_ur: 'راشد علی', village: 'چک 12' },
+    customer_id: '88888888-8888-4888-8888-888888888888',
+    lines: [
+      { position: 1, name_en: 'Insecticide X 1 L', name_ur: 'کیڑے مار دوا ایکس 1 L', batch_no: 'B-001', base_unit: VOLUME, pack_size: 1000, qty: 1000, unit_price: 50_000, refund_amount: 50_000, tax_refund: 2000, condition: 'resellable', reason: 'changed_mind' },
+      { position: 2, name_en: 'Fertilizer', name_ur: 'کھاد', batch_no: 'F-001', base_unit: WEIGHT, pack_size: 1000, qty: 500, unit_price: 20_000, refund_amount: 10_000, tax_refund: 0, condition: 'damaged', reason: 'leaked' },
+      { position: 3, name_en: 'Fungicide 0.25 L', name_ur: 'پھپھوندی کش 0.25 L', batch_no: 'G-001', base_unit: VOLUME, pack_size: 250, qty: 250, unit_price: 35_000, refund_amount: 23_300, tax_refund: 1700, condition: 'expired', reason: 'expired' },
+    ],
+    balance_after: 221_700,
+    copies_printed: 0,
+    is_copy: false,
+    time_zone: 'Asia/Karachi',
+  };
+}
+const RETURN_URDU = ['راشد علی', 'پیسٹیسائیڈ کلب شاپ', 'کل واپسی رقم', 'ٹیکس سمیت', 'اب ان کے ذمے', 'نقد واپس', 'کھاتے سے کم'];
+const RETURN_LATIN = ['RET-A-000001', 'INV-A-000002', 'Rs 833', 'Rs 2,217', '12 Oct 2026, 11:30'];
+
 const KHATA_URDU = ['راشد علی', 'پیسٹیسائیڈ کلب شاپ', 'ابتدائی بقایا', 'فروخت', 'ادائیگی', 'واپسی کا کریڈٹ', 'ان کے ذمے', 'کپاس کی فصل کے بعد'];
 const KHATA_LATIN = ['INV-A-000001', 'RCP-A-000001', 'RET-A-000001', 'TRX 88213', 'Rs 9,000', 'Rs 10,000', '01 Oct'];
 const RECEIPT_URDU = ['راشد علی', 'پیسٹیسائیڈ کلب شاپ', 'ادائیگی کی رسید', 'وصول کنندہ از', 'ایزی پیسہ', 'وصول شدہ رقم', 'اس کے بعد بقایا', 'ان کے ذمے', 'دکان پر بیٹے نے ادا کیے'];
@@ -268,6 +291,15 @@ async function runKhataChecks(driver: ReturnType<typeof createElectronPrintDrive
     docs.push({ label: `statement 80 mm (${language})`, file: `statement-80mm-${language}`, language, html: renderStatementHtml(urduStatement('receipt'), language, documentFonts), page: receiptPage, urdu: KHATA_URDU.filter((s) => s !== 'کپاس کی فصل کے بعد'), latin: KHATA_LATIN, sample: urduStatement('receipt') });
     docs.push({ label: `statement A4 (${language})`, file: `statement-a4-${language}`, language, html: renderStatementHtml(urduStatement('invoice'), language, documentFonts), page: a4Page, urdu: KHATA_URDU, latin: KHATA_LATIN.filter((s) => s !== '01 Oct'), sample: urduStatement('invoice') });
     docs.push({ label: `payment receipt (${language})`, file: `payment-receipt-${language}`, language, html: renderPaymentReceiptHtml(urduPaymentReceipt(), language, documentFonts), page: receiptPage, urdu: RECEIPT_URDU, latin: RECEIPT_LATIN, sample: urduPaymentReceipt() });
+  }
+  for (const kind of ['receipt', 'invoice'] as const) {
+    for (const language of ['en', 'ur'] as const) {
+      docs.push({
+        label: `${kind === 'receipt' ? 'return slip 80 mm' : 'credit note A4'} (${language})`, file: `return-${kind === 'receipt' ? 'slip-80mm' : 'credit-note-a4'}-${language}`, language,
+        html: renderReturnSlipHtml(urduReturnSlip(kind), language, documentFonts), page: kind === 'receipt' ? receiptPage : a4Page,
+        urdu: [...RETURN_URDU, kind === 'receipt' ? 'واپسی کی پرچی' : 'کریڈٹ نوٹ'], latin: RETURN_LATIN, sample: urduReturnSlip(kind),
+      });
+    }
   }
   for (const d of docs) {
     const label = d.label;
@@ -291,7 +323,11 @@ async function runKhataChecks(driver: ReturnType<typeof createElectronPrintDrive
     // No cost: the same document, but its data carries a cost on everything (a field that must never be printed).
     const dirty = d.sample as Record<string, unknown>;
     const withCost = { ...dirty, cost_total: COST_SENTINEL, profit: COST_SENTINEL, cost: COST_SENTINEL, margin: COST_SENTINEL, ...(Array.isArray(dirty['lines']) ? { lines: (dirty['lines'] as object[]).map((l) => ({ ...l, cost_price: COST_SENTINEL, margin: COST_SENTINEL })) } : {}) };
-    const costHtml = d.file.startsWith('payment') ? renderPaymentReceiptHtml(withCost as unknown as PaymentReceiptData, d.language, documentFonts) : renderStatementHtml(withCost as unknown as StatementDocumentData, d.language, documentFonts);
+    const costHtml = d.file.startsWith('payment')
+      ? renderPaymentReceiptHtml(withCost as unknown as PaymentReceiptData, d.language, documentFonts)
+      : d.file.startsWith('return')
+        ? renderReturnSlipHtml(withCost as unknown as ReturnDocumentData, d.language, documentFonts)
+        : renderStatementHtml(withCost as unknown as StatementDocumentData, d.language, documentFonts);
     const costPdf = await driver.toPdf(costHtml, { page: d.page });
     const costPath = join(outDir, `${d.file}-costscan.pdf`);
     writeFileSync(costPath, costPdf);
