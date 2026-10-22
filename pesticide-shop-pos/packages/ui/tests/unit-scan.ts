@@ -32,6 +32,6 @@ export function visibleText(root: ParentNode): string {
 
 /** The unit words that must show up on a screen that has quantities: kg / L / piece(s) in English, کلو / لیٹر / عدد in Urdu. */
 export const UNIT_WORDS: Record<'en' | 'ur', RegExp> = {
-  en: /(?<![\p{L}\p{N}])(?:kg|L|pieces?)(?![\p{L}\p{N}])/u,
+  en: /\d\s?(?:kg|L|pieces?)/,
   ur: /(?:کلو|لیٹر|عدد)/,
 };

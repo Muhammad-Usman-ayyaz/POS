@@ -8,6 +8,7 @@ import { I18nProvider } from '../src/index.js';
 import { qtyText, stockText } from '../src/i18n/units.js';
 import { formatRange, formatTaxRate, withoutIsolates } from '../src/pages/products/catalogue-format.js';
 import { ProductsPage } from '../src/pages/products/products-page.js';
+import { smallUnitsIn, UNIT_WORDS, visibleText, withoutMarks } from './unit-scan.js';
 import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
 
@@ -616,4 +617,20 @@ describe('Products: motion', () => {
     const classes = [...document.querySelectorAll('[class]')].map((e) => e.getAttribute('class') ?? '').join(' ');
     expect(classes).not.toMatch(/\banimate-|\bduration-|\btransition\b/);
   });
+});
+
+describe('standard units on the Products screen (English and Urdu)', () => {
+  for (const language of ['en', 'ur'] as const) {
+    it(`${language}: the list, every expanded product and its sizes show kg / L / pieces and never g or ml`, async () => {
+      show(fakeShell(), OWNER, language);
+      await screen.findByRole('button', { name: /Expand all|سب کھولیں/ });
+      expect(smallUnitsIn(visibleText(document.body))).toEqual([]);
+      fireEvent.click(screen.getByRole('button', { name: /Expand all|سب کھولیں/ }));
+      const text = withoutIsolates(visibleText(document.body));
+      expect(smallUnitsIn(text)).toEqual([]);
+      expect(UNIT_WORDS[language].test(text)).toBe(true);
+      expect(text).toContain(language === 'ur' ? 'لیٹر' : '0.25 L');
+      expect(text).toContain(language === 'ur' ? 'کلو' : '50 kg');
+    });
+  }
 });

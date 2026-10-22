@@ -12,6 +12,7 @@ import { ur } from '../src/i18n/messages/ur.js';
 import { takeSeen } from '../src/pages/pos/held-bills.js';
 import { PosPage } from '../src/pages/pos/pos-page.js';
 import { errorText } from '../src/i18n/errors.js';
+import { smallUnitsIn, UNIT_WORDS, visibleText, withoutMarks } from './unit-scan.js';
 
 const OWNER: SessionUser = { id: 'u1', name: 'Owner', username: 'owner', role: 'owner' };
 const STAFF: SessionUser = { id: 'u2', name: 'Salesman', username: 'staff', role: 'staff' };
@@ -1778,4 +1779,35 @@ describe('gaps found by the test review', () => {
       expect(screen.queryByLabelText(T.line.discount)).toBeNull();
     });
   });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The standard-units rule on the rendered counter screen: kg, L and pieces are shown, g and ml never are (see unit-scan.ts).
+// ---------------------------------------------------------------------------------------------------------------------------
+describe('standard units on the counter screen (English and Urdu)', () => {
+  for (const language of ['en', 'ur'] as const) {
+    it(`${language}: search cards, a sealed line, a loose line and the line editor show kg / L, never g or ml`, async () => {
+      const shell = fakeShell(STAFF);
+      show(shell, STAFF, language);
+      await typeIn(searchBox(), 'insect');
+      await waitFor(() => expect(chip('p250')).toBeTruthy());
+      expect(smallUnitsIn(visibleText(document.body))).toEqual([]);
+      expect(UNIT_WORDS[language].test(withoutMarks(chip('p250').textContent!))).toBe(true);
+      await userEvent.setup().click(chip('p1l'));
+      await priced('Rs 500');
+      await userEvent.setup().clear(searchBox());
+      await addSize('fert', 'f1');
+      await priced('Rs 700');
+      const loose = document.querySelector('[data-line=f1]')!;
+      expect(withoutMarks(loose.textContent!)).toContain(language === 'ur' ? 'کلو' : 'kg');
+      expect(withoutMarks(document.querySelector('[data-line=p1l]')!.textContent!)).toMatch(language === 'ur' ? /1 لیٹر/ : /1 L/);
+      expect(smallUnitsIn(visibleText(document.body))).toEqual([]);
+      await userEvent.setup().click(loose.querySelector<HTMLButtonElement>('button[title]')!);
+      const dialog = await screen.findByRole('dialog');
+      await within(dialog).findByRole('radio', { name: /B-002/ });
+      expect(smallUnitsIn(visibleText(dialog))).toEqual([]);
+      expect((within(dialog).getByLabelText(T.line.quantityUnit(language === 'ur' ? 'کلو' : 'kg')) as HTMLInputElement).value).toBe('1');
+      expect(withoutMarks(dialog.textContent!)).toContain('0.5');
+    }, 20_000);
+  }
 });

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { InvoiceDocumentData } from '@pos/core';
 import { describe, expect, it } from 'vitest';
 import { documentCss, lineQuantity, PAGE, quantityText, renderDocumentHtml, renderDocumentMarkup, type DocumentFonts } from '../src/print/index.js';
+import { smallUnitsIn, UNIT_WORDS } from './unit-scan.js';
 
 const FONTS: DocumentFonts = {
   plex400: 'data:font/woff2;base64,AAAA',
@@ -361,4 +362,20 @@ describe('conformance with docs/design (Receipts80.dc.html, InvoiceA4.dc.html)',
       expect(css, rule).toContain(rule);
     }
   });
+});
+
+describe('standard units on every printed document (English and Urdu)', () => {
+  for (const language of ['en', 'ur'] as const) {
+    for (const kind of ['receipt', 'invoice'] as const) {
+      it(`${language} ${kind === 'receipt' ? '80 mm receipt' : 'A4 invoice'}: quantities in kg / L / pieces; old g and ml names are shown converted; never g or ml`, () => {
+        const data = kind === 'receipt' ? sale() : asInvoice(sale());
+        const page = text(renderDocumentMarkup(data, language));
+        expect(smallUnitsIn(page)).toEqual([]);
+        expect(UNIT_WORDS[language].test(page)).toBe(true);
+        expect(page).toContain(language === 'ur' ? '0.25 کلو' : '0.25 kg');
+        // the sale-time name still says "250 ml" in its snapshot; it is shown as 0.25 L
+        expect(page).toContain(language === 'ur' ? '0.25 لیٹر' : '0.25 L');
+      });
+    }
+  }
 });

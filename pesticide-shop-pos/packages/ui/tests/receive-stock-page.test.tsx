@@ -12,6 +12,7 @@ import { ur } from '../src/i18n/messages/ur.js';
 import { PurchasesPage } from '../src/pages/purchases/purchases-page.js';
 import { todayText } from '../src/pages/purchases/receive-state.js';
 import { ReceiveStockPage } from '../src/pages/purchases/receive-stock-page.js';
+import { smallUnitsIn, UNIT_WORDS, visibleText, withoutMarks } from './unit-scan.js';
 
 const OWNER: SessionUser = { id: 'u1', name: 'Owner', username: 'owner', role: 'owner' };
 const STAFF: SessionUser = { id: 'u2', name: 'Salesman', username: 'staff', role: 'staff' };
@@ -825,4 +826,19 @@ describe('dates are written "12 Oct 2026" and read strictly', () => {
     await screen.findByText('the product list');
     expect(shell.receives()[0]!.input).toMatchObject({ items: [{ expiry_date: '2027-03-12' }] });
   });
+});
+
+describe('standard units on Receive stock (English and Urdu)', () => {
+  for (const language of ['en', 'ur'] as const) {
+    it(`${language}: the search results and the lines show kg / L, never g or ml`, async () => {
+      await ready(fakeShell(), OWNER, language);
+      fireEvent.click(screen.getByRole('button', { name: now.addLine }));
+      set(screen.getByRole('searchbox', { name: now.searchLabel }), 'insect');
+      await pickSize('0.5 L');
+      await waitFor(() => expect(document.querySelectorAll('[data-line]')).toHaveLength(1));
+      const text = visibleText(document.body);
+      expect(smallUnitsIn(text)).toEqual([]);
+      expect(UNIT_WORDS[language].test(withoutMarks(text))).toBe(true);
+    });
+  }
 });

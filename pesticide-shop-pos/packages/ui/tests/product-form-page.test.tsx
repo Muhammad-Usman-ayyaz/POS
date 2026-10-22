@@ -8,6 +8,7 @@ import { I18nProvider, ToastProvider } from '../src/index.js';
 import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
 import { ProductFormPage } from '../src/pages/products/product-form-page.js';
+import { smallUnitsIn, UNIT_WORDS, visibleText, withoutMarks } from './unit-scan.js';
 
 const OWNER: SessionUser = { id: 'u1', name: 'Owner', username: 'owner', role: 'owner' };
 const STAFF: SessionUser = { id: 'u2', name: 'Salesman', username: 'staff', role: 'staff' };
@@ -700,4 +701,21 @@ describe('touch size and motion', () => {
     const classes = [...document.querySelectorAll('[class]')].map((e) => e.getAttribute('class') ?? '').join(' ');
     expect(classes).not.toMatch(/\banimate-|\bduration-|\btransition\b/);
   });
+});
+
+describe('standard units on the product form (English and Urdu)', () => {
+  for (const language of ['en', 'ur'] as const) {
+    it(`${language}: the unit choice is kg / L / piece, the sizes are typed in that unit, no g or ml anywhere`, async () => {
+      await editReady(fakeShell(), OWNER, language);
+      const text = visibleText(document.body);
+      expect(smallUnitsIn(text)).toEqual([]);
+      const unit = document.getElementById('unit') as HTMLSelectElement;
+      expect([...unit.options].map((o) => o.value)).toEqual(['kg', 'L', 'piece']);
+      expect([...unit.options].map((o) => o.textContent)).toEqual(language === 'ur' ? ['کلو', 'لیٹر', 'عدد'] : ['Kilograms (kg)', 'Litres (L)', 'Pieces']);
+      expect(UNIT_WORDS[language].test(withoutMarks(text))).toBe(true);
+      expect(field(3, 'packSize').value).toBe('1');
+      fireEvent.click(screen.getByRole('button', { name: language === 'ur' ? ur.productForm.addSize : en.productForm.addSize }));
+      expect(smallUnitsIn(visibleText(document.body))).toEqual([]);
+    });
+  }
 });
