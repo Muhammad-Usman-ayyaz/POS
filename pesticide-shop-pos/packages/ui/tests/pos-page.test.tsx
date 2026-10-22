@@ -1811,3 +1811,27 @@ describe('standard units on the counter screen (English and Urdu)', () => {
     }, 20_000);
   }
 });
+
+describe('the line editor reads the loose quantity strictly', () => {
+  it('"2,5", "2..5", zero and four decimals are refused with a sentence and Done stays off; "2.5" is accepted and sent as 2500', async () => {
+    const shell = fakeShell(STAFF);
+    show(shell, STAFF, 'en');
+    await addSize('fert', 'f1');
+    await priced('Rs 200');
+    await userEvent.setup().click(document.querySelector<HTMLButtonElement>('[data-line=f1] button[title]')!);
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByRole('radio', { name: /B-002/ });
+    const box = within(dialog).getByLabelText(T.line.quantityUnit('kg')) as HTMLInputElement;
+    const done = within(dialog).getByRole('button', { name: T.line.done }) as HTMLButtonElement;
+    for (const bad of ['2,5', '2..5', '0', '1.2345', 'abc']) {
+      fireEvent.change(box, { target: { value: bad } });
+      expect(dialog.querySelector('[data-qty-error]'), bad).toBeTruthy();
+      expect(done.disabled, bad).toBe(true);
+    }
+    fireEvent.change(box, { target: { value: '2.5' } });
+    expect(dialog.querySelector('[data-qty-error]')).toBeNull();
+    expect(done.disabled).toBe(false);
+    await userEvent.setup().click(done);
+    await waitFor(() => expect(shell.of('sale:quote').at(-1)!.input.lines[0].qty).toBe(2500));
+  }, 20_000);
+});
