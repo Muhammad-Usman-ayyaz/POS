@@ -4,6 +4,7 @@ import { defineAdjustOpeningTests } from './adjust-opening.js';
 import { defineAtomicityTests } from './atomicity.js';
 import { defineCatalogueTests } from './catalogue.js';
 import { defineCatalogueListTests } from './catalogue-list.js';
+import { defineCustomerSearchUrduTests } from './customer-search-urdu.js';
 import { defineCustomerKhataTests } from './customer-khata.js';
 import { defineCustomerTests } from './customers.js';
 import { defineContractTests } from './contract.js';
@@ -34,6 +35,7 @@ export function defineServiceSuites(label: string, make: WorldFactory): void {
     defineCatalogueTests(make);
     defineCatalogueListTests(make);
     defineDirectoryTests(make);
+    defineCustomerSearchUrduTests(make);
     defineLedgerSeqTests(make);
     defineAdjustOpeningTests(make);
     defineAtomicityTests(make);
