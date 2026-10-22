@@ -55,3 +55,39 @@ partial return of a discounted line; return after a price change (sold price); b
 
 ## Out of scope
 Supplier returns (Phase 4 left them as tables only); a cash drawer report (Phase 8); sync.
+
+## Planted-bug proofs (run 2026-10-22)
+Each bug: file backed up, ONE bug planted, relevant tests run (expected FAIL), file restored byte for byte, sha256 checked equal (all 30 restored identical). 28 were caught on the first run; 28 and 29 (screen-side defence in depth) were not, so `packages/ui/tests/returns-state.test.ts` was added and both are now caught.
+
+| # | Bug | Result | First failing test |
+|---|---|---|---|
+| 1 | refund may exceed quantity sold | CAUGHT | 10 sold, 2 returned > after that, returning 9 bottles is blocked and returning the last 8 is allowed |
+| 2 | tax refund not the running difference | CAUGHT | the tax in a refund is worked out the same running-difference way (migration 005 stores it as tax_refund) > ov |
+| 3 | stock restored to wrong batch | CAUGHT | in-memory fakes > sales return > what comes back > a sale split over two batches returns to the batch each lin |
+| 4 | non-resellable goods restocked (no write-off) | CAUGHT | in-memory fakes > sales return > what comes back > damaged goods are refunded but not put back in sellable sto |
+| 5 | void allowed for staff (core) | CAUGHT | SQLite adapter > returns and voids (Phase 7) > void a whole invoice > owner only: staff and inactive users are |
+| 6 | void with no reason accepted | CAUGHT | SQLite adapter > returns and voids (Phase 7) > void a whole invoice > a reason is required: empty and blank ar |
+| 7 | approval token reusable | CAUGHT | staff start a return, the owner approves it > a token works ONCE: the same token again is APPROVAL_INVALID and |
+| 8 | Khata compensation missing (credit sale return) | CAUGHT | in-memory fakes > customer payments and statement > statement > every line has its label, amounts, running bal |
+| 9 | Khata entry for a cash sale return | CAUGHT | SQLite adapter > sales return > 10 sold, 2 returned > then 9 more bottles cannot come back, but the last 8 can |
+| 10 | void does not reverse stock | CAUGHT | in-memory fakes > returns and voids (Phase 7) > void a whole invoice > marks the invoice voided (it stays on r |
+| 11 | double return allowed (cumulative cap ignored) | CAUGHT | in-memory fakes > sales return > 10 sold, 2 returned > a refused return writes no audit row, and the error say |
+| 12 | cost in a staff reply | CAUGHT | look, list, preview, print > forInvoice, preview, list and get: the screen gets the core's numbers, the quanti |
+| 13 | renderer-supplied approved_by accepted | CAUGHT | the contract > never lets the renderer say who is acting: created_by, approved_by and user_id are refused on e |
+| 14 | void channel public | CAUGHT | every channel has a permission policy > each policy is what the hand-written table says it should be (so loose |
+| 15 | VOIDED mark missing | CAUGHT | the COPY and VOIDED marks (both papers, both languages) > receipt: a voided invoice says VOIDED (English) or م |
+| 16 | unit shown in g/ml on slip | CAUGHT | the 80 mm return slip > says what came back in each line's own unit, the refund, the included tax, how it was  |
+| 17 | expired batch accepted as resellable | CAUGHT | in-memory fakes > returns and voids (Phase 7) > what happens to the goods > a batch that has expired since the |
+| 18 | write-off movement wrong type | CAUGHT | in-memory fakes > sales return > what comes back > damaged goods are refunded but not put back in sellable sto |
+| 19 | void allowed after returns | CAUGHT | SQLite adapter > returns and voids (Phase 7) > void a whole invoice > after a partial return the void is refus |
+| 20 | refund at today's price | CAUGHT | in-memory fakes > sales return > what comes back > refunds at the price charged: discount and tax come back in |
+| 21 | COPY missing on reprint | CAUGHT | look, list, preview, print > the slip says COPY from the second print of the same kind, counted in the audit l |
+| 22 | part-paid split ignores earlier credits | CAUGHT | in-memory fakes > sales return > 10 sold, 2 returned > then 9 more bottles cannot come back, but the last 8 ca |
+| 23 | void leaves Khata uncompensated | CAUGHT | SQLite adapter > returns and voids (Phase 7) > void a whole invoice > a credit sale: a compensating Khata row  |
+| 24 | sealed pack returned in a fraction | CAUGHT | SQLite adapter > returns and voids (Phase 7) > in the line's own unit > a sealed size comes back in whole pack |
+| 25 | profit view ignores returns | CAUGHT | purchase 20 bottles, sell 10 on credit with Rs 2000 paid, return 2 resellable > stock is 12000 ml, the custome |
+| 26 | token ignores quantity | CAUGHT | staff start a return, the owner approves it > a token is for EXACTLY that return: another quantity, line, cond |
+| 27 | staff complete return without owner | CAUGHT | staff start a return, the owner approves it > staff without a token get APPROVAL_REQUIRED and nothing is writt |
+| 28 | stepper unclamped | CAUGHT (first run uncaught; returns-state.test.ts added) |  |
+| 29 | return sent without reason | CAUGHT (first run uncaught; returns-state.test.ts added) |  |
+| 30 | Complete ignores preview issues | CAUGHT | Returns: the refund is the core's > a wrong word from the preview (an issue) keeps Complete off and says what  |
