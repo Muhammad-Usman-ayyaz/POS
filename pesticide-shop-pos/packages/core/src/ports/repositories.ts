@@ -130,11 +130,20 @@ export interface InvoiceRepository {
   listItems(invoiceId: string): InvoiceItem[];
   insert(row: NewRow<Invoice>): void;
   insertItem(row: NewRow<InvoiceItem>): void;
+  /**
+   * Voids an active invoice: status becomes 'voided', with the reason and the owner who did it. The database refuses it when the invoice has
+   * returns and refuses to ever make it active again. The rows of the sale stay as they are.
+   */
+  markVoided(id: string, reason: string, voidedBy: string): void;
 }
 
 export interface SalesReturnRepository {
   /** Quantity already returned per invoice_item_id, for the items of one invoice. Missing means 0. */
   returnedQtyByItem(invoiceId: string): ReadonlyMap<string, number>;
+  /** Sum of `khata_amount` of the earlier returns of this invoice: what they already took off the customer's Khata. */
+  khataCreditedSoFar(invoiceId: string): number;
+  /** Has any live return been made against this invoice? */
+  hasReturns(invoiceId: string): boolean;
   insert(row: NewRow<SalesReturn>): void;
   insertItem(row: NewRow<SalesReturnItem>): void;
 }

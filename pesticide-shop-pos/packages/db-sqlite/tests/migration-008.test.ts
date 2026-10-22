@@ -56,6 +56,7 @@ async function shopAtVersion7(file: string): Promise<Db> {
   return db;
 }
 
+const m8 = { migrations: loadMigrations().slice(0, 8) }; // this file tests 008 alone; 009 has its own test file
 const newRow = (id: string, delta = 1) => ({ id, party_type: 'customer', party_id: 'c1', entry_type: 'adjustment', amount_delta: delta, created_by: 'u1', ...SCOPE });
 const repoInsert = (db: Db, row: Record<string, unknown>) => createSqliteUnitOfWork(db, SCOPE).run((tx) => tx.ledger.insert(row as never));
 
@@ -67,7 +68,7 @@ describe('migration 008 on a shop that already has ledger rows', () => {
       customers: dump(db, 'customers'),
       changeLog: one(db, 'SELECT COUNT(*) AS n FROM change_log').n,
     };
-    const result = await migrate(db);
+    const result = await migrate(db, m8);
     expect(result.applied).toEqual([8]);
     expect(result.backupPath).not.toBeNull();
     expect(currentSchemaVersion(db)).toBe(8);
@@ -85,7 +86,7 @@ describe('migration 008 on a shop that already has ledger rows', () => {
     })).toEqual(before.customers);
     expect(one(db, 'SELECT COUNT(*) AS n FROM change_log').n).toBe(before.changeLog); // nothing was rewritten, so nothing was logged for sync
     expect(checkIntegrity(db)).toEqual({ ok: true, problems: [] });
-    expect((await migrate(db)).applied).toEqual([]);
+    expect((await migrate(db, m8)).applied).toEqual([]);
   });
 
   it('seq is a nullable INTEGER, land_size and crop are nullable TEXT', async () => {

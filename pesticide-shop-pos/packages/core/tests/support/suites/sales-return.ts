@@ -21,8 +21,8 @@ export function defineSalesReturnTests(make: WorldFactory): void {
 
     const ret = (invoiceId: string, itemId: string, qty: number, extra: object = {}) =>
       s.salesReturn.create({
-        invoice_id: invoiceId, approved_by: ID.owner, refund_method: 'khata_credit',
-        items: [{ invoice_item_id: itemId, qty, condition: 'resellable' }], ...extra,
+        invoice_id: invoiceId, approved_by: ID.owner,
+        items: [{ invoice_item_id: itemId, qty, condition: 'resellable', reason: 'changed_mind' }], ...extra,
       });
 
     describe('10 sold, 2 returned', () => {
@@ -31,13 +31,13 @@ export function defineSalesReturnTests(make: WorldFactory): void {
         expect(s.khata.balance(ID.customer)).toBe(300_000); // owes Rs 3000
         const stockBefore = w.stockOf(ID.bA);
 
-        const r = ret(invoice.id, item.id, 2000, { reason: 'wrong product' });
+        const r = ret(invoice.id, item.id, 2000, { note: 'wrong product' });
 
         expect(r.sales_return).toMatchObject({
-          return_no: 'RET-A-000001', invoice_id: invoice.id, approved_by: ID.owner, return_date: w.today,
-          reason: 'wrong product', refund_method: 'khata_credit', total: 100_000,
+          return_no: 'RET-A-000001', invoice_id: invoice.id, approved_by: ID.owner, requested_by: ID.owner, return_date: w.today,
+          reason: 'wrong product', refund_method: 'khata_credit', total: 100_000, cash_amount: 0, khata_amount: 100_000,
         });
-        expect(r.items).toEqual([expect.objectContaining({ sales_return_id: r.sales_return.id, invoice_item_id: item.id, qty: 2000, refund_amount: 100_000, condition: 'resellable' })]);
+        expect(r.items).toEqual([expect.objectContaining({ sales_return_id: r.sales_return.id, invoice_item_id: item.id, qty: 2000, refund_amount: 100_000, condition: 'resellable', reason: 'changed_mind' })]);
 
         expect(w.rows('stock_movements').at(-1)).toMatchObject({ batch_id: item.batch_id, qty_delta: 2000, movement_type: 'sale_return', ref_type: 'return', ref_id: r.sales_return.id });
         expect(w.stockOf(ID.bA)).toBe(stockBefore + 2000);
@@ -52,7 +52,9 @@ export function defineSalesReturnTests(make: WorldFactory): void {
         expect(w.rows('audit_log')).toEqual([
           expect.objectContaining({ user_id: ID.owner, action: 'return_approved', table_name: 'sales_returns', row_id: r.sales_return.id }),
         ]);
-        expect(JSON.parse(w.rows('audit_log')[0]!.details as string)).toEqual({ return_no: 'RET-A-000001', invoice_id: invoice.id, total: 100_000, refund_method: 'khata_credit' });
+        expect(JSON.parse(w.rows('audit_log')[0]!.details as string)).toEqual({
+          return_no: 'RET-A-000001', invoice_id: invoice.id, total: 100_000, refund_method: 'khata_credit', cash_amount: 0, khata_amount: 100_000, requested_by: ID.owner,
+        });
       });
 
       it('a refused return writes no audit row, and the error says how much can still come back', () => {
@@ -76,23 +78,28 @@ export function defineSalesReturnTests(make: WorldFactory): void {
         expect(rest.sales_return.total).toBe(400_000);
         expect(rest.sales_return.return_no).toBe('RET-A-000002');
         expect(codeOf(() => ret(invoice.id, item.id, 1))).toBe('RETURN_EXCEEDS_SOLD');
-        // paid 200000 of 500000, got all 500000 credited back: Rs 2000 in credit
-        expect(s.khata.balance(ID.customer)).toBe(-200_000);
+        // paid 200000 of 500000: the 300000 still on Khata is taken off it, the 200000 that was paid comes back in cash (Q8)
+        expect(s.khata.balance(ID.customer)).toBe(0);
+        expect(w.rows('sales_returns').map((r) => [r.cash_amount, r.khata_amount])).toEqual([[0, 100_000], [200_000, 200_000]]);
       });
     });
 
     describe('what comes back', () => {
-      it('damaged goods are credited to the customer but not put back in stock', () => {
+      it('damaged goods are refunded but not put back in sellable stock: they come back and are written off, with the reason', () => {
         const { invoice, item } = tenSold();
         const stockBefore = w.stockOf(ID.bA);
         const movements = w.rows('stock_movements').length;
         const r = s.salesReturn.create({
-          invoice_id: invoice.id, approved_by: ID.owner, refund_method: 'khata_credit',
-          items: [{ invoice_item_id: item.id, qty: 1000, condition: 'damaged' }],
+          invoice_id: invoice.id, approved_by: ID.owner,
+          items: [{ invoice_item_id: item.id, qty: 1000, condition: 'damaged', reason: 'leaked' }],
         });
         expect(r.sales_return.total).toBe(50_000);
+        expect(r.items[0]).toMatchObject({ condition: 'damaged', reason: 'leaked' });
         expect(w.stockOf(ID.bA)).toBe(stockBefore);
-        expect(w.rows('stock_movements')).toHaveLength(movements);
+        expect(w.rows('stock_movements').slice(movements)).toEqual([
+          expect.objectContaining({ batch_id: item.batch_id, qty_delta: 1000, movement_type: 'sale_return', ref_type: 'return', ref_id: r.sales_return.id }),
+          expect.objectContaining({ batch_id: item.batch_id, qty_delta: -1000, movement_type: 'damage', ref_type: 'return', ref_id: r.sales_return.id }),
+        ]);
         expect(w.rows('ledger_entries').at(-1)).toMatchObject({ entry_type: 'return', amount_delta: -50_000 });
       });
 
@@ -128,8 +135,8 @@ export function defineSalesReturnTests(make: WorldFactory): void {
       it('can return several lines at once', () => {
         const sold = s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: ID.bottle, qty: 2000 }, { product_id: ID.fert, qty: 500 }] });
         const r = s.salesReturn.create({
-          invoice_id: sold.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit',
-          items: sold.items.map((i) => ({ invoice_item_id: i.id, qty: i.qty, condition: 'resellable' as const })),
+          invoice_id: sold.invoice.id, approved_by: ID.owner,
+          items: sold.items.map((i) => ({ invoice_item_id: i.id, qty: i.qty, condition: 'resellable' as const, reason: 'wrong_item' })),
         });
         expect(r.sales_return.total).toBe(100_000 + 10_000);
         expect(r.items).toHaveLength(2);
@@ -163,8 +170,8 @@ export function defineSalesReturnTests(make: WorldFactory): void {
         expect(new Set([a!.tax_amount, b!.tax_amount]).size).toBe(2); // two different amounts of tax
         expect(plain!.tax_amount).toBe(0);
         const back = s.salesReturn.create({
-          invoice_id: sold.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit',
-          items: [a!, b!, plain!].map((i) => ({ invoice_item_id: i.id, qty: i.qty, condition: 'resellable' as const })),
+          invoice_id: sold.invoice.id, approved_by: ID.owner,
+          items: [a!, b!, plain!].map((i) => ({ invoice_item_id: i.id, qty: i.qty, condition: 'resellable' as const, reason: 'wrong_item' })),
         });
         // everything is returned, so each line gives back exactly ITS OWN tax (and a line with none gives back none)
         expect(back.items.map((i) => [i.invoice_item_id, i.tax_refund])).toEqual([[a!.id, a!.tax_amount], [b!.id, b!.tax_amount], [plain!.id, 0]]);
@@ -175,15 +182,15 @@ export function defineSalesReturnTests(make: WorldFactory): void {
         const { invoice, item } = tenSold();
         expect(ret(invoice.id, item.id, 2000).items[0]!.tax_refund).toBe(0);
         const sold = taxedSale();
-        const damaged = ret(sold.invoice.id, sold.items[0]!.id, 2000, { items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'damaged' }] });
+        const damaged = ret(sold.invoice.id, sold.items[0]!.id, 2000, { items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'damaged', reason: 'leaked' }] });
         expect(damaged.items[0]!.tax_refund).toBe(14_949);
       });
 
-      it('a tax_refund typed by the caller changes nothing: the stored value is always the one the service works out (the contract refuses the key outright)', () => {
+      it('a tax_refund typed by the caller is refused: the stored value is always the one the service works out', () => {
         const sold = taxedSale();
-        const result = ret(sold.invoice.id, sold.items[0]!.id, 2000, { items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'resellable', tax_refund: 1 }] });
-        expect(result.items[0]!.tax_refund).toBe(14_949);
-        expect(w.rows('sales_return_items').at(-1)!.tax_refund).toBe(14_949);
+        const before = w.snapshot();
+        expect(codeOf(() => ret(sold.invoice.id, sold.items[0]!.id, 2000, { items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'resellable', reason: 'other', tax_refund: 1 }] }))).toBe('INVALID_INPUT');
+        expect(w.snapshot()).toEqual(before);
       });
     });
 
@@ -208,26 +215,22 @@ export function defineSalesReturnTests(make: WorldFactory): void {
         expect(codeOf(() => ret(invoice.id, item.id, 1000))).toBe('INVOICE_VOIDED');
       });
 
-      it('a walk-in sale has no Khata, so it cannot be credited', () => {
+      it('a walk-in sale has no Khata: the refund is cash back and no ledger row is written', () => {
         const walkIn = s.sale.create({ created_by: ID.staff, paid_amount: 50_000, lines: [{ product_id: ID.bottle, qty: 1000 }] });
-        expect(codeOf(() => ret(walkIn.invoice.id, walkIn.items[0]!.id, 1000))).toBe('CREDIT_NEEDS_CUSTOMER');
-      });
-
-      it('cash refunds are not available yet and open no transaction', () => {
-        const { invoice, item } = tenSold();
-        const runs = w.runs();
-        expect(codeOf(() => ret(invoice.id, item.id, 1000, { refund_method: 'cash' }))).toBe('NOT_SUPPORTED');
-        expect(w.runs()).toBe(runs);
+        const ledger = w.rows('ledger_entries').length;
+        const r = ret(walkIn.invoice.id, walkIn.items[0]!.id, 1000);
+        expect(r.sales_return).toMatchObject({ refund_method: 'cash', total: 50_000, cash_amount: 50_000, khata_amount: 0 });
+        expect(w.rows('ledger_entries')).toHaveLength(ledger);
       });
 
       it('rejects an empty or malformed request', () => {
         const { invoice, item } = tenSold();
-        expect(codeOf(() => s.salesReturn.create({ invoice_id: invoice.id, approved_by: ID.owner, refund_method: 'khata_credit', items: [] }))).toBe('INVALID_INPUT');
+        expect(codeOf(() => s.salesReturn.create({ invoice_id: invoice.id, approved_by: ID.owner, items: [] }))).toBe('INVALID_INPUT');
         expect(codeOf(() => ret(invoice.id, item.id, 0))).toBe('INVALID_INPUT');
         expect(codeOf(() => ret(invoice.id, item.id, 1.5))).toBe('INVALID_INPUT');
         expect(codeOf(() => s.salesReturn.create({
-          invoice_id: invoice.id, approved_by: ID.owner, refund_method: 'khata_credit',
-          items: [{ invoice_item_id: item.id, qty: 1000, condition: 'resellable' }, { invoice_item_id: item.id, qty: 1000, condition: 'resellable' }],
+          invoice_id: invoice.id, approved_by: ID.owner,
+          items: [{ invoice_item_id: item.id, qty: 1000, condition: 'resellable', reason: 'other' }, { invoice_item_id: item.id, qty: 1000, condition: 'resellable', reason: 'other' }],
         }))).toBe('DUPLICATE_LINE');
       });
 

@@ -14,6 +14,7 @@ import { definePaymentKhataTests } from './payment-khata.js';
 import { definePurchaseTests, defineStockTests } from './purchase-stock.js';
 import { defineSaleTests } from './sale.js';
 import { defineSaleQuoteTests } from './sale-quote.js';
+import { defineReturnsVoidsTests } from './returns-voids.js';
 import { defineSalesReturnTests } from './sales-return.js';
 import { defineScenarioTests } from './scenario.js';
 
@@ -32,6 +33,7 @@ export function defineServiceSuites(label: string, make: WorldFactory): void {
     defineCustomerTests(make);
     defineCustomerKhataTests(make);
     defineSalesReturnTests(make);
+    defineReturnsVoidsTests(make);
     defineCatalogueTests(make);
     defineCatalogueListTests(make);
     defineDirectoryTests(make);

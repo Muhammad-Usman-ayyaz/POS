@@ -100,7 +100,7 @@ export function defineAtomicityTests(make: WorldFactory): void {
         return s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 200_000, lines: [{ product_id: ID.bottle, qty: 10_000 }] });
       }
       const back = (r: ReturnType<typeof sold>, qty = 2000) => () =>
-        s.salesReturn.create({ invoice_id: r.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: r.items[0]!.id, qty, condition: 'resellable' }] });
+        s.salesReturn.create({ invoice_id: r.invoice.id, approved_by: ID.owner, items: [{ invoice_item_id: r.items[0]!.id, qty, condition: 'resellable', reason: 'other' }] });
 
       it.each<[InsertTable, number]>([
         ['sales_returns', 1],
@@ -157,7 +157,7 @@ export function defineAtomicityTests(make: WorldFactory): void {
         s.payment.receiveFromCustomer({ party_id: ID.customer, amount: 1000, method: 'cash', created_by: ID.staff });
         s.payment.payToSupplier({ party_id: ID.supplier, amount: 1000, method: 'bank', created_by: ID.owner });
         s.khata.setOpeningBalance({ customer_id: ID.customer, amount: 5000, created_by: ID.owner });
-        s.salesReturn.create({ invoice_id: sale.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sale.items[0]!.id, qty: 1000, condition: 'resellable' }] });
+        s.salesReturn.create({ invoice_id: sale.invoice.id, approved_by: ID.owner, items: [{ invoice_item_id: sale.items[0]!.id, qty: 1000, condition: 'resellable', reason: 'other' }] });
         s.stock.adjust({ batch_id: ID.bA, qty_delta: -100, created_by: ID.owner });
         s.stock.writeOff({ batch_id: ID.bA, qty: 100, kind: 'damage', created_by: ID.owner });
         expect(w.runs()).toBe(9);

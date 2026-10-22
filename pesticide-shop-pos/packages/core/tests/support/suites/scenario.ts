@@ -26,8 +26,7 @@ export function runPurchaseSaleReturnScenario(w: ServiceWorld): ScenarioResult {
 
   // return: 2 bottles, resellable, credited to the customer's Khata
   const back = s.salesReturn.create({
-    invoice_id: sold.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit',
-    items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'resellable' }],
+    invoice_id: sold.invoice.id, approved_by: ID.owner, items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'resellable', reason: 'other' }],
   });
 
   return { batchId, invoiceId: sold.invoice.id, itemId: sold.items[0]!.id, returnId: back.sales_return.id };
@@ -60,7 +59,7 @@ export function defineScenarioTests(make: WorldFactory): void {
 
       // 10 sold, 2 already back: 9 more is too many
       expect(
-        codeOf(() => s.salesReturn.create({ invoice_id: r.invoiceId, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: r.itemId, qty: 9000, condition: 'resellable' }] })),
+        codeOf(() => s.salesReturn.create({ invoice_id: r.invoiceId, approved_by: ID.owner, items: [{ invoice_item_id: r.itemId, qty: 9000, condition: 'resellable', reason: 'other' }] })),
       ).toBe('RETURN_EXCEEDS_SOLD');
       // 12 bottles are in stock: 13 is too many
       expect(codeOf(() => s.sale.create({ created_by: ID.staff, paid_amount: 650_000, lines: [{ product_id: ID.bottle, qty: 13_000 }] }))).toBe('INSUFFICIENT_STOCK');

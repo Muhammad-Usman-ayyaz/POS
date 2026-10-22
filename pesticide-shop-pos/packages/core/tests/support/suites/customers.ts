@@ -742,9 +742,9 @@ export function defineCustomerTests(make: WorldFactory): void {
 
     describe('shop settings for customers', () => {
       it('default to 0 and off, and are read back after the owner sets them', () => {
-        expect(s.customerSettings.get()).toEqual({ default_credit_limit: 0, show_farmer_fields: false });
+        expect(s.customerSettings.get()).toEqual({ default_credit_limit: 0, show_farmer_fields: false, refund_paid_part_to_khata: false });
         const set = s.customerSettings.set({ default_credit_limit: 750_000, show_farmer_fields: true, actor_id: ID.owner });
-        expect(set).toEqual({ default_credit_limit: 750_000, show_farmer_fields: true });
+        expect(set).toEqual({ default_credit_limit: 750_000, show_farmer_fields: true, refund_paid_part_to_khata: false });
         expect(s.customerSettings.get()).toEqual(set);
         // and a new customer picks the limit up
         expect(staffCreate({ name_en: 'Fresh' }).customer.credit_limit).toBe(750_000);
@@ -772,9 +772,9 @@ export function defineCustomerTests(make: WorldFactory): void {
       it('a setting left out is not touched: sending only the farmer switch keeps the default limit', () => {
         s.customerSettings.set({ default_credit_limit: 640_000, actor_id: ID.owner });
         s.customerSettings.set({ show_farmer_fields: true, actor_id: ID.owner });
-        expect(s.customerSettings.get()).toEqual({ default_credit_limit: 640_000, show_farmer_fields: true });
+        expect(s.customerSettings.get()).toEqual({ default_credit_limit: 640_000, show_farmer_fields: true, refund_paid_part_to_khata: false });
         s.customerSettings.set({ actor_id: ID.owner });
-        expect(s.customerSettings.get()).toEqual({ default_credit_limit: 640_000, show_farmer_fields: true });
+        expect(s.customerSettings.get()).toEqual({ default_credit_limit: 640_000, show_farmer_fields: true, refund_paid_part_to_khata: false });
       });
 
       it('a stored value is read the way parseInt reads it: "12abc" is 12, text with no number and a negative one fall back to the default', () => {

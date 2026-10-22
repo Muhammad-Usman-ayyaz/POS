@@ -75,7 +75,7 @@ describe('refusals', () => {
     const s = services(w);
     const before = w.snapshot();
 
-    expect(codeOf(() => s.salesReturn.create({ invoice_id: r.invoiceId, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: r.itemId, qty: 9000, condition: 'resellable' }] }))).toBe('RETURN_EXCEEDS_SOLD');
+    expect(codeOf(() => s.salesReturn.create({ invoice_id: r.invoiceId, approved_by: ID.owner, items: [{ invoice_item_id: r.itemId, qty: 9000, condition: 'resellable', reason: 'other' }] }))).toBe('RETURN_EXCEEDS_SOLD');
     expect(w.snapshot()).toEqual(before);
 
     // straight into the table, around the services: the trigger still says no
@@ -172,7 +172,7 @@ describe('prices include tax (open question 6)', () => {
       expect(t.db.prepare('SELECT revenue, cost, profit FROM v_profit_by_day').all()).toEqual([{ revenue: 415_254, cost: 400_000, profit: 15_254 }]);
 
       // 2 packs back: Rs 980 refunded, and the revenue that comes off is the net part of it (98000 * 415254 / 490000 = 83050.8)
-      const back = s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'resellable' }] });
+      const back = s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: ID.owner, items: [{ invoice_item_id: sold.items[0]!.id, qty: 2000, condition: 'resellable', reason: 'other' }] });
       expect(back.sales_return.total).toBe(98_000);
       expect(t.rows('ledger_entries').at(-1)).toMatchObject({ entry_type: 'return', amount_delta: -98_000 });
       expect(t.db.prepare('SELECT revenue, cost, profit FROM v_profit_by_day').all()).toEqual([{ revenue: 332_203, cost: 320_000, profit: 12_203 }]);
@@ -305,7 +305,7 @@ describe('v_profit_by_day takes back exactly what was refunded, without the tax 
       const s = services(t);
       t.update('customers', ID.customer, { credit_limit: 0 });
       const sold = s.sale.create({ customer_id: ID.customer, created_by: ID.staff, paid_amount: 0, lines: [{ product_id: ID.taxed, qty: 7000, line_discount: 3_333 }] });
-      for (const qty of [2000, 2000, 3000]) s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty, condition: 'resellable' }] });
+      for (const qty of [2000, 2000, 3000]) s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: ID.owner, items: [{ invoice_item_id: sold.items[0]!.id, qty, condition: 'resellable', reason: 'other' }] });
       expect(t.db.prepare('SELECT revenue, cost, profit FROM v_profit_by_day').all()).toEqual([{ revenue: 0, cost: 0, profit: 0 }]);
     } finally {
       t.close();
@@ -334,7 +334,7 @@ describe('v_profit_by_day takes back exactly what was refunded, without the tax 
         for (let k = int(0, 3); k > 0 && left > 0; k--) {
           const back = int(1, left);
           left -= back;
-          s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: ID.owner, refund_method: 'khata_credit', items: [{ invoice_item_id: sold.items[0]!.id, qty: back * 1000, condition: random() < 0.7 ? 'resellable' : 'damaged' }] });
+          s.salesReturn.create({ invoice_id: sold.invoice.id, approved_by: ID.owner, items: [{ invoice_item_id: sold.items[0]!.id, qty: back * 1000, condition: random() < 0.7 ? 'resellable' : 'damaged', reason: 'other' }] });
         }
       }
       const sum = (sql: string): number => (t.db.prepare(sql).get() as { v: number }).v;
