@@ -95,11 +95,11 @@ describe('terms and shop settings are the owner\'s', () => {
     await shop.signInAs('owner');
     const mine = await h()['customers:get']({ customer_id: rashid() });
     const done = await h()['customers:setTerms']({
-      customer_id: rashid(), credit_limit: 2_500_000, default_price_type: 'wholesale', father_name: 'Ali Khan', cnic: '35202-1234567-1', guarantor: 'Bashir', expected_version: mine.customer.version,
+      customer_id: rashid(), credit_limit: 2_500_000, default_price_type: 'wholesale', father_name: 'Ali Khan', cnic: '35202-1234567-1', guarantor: 'Bashir', land_size: '5 acres', crop: 'Cotton', expected_version: mine.customer.version,
     });
-    expect(done.changed.sort()).toEqual(['cnic', 'credit_limit', 'default_price_type', 'father_name', 'guarantor']);
+    expect(done.changed.sort()).toEqual(['cnic', 'credit_limit', 'crop', 'default_price_type', 'father_name', 'guarantor', 'land_size']);
     expect(done.below_balance).toBe(false);
-    expect(done.customer.customer).toMatchObject({ credit_limit: 2_500_000, default_price_type: 'wholesale', father_name: 'Ali Khan', guarantor: 'Bashir' });
+    expect(done.customer.customer).toMatchObject({ credit_limit: 2_500_000, default_price_type: 'wholesale', father_name: 'Ali Khan', guarantor: 'Bashir', land_size: '5 acres', crop: 'Cotton' });
     expect(done.customer.customer.version).toBe(mine.customer.version + 1);
     const rows = audits('customer_terms_changed');
     expect(rows).toHaveLength(1);
@@ -177,7 +177,7 @@ describe('adding and editing customers', () => {
   it('a staff create with ANY owner-only field is refused with FIELD_NOT_ALLOWED and writes nothing (it is not quietly dropped)', async () => {
     await shop.signInAs('staff');
     const before = footprint();
-    for (const extra of [{ credit_limit: 9_000_000 }, { credit_limit: 0 }, { default_price_type: 'wholesale' as const }, { father_name: 'X' }, { cnic: '1' }, { phone2: '2' }, { guarantor: 'G' }]) {
+    for (const extra of [{ credit_limit: 9_000_000 }, { credit_limit: 0 }, { default_price_type: 'wholesale' as const }, { father_name: 'X' }, { cnic: '1' }, { phone2: '2' }, { guarantor: 'G' }, { land_size: '5 acres' }, { crop: 'Cotton' }]) {
       const error = await failureOf(h()['customers:create']({ fields: { name_en: 'Sneaky', ...extra } }));
       expect(error.code, JSON.stringify(extra)).toBe('FIELD_NOT_ALLOWED');
     }
@@ -259,7 +259,7 @@ describe('adding and editing customers', () => {
     await shop.signInAs('staff');
     const ipc = fakeIpc(shop);
     const v = (await h()['customers:get']({ customer_id: rashid() })).customer.version;
-    for (const fields of [{ credit_limit: 9_000_000 }, { default_price_type: 'wholesale' }, { cnic: '1' }, { guarantor: 'G' }]) {
+    for (const fields of [{ credit_limit: 9_000_000 }, { default_price_type: 'wholesale' }, { cnic: '1' }, { guarantor: 'G' }, { land_size: '5 acres' }, { crop: 'Cotton' }]) {
       expect(await ipc('customers:update', { customer_id: rashid(), fields, expected_version: v }), JSON.stringify(fields)).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
     }
     expect((await h()['customers:get']({ customer_id: rashid() })).customer.credit_limit).toBe(1_000_000);

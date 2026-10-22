@@ -58,6 +58,7 @@ const EXPECTED: Record<Channel, Who> = {
   'brands:list': 'signed-in',
   'brands:create': 'owner',
   'khata:setOpeningBalance': 'owner',
+  'khata:adjustOpening': 'owner',
   'reports:profitByDay': 'owner',
   // held bills: owner AND staff share the counter, so any signed-in user
   'bills:hold': 'signed-in',
@@ -128,6 +129,7 @@ const SAMPLES: Record<Channel, () => Record<string, unknown>> = {
   'brands:list': () => ({}),
   'brands:create': () => ({ name_en: 'Brand' }),
   'khata:setOpeningBalance': () => ({ customer_id: randomUUID(), amount: 100 }),
+  'khata:adjustOpening': () => ({ customer_id: randomUUID(), delta: -100, reason: 'typo' }),
   'reports:profitByDay': () => ({ from: '2026-10-01', to: '2026-10-31' }),
   'bills:hold': () => ({ lines: [{ product_id: randomUUID(), qty: 1000 }] }),
   'bills:list': () => ({}),
@@ -575,6 +577,7 @@ describe('with a real shop', () => {
       }
       expect(succeeded.has('print:setConfig')).toBe(false); // owner-only: staff only ever got the refusal
       expect(succeeded.has('customers:setTerms')).toBe(false);
+      expect(succeeded.has('khata:adjustOpening')).toBe(false);
       expect(succeeded.has('customers:setSettings')).toBe(false);
       // ...and the Phase 6 error codes really were reached by staff (so the error replies were scanned too)
       const codes = new Set(replies.flatMap((r) => ((r as { ok: boolean; error?: { code: string } }).ok ? [] : [(r as { error: { code: string } }).error.code])));

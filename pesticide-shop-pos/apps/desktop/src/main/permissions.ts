@@ -139,6 +139,10 @@ export const CHANNEL_POLICY = {
   'print:paymentReceipt': 'signed-in',
   'khata:exportStatement': 'signed-in',
   // ---------- END Phase 6 M6 ----------
+  // ---------- BEGIN Phase 6 wrap-up ----------
+  // Correcting an opening balance is the owner's, the same capability as setting one.
+  'khata:adjustOpening': { capability: 'khata.openingBalance' },
+  // ---------- END Phase 6 wrap-up ----------
 } as const satisfies Record<Channel, ChannelPolicy>;
 
 /** Throws NOT_SIGNED_IN or NOT_AUTHORIZED unless this user may call the channel. */

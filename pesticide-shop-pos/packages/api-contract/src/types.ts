@@ -141,6 +141,7 @@ export interface PrintResult {
 
 // ---------- Phase 6 M2: customers, payments, statement (none of it carries a cost) ----------
 import type { CustomerList, CustomerPaymentResult, CustomerSettings, CustomerSummary, CustomerTermsResult, DuplicateMatch, Statement } from '@pos/core';
+import type { AdjustOpeningResult } from '@pos/core';
 
 export type CustomerListView = CustomerList;
 export type CustomerSummaryView = CustomerSummary;
@@ -149,6 +150,7 @@ export type CustomerTermsView = CustomerTermsResult;
 export type CustomerSettingsView = CustomerSettings;
 export type CustomerPaymentView = CustomerPaymentResult;
 export type StatementView = Statement;
+export type AdjustOpeningView = AdjustOpeningResult;
 
 // ---------- BEGIN Phase 6 M6 ----------
 /** `khata:exportStatement`: the main process asked where to save the CSV. 'cancelled' means the person closed the save box: nothing was written. */

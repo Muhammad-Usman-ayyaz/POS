@@ -46,6 +46,7 @@ import {
   profitByDay,
   resetCredentials,
   setPrintConfig,
+  shopTimeZone,
   setRecoveryCodeHash,
   type Db,
   type DeviceInfo,
@@ -688,6 +689,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return null;
     },
 
+    // ---------- BEGIN Phase 6 wrap-up ----------
+    // The owner is the SESSION user; the renderer sends the customer, the delta and the reason, nothing about who or when.
+    'khata:adjustOpening': async (input) => {
+      const user = session.require();
+      requireCapability(user, 'khata.openingBalance');
+      return services().khata.adjustOpening({ ...input, created_by: user.id });
+    },
+    // ---------- END Phase 6 wrap-up ----------
+
     'reports:profitByDay': async ({ from, to }) => {
       const user = session.require();
       requireCapability(user, 'profit.view');
@@ -763,7 +773,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return services().payment.receiveFromCustomer({ ...rest, party_id: customer_id, created_by: user.id });
     },
 
-    'khata:statement': async (input) => (session.require(), services().khata.statement(input)),
+    // The shop's time zone comes from the shop setting here, never from the request (the contract has no such key): a statement day is a shop day.
+    'khata:statement': async (input) => (session.require(), services().khata.statement({ ...input, time_zone: shopTimeZone(db) })),
     // ---------- END Phase 6 M2 ----------
 
     // ---------- BEGIN Phase 6 M6: statement and payment receipt printing, CSV export. Nothing here holds a cost; the user comes from the session ----------
@@ -771,7 +782,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     'print:statement': async ({ customer_id, from, to, kind, language, output }) => {
       const user = session.require();
       const s = services();
-      const statement = s.khata.statement({ customer_id, ...(from !== undefined ? { from } : {}), ...(to !== undefined ? { to } : {}) });
+      const statement = s.khata.statement({ customer_id, ...(from !== undefined ? { from } : {}), ...(to !== undefined ? { to } : {}), time_zone: shopTimeZone(db) });
       const data = statementDocumentData(db, statement, kind);
       const config = getPrintConfig(db);
       const chosen = language ?? (kind === 'receipt' ? config.receipt_language : config.invoice_language);
@@ -814,7 +825,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     // The CSV is written by THIS process, and only after the person chose a place in the save box. Cancel writes nothing.
     'khata:exportStatement': async ({ customer_id, from, to }) => {
       session.require();
-      const statement = services().khata.statement({ customer_id, ...(from !== undefined ? { from } : {}), ...(to !== undefined ? { to } : {}) });
+      const statement = services().khata.statement({ customer_id, ...(from !== undefined ? { from } : {}), ...(to !== undefined ? { to } : {}), time_zone: shopTimeZone(db) });
       const data = statementDocumentData(db, statement, 'invoice');
       const path = await saveDialog.chooseSavePath({ defaultName: statementFileName(data, clock.now().toISOString().slice(0, 10)), filterName: 'CSV', extension: 'csv' });
       if (path === null) return { status: 'cancelled' };

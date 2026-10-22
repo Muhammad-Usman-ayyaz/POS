@@ -1,5 +1,6 @@
 import type { DocumentPaymentMethod, DocumentShop, PaymentReceiptData, Statement, StatementDocumentData, StatementDocumentLine, StatementPaper } from '@pos/core';
 import type { Db } from './connection.js';
+import { LEDGER_POSITION_SQL, LEDGER_UPTO, positionArgs, type LedgerPosition } from './ledger-order.js';
 import { DEFAULT_TIME_ZONE, getPrintConfig, readSetting, TIME_ZONE_KEY } from './documents.js';
 
 // Data for the printed customer statement and the printed payment receipt (Phase 6 M6). Every query NAMES its columns: nothing here can read a
@@ -88,14 +89,14 @@ interface PaymentRow {
 }
 
 /**
- * The customer's balance right after this payment: every ledger row of the customer up to and including the payment's own row, in `rowid` order
- * (the same rule `balanceAsOfSale` uses). A sale or payment made later has a later row and never changes it. LIMIT: rows that reach this database
- * from another device would need a stable sequence column first (docs/decisions.md, "Balance on a receipt needs a ledger sequence").
+ * The customer's balance right after this payment: every ledger row of the customer up to and including the payment's own row, in the stable
+ * ledger order (`ledger-order.ts`, migration 008: seq, old rows first by rowid; the same rule `balanceAsOfSale` uses). A sale or payment made later
+ * has a later position and never changes it.
  */
 export function balanceAfterPayment(db: Db, customerId: string, paymentId: string, createdAt: string): number {
-  const entry = db.prepare("SELECT rowid AS r FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND ref_type = 'payment' AND ref_id = ?").get(customerId, paymentId) as { r: number } | undefined;
+  const entry = db.prepare(`${LEDGER_POSITION_SQL} WHERE party_type = 'customer' AND party_id = ? AND ref_type = 'payment' AND ref_id = ?`).get(customerId, paymentId) as LedgerPosition | undefined;
   const sum = entry
-    ? db.prepare("SELECT COALESCE(SUM(amount_delta), 0) AS s FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND rowid <= ?").get(customerId, entry.r)
+    ? db.prepare(`SELECT COALESCE(SUM(amount_delta), 0) AS s FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND ${LEDGER_UPTO}`).get(customerId, ...positionArgs(entry))
     : db.prepare("SELECT COALESCE(SUM(amount_delta), 0) AS s FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND created_at <= ?").get(customerId, createdAt);
   return (sum as { s: number }).s;
 }

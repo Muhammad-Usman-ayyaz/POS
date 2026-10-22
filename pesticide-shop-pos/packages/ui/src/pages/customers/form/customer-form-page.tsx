@@ -318,6 +318,8 @@ function Form({ api, owner }: { api: Api; owner: boolean }) {
                   <TextField id="cnic" label={f.cnic} value={draft.cnic} onChange={(v) => update({ cnic: v })} phone />
                   <TextField id="phone2" label={f.phone2} value={draft.phone2} onChange={(v) => update({ phone2: v })} phone />
                   <TextField id="guarantor" label={f.guarantor} value={draft.guarantor} onChange={(v) => update({ guarantor: v })} />
+                  <TextField id="land-size" label={f.landSize} value={draft.landSize} onChange={(v) => update({ landSize: v })} />
+                  <TextField id="crop" label={f.crop} value={draft.crop} onChange={(v) => update({ crop: v })} />
                 </div>
               </div>
             )}

@@ -43,6 +43,7 @@ import type {
   CustomerPaymentView,
   StatementView,
   ExportStatementResult,
+  AdjustOpeningView,
 } from './types.js';
 
 // The one list of calls the UI can make. Each channel has a STRICT input schema: an unknown key is an error.
@@ -304,6 +305,9 @@ const FarmerFields = {
   cnic: PhoneText.nullable().optional(),
   phone2: PhoneText.nullable().optional(),
   guarantor: PersonName.nullable().optional(),
+  /** Free text such as '5 acres' and 'Cotton'. Owner only, like the rest of the farmer details. */
+  land_size: VillageText.nullable().optional(),
+  crop: VillageText.nullable().optional(),
 };
 
 export const CustomerListInput = z.strictObject({
@@ -500,6 +504,10 @@ export const contract = {
   'print:paymentReceipt': { input: PrintPaymentReceiptInput },
   'khata:exportStatement': { input: ExportStatementInput },
   // ---------- END Phase 6 M6 ----------
+  // ---------- BEGIN Phase 6 wrap-up ----------
+  // The owner's correction of a wrong opening balance: ONE `adjustment` ledger row and an audit row. No customer, user or date comes from anywhere but the session.
+  'khata:adjustOpening': { input: z.strictObject({ customer_id: Id, delta: z.number().int().min(-MAX_PAISA).max(MAX_PAISA).refine((n) => n !== 0, { message: 'cannot be 0' }), reason: z.string().trim().min(1).max(200) }) },
+  // ---------- END Phase 6 wrap-up ----------
 } as const;
 
 export type Channel = keyof typeof contract;
@@ -574,6 +582,9 @@ export interface Outputs {
   'print:paymentReceipt': PrintResult;
   'khata:exportStatement': ExportStatementResult;
   // ---------- END Phase 6 M6 ----------
+  // ---------- BEGIN Phase 6 wrap-up ----------
+  'khata:adjustOpening': AdjustOpeningView;
+  // ---------- END Phase 6 wrap-up ----------
 }
 
 export type Output<C extends Channel> = Outputs[C];

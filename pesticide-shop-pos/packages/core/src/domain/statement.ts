@@ -1,5 +1,7 @@
 import type { LedgerDisplayRow } from '../ports/types.js';
 import type { LedgerEntry } from '../schemas/index.js';
+import { addDays } from '../clock.js';
+import { DEFAULT_SHOP_TIME_ZONE, shopDayStartMs } from './zone-day.js';
 
 /** The word a statement line carries, as a key the screens translate. */
 export type StatementLabel = 'brought_forward' | 'opening' | 'sale' | 'payment' | 'return' | 'adjustment';
@@ -48,25 +50,26 @@ const LABELS: Record<LedgerEntry['entry_type'], StatementLabel> = {
   purchase_return: 'adjustment',
 };
 
-/** The calendar date (UTC) of a stored moment. */
-const dayOf = (entryDate: string): string => entryDate.slice(0, 10);
-
 /**
  * Builds a statement from a customer's ledger rows. Pure: it never reads or writes anything.
  *  - rows are ordered by (entry_date, position in `rows`), which is the order the database lists them in;
- *  - `from` and `to` are whole days (YYYY-MM-DD, UTC), both included;
+ *  - `from` and `to` are whole SHOP days (YYYY-MM-DD on the shop's clock, Asia/Karachi unless `timeZone` says otherwise), both included. A day is
+ *    the UTC range [start of `from`, start of the day after `to`), computed by `shopDayStartMs`, so a sale at 01:00 on the 5th in Karachi (20:00 UTC on the 4th) is on the 5th;
  *  - with a `from`, the first line is a brought-forward line equal to the sum of every row before that day;
  *  - the closing balance is brought-forward + the rows inside the range, which is the sum of every row up to `to`.
  */
-export function buildStatement(rows: readonly LedgerDisplayRow[], range: { from?: string | undefined; to?: string | undefined } = {}): StatementResult {
+export function buildStatement(rows: readonly LedgerDisplayRow[], range: { from?: string | undefined; to?: string | undefined; timeZone?: string | undefined } = {}): StatementResult {
   const ordered = rows.map((row, i) => ({ row, i })).sort((a, b) => (a.row.entry.entry_date < b.row.entry.entry_date ? -1 : a.row.entry.entry_date > b.row.entry.entry_date ? 1 : a.i - b.i));
 
+  const zone = range.timeZone ?? DEFAULT_SHOP_TIME_ZONE;
+  const fromMs = range.from === undefined ? null : shopDayStartMs(range.from, zone);
+  const afterToMs = range.to === undefined ? null : shopDayStartMs(addDays(range.to, 1), zone);
   let brought = 0;
   const inside: LedgerDisplayRow[] = [];
   for (const { row } of ordered) {
-    const day = dayOf(row.entry.entry_date);
-    if (range.from !== undefined && day < range.from) brought += row.entry.amount_delta;
-    else if (range.to === undefined || day <= range.to) inside.push(row);
+    const at = Date.parse(row.entry.entry_date);
+    if (fromMs !== null && at < fromMs) brought += row.entry.amount_delta;
+    else if (afterToMs === null || at < afterToMs) inside.push(row);
   }
 
   let running = brought;

@@ -13,7 +13,7 @@ import { en } from '../src/i18n/messages/en.js';
 import { ur } from '../src/i18n/messages/ur.js';
 import { CustomerDetailPage } from '../src/pages/customers/detail/customer-detail-page.js';
 import { advanceExtraPreview, balanceAfterPreview } from '../src/pages/customers/detail/customer-detail-state.js';
-import { buildOpeningRequest, signedOpening } from '../src/pages/customers/opening/customer-opening-requests.js';
+import { adjustmentFor, buildOpeningRequest, signedOpening } from '../src/pages/customers/opening/customer-opening-requests.js';
 import { scanSource } from './source-scan.js';
 
 configure({ asyncUtilTimeout: 5000 });
@@ -33,7 +33,7 @@ const drawn = (start: string): string => {
 // ---- fixtures ----
 const customer = (over: Record<string, unknown> = {}) => ({
   id: 'c1', name_en: 'Rashid', name_ur: 'راشد', phone: '0300 1234567', village: 'Chak 12', credit_limit: 1_000_000, default_price_type: 'retail',
-  notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, version: 1, ...over,
+  notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, land_size: null, crop: null, version: 1, ...over,
 });
 const summary = (over: Record<string, unknown> = {}, c = customer()) => ({ customer: c, balance: 900_000, credit_left: 100_000, no_limit: false, over_limit: false, next_due: '2026-10-31', overdue_amount: 0, overdue_days: 0, ...over });
 let n = 0;
@@ -556,16 +556,111 @@ describe('Opening balance', () => {
     expect(shell.of('khata:setOpeningBalance')).toHaveLength(0);
   });
 
-  it('a second opening balance (OPENING_BALANCE_EXISTS) shows the calm notice, with no correction offered', async () => {
-    const shell = fakeShell({ 'khata:setOpeningBalance': () => fail('OPENING_BALANCE_EXISTS') });
-    await openOpening(shell);
-    set(openAmount(), '100');
-    click(screen.getByRole('button', { name: o.save }));
-    click(screen.getByRole('button', { name: o.confirm }));
-    expect(await screen.findByText(o.exists)).toBeTruthy();
-    expect(o.exists).toBe('An opening balance is already set. Correcting it is not available yet.');
-    expect(document.body.textContent).not.toMatch(/reverse|adjust/i);
-    expect(shell.calls.some((c) => c.channel.includes('adjust'))).toBe(false);
+  describe('correcting an existing opening balance (owner)', () => {
+    const openingLines = (extra: unknown[] = []) => [line('opening', 650_000, 650_000), ...extra];
+    const existsShell = (extra: Partial<Record<Channel, Handler>> = {}, lines: unknown[] = openingLines()) =>
+      fakeShell({ 'khata:setOpeningBalance': () => fail('OPENING_BALANCE_EXISTS'), 'khata:adjustOpening': () => ok({ entry_id: 'x', balance_before: 650_000, balance: 500_000 }), ...extra }, { lines });
+    const reachCorrection = async (shell: ReturnType<typeof fakeShell>) => {
+      await openOpening(shell);
+      set(openAmount(), '100');
+      click(screen.getByRole('button', { name: o.save }));
+      click(screen.getByRole('button', { name: o.confirm }));
+      await screen.findByText(o.fixSave, { selector: 'button' });
+    };
+    const newAmount = () => screen.getByLabelText(o.newOpening) as HTMLInputElement;
+    const reasonBox = () => screen.getByLabelText(o.reasonLabel) as HTMLInputElement;
+
+    it('shows the current opening amount from the statement and the correction form', async () => {
+      const shell = existsShell();
+      await reachCorrection(shell);
+      expect(document.querySelector('[data-current-opening]')!.textContent).toBe('Rs 6,500');
+      expect(screen.getAllByText(o.fixTitle).length).toBeGreaterThan(0);
+      expect(shell.of('khata:statement')).toHaveLength(2); // the page load and this box
+    });
+
+    it('sends the delta (new minus current) with the reason, after a confirm step', async () => {
+      const shell = existsShell();
+      await reachCorrection(shell);
+      set(newAmount(), '5000');
+      set(reasonBox(), '  Wrote Rs 1,500 too much ');
+      click(screen.getByRole('button', { name: o.fixSave }));
+      expect(document.querySelector('[data-fix-confirm]')!.textContent).toBe(o.fixConfirm('Rashid', 'Rs 6,500', 'Rs 5,000'));
+      expect(shell.of('khata:adjustOpening')).toHaveLength(0);
+      click(screen.getByRole('button', { name: o.fixConfirmButton }));
+      await waitFor(() => expect(shell.of('khata:adjustOpening')).toHaveLength(1));
+      expect(shell.of('khata:adjustOpening')[0]!.input).toEqual({ customer_id: 'c1', delta: -150_000, reason: 'Wrote Rs 1,500 too much' });
+      expect((await screen.findByRole('status')).textContent).toContain('Opening balance corrected');
+    });
+
+    it('counts earlier corrections in the current amount (opening 6,500 and an adjustment of -1,500 is 5,000 now)', async () => {
+      const shell = existsShell({}, openingLines([line('adjustment', -150_000, 500_000)]));
+      await reachCorrection(shell);
+      expect(document.querySelector('[data-current-opening]')!.textContent).toBe('Rs 5,000');
+      set(newAmount(), '5500');
+      set(reasonBox(), 'again');
+      click(screen.getByRole('button', { name: o.fixSave }));
+      click(screen.getByRole('button', { name: o.fixConfirmButton }));
+      await waitFor(() => expect(shell.of('khata:adjustOpening')).toHaveLength(1));
+      expect(shell.of('khata:adjustOpening')[0]!.input.delta).toBe(50_000);
+    });
+
+    it('We owe them: the new amount is minus, so the delta crosses zero', async () => {
+      const shell = existsShell();
+      await reachCorrection(shell);
+      click(dirBtn(en.customerOpening.weOweThem));
+      set(newAmount(), '200');
+      set(reasonBox(), 'wrong way round');
+      click(screen.getByRole('button', { name: o.fixSave }));
+      click(screen.getByRole('button', { name: o.fixConfirmButton }));
+      await waitFor(() => expect(shell.of('khata:adjustOpening')).toHaveLength(1));
+      expect(shell.of('khata:adjustOpening')[0]!.input.delta).toBe(-670_000);
+    });
+
+    it('refuses the same amount, an empty reason and a bad amount inline, and sends nothing', async () => {
+      const shell = existsShell();
+      await reachCorrection(shell);
+      set(newAmount(), '6500');
+      set(reasonBox(), 'x');
+      click(screen.getByRole('button', { name: o.fixSave }));
+      expect(await screen.findByText(o.fixSame)).toBeTruthy();
+      set(newAmount(), 'abc');
+      set(reasonBox(), '   ');
+      click(screen.getByRole('button', { name: o.fixSave }));
+      expect(screen.getByText(o.amountInvalid)).toBeTruthy();
+      expect(screen.getByText(o.reasonRequired)).toBeTruthy();
+      expect(shell.of('khata:adjustOpening')).toHaveLength(0);
+    });
+
+    it('a failure from the shell keeps the box open with the error', async () => {
+      const shell = existsShell({ 'khata:adjustOpening': () => fail('NOT_AUTHORIZED') });
+      await reachCorrection(shell);
+      set(newAmount(), '5000');
+      set(reasonBox(), 'r');
+      click(screen.getByRole('button', { name: o.fixSave }));
+      click(screen.getByRole('button', { name: o.fixConfirmButton }));
+      expect(await screen.findByText(/Only the owner/)).toBeTruthy();
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('staff never see the Opening balance button, so never the correction', async () => {
+      const shell = existsShell();
+      show(shell, STAFF);
+      await loaded();
+      expect(screen.queryByRole('button', { name: drawn('Opening balance') })).toBeNull();
+      expect(shell.of('khata:adjustOpening')).toHaveLength(0);
+    });
+  });
+
+  describe('adjustmentFor (pure)', () => {
+    it.each([
+      [650_000, 500_000, -150_000],
+      [100_000, -20_000, -120_000],
+      [-30_000, 40_000, 70_000],
+      [5, 5, 0],
+    ])('opening %i becoming %i is a delta of %i', (cur, next, delta) => {
+      expect(adjustmentFor(cur, next)).toBe(delta);
+      expect(cur + adjustmentFor(cur, next)).toBe(next);
+    });
   });
 
   it('two quick presses of the confirm send ONE request', async () => {
@@ -777,6 +872,46 @@ describe('Urdu and right to left', () => {
 });
 
 // ---------- source ----------
+
+
+describe('farmer details on the customer page (land size and crop)', () => {
+  const farmer = () => summary({}, customer({ land_size: '5 acres', crop: 'Cotton' }));
+  const shellWith = (showFarmer: boolean) =>
+    fakeShell({ 'customers:getSettings': () => ok({ default_credit_limit: 0, show_farmer_fields: showFarmer }) }, { summary: farmer() });
+
+  it('the owner sees them when the shop setting is on and they are set', async () => {
+    show(shellWith(true), OWNER);
+    await loaded();
+    const block = await screen.findByText(t.farmerDetails);
+    expect(block).toBeTruthy();
+    expect(document.querySelector('[data-farmer-field="land_size"]')!.textContent).toContain('5 acres');
+    expect(document.querySelector('[data-farmer-field="crop"]')!.textContent).toContain('Cotton');
+  });
+
+  it('are hidden while the setting is off, even for the owner', async () => {
+    const shell = shellWith(false);
+    show(shell, OWNER);
+    await loaded();
+    await waitFor(() => expect(shell.of('customers:getSettings')).toHaveLength(1));
+    expect(document.querySelector('[data-farmer-details]')).toBeNull();
+    expect(screen.queryByText('5 acres')).toBeNull();
+  });
+
+  it('staff never see them and the page does not even ask for the setting', async () => {
+    const shell = shellWith(true);
+    show(shell, STAFF);
+    await loaded();
+    expect(document.querySelector('[data-farmer-details]')).toBeNull();
+    expect(screen.queryByText('5 acres')).toBeNull();
+    expect(shell.of('customers:getSettings')).toHaveLength(0);
+  });
+
+  it('nothing is drawn when the setting is on but nothing is set', async () => {
+    show(fakeShell({ 'customers:getSettings': () => ok({ default_credit_limit: 0, show_farmer_fields: true }) }), OWNER);
+    await loaded();
+    expect(document.querySelector('[data-farmer-details]')).toBeNull();
+  });
+});
 
 describe('source of the customer page files', () => {
   const dirs = ['detail', 'payment', 'opening'].map((d) => join(__dirname, '../src/pages/customers', d));

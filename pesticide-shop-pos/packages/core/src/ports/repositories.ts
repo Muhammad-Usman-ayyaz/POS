@@ -156,9 +156,10 @@ export interface AuditRepository {
 export interface LedgerRepository {
   /** Sum of amount_delta. Plus means the party owes more. */
   balance(partyType: 'customer' | 'supplier', partyId: string): number;
-  /** Oldest first. */
+  /** Oldest first: by entry_date, then the stable ledger order (seq; rows from before migration 008 have no seq and come first, in insertion order). */
   list(partyType: 'customer' | 'supplier', partyId: string): LedgerEntry[];
-  insert(row: NewRow<LedgerEntry>): void;
+  /** `seq` is assigned by the repository (the next number, inside the transaction): a service never sets it. */
+  insert(row: Omit<NewRow<LedgerEntry>, 'seq'>): void;
   /** The balance of every party of one type that has at least one ledger row (a party with no rows is not in the map: its balance is 0). */
   balancesByParty(partyType: 'customer' | 'supplier'): Map<string, number>;
   /**
