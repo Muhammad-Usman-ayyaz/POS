@@ -40,7 +40,7 @@ export const DialogInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTML
 
 /** The row of buttons at the foot of a dialog: 10px apart, at the end. */
 export function Actions({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('mt-1 flex flex-wrap items-center justify-end gap-2.5', className)} {...props} />;
+  return <div className={cn('sticky bottom-0 z-10 -mb-3 mt-1 flex flex-wrap items-center justify-end gap-2.5 bg-card pb-3 pt-2', className)} {...props} />;
 }
 
 /** The trash can of the design (an 18px line icon in the danger colour). */

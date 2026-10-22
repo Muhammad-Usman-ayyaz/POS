@@ -182,7 +182,7 @@ describe('staff and owner see different forms', () => {
 
   it('owner create sends the limit in paisa (typed in rupees), the price type, and no user or role', async () => {
     const shell = await newForm(fakeShell({ settings: { default_credit_limit: 500_000 } }));
-    expect((screen.getByLabelText(f.creditLimit) as HTMLInputElement).value).toBe('5000'); // starts with the shop default
+    expect((screen.getByLabelText(f.creditLimit) as HTMLInputElement).value).toBe('5,000'); // starts with the shop default
     set(nameEn(), 'Imran');
     set(screen.getByLabelText(f.creditLimit), '10,000');
     click(screen.getByRole('radio', { name: f.wholesale }));
@@ -264,7 +264,7 @@ describe('the duplicate warning', () => {
     const d = within(dialog);
     expect(d.getByText(drawn('A customer named Rashid Ali is already saved.'))).toBeTruthy();
     expect(d.getByText(drawn("If this is another person, add the village or father's name"))).toBeTruthy();
-    expect(d.getByRole('button', { name: drawn('Open existing Rashid Ali') })).toBeTruthy();
+    expect(d.getByRole('button', { name: drawn('Open existing Rashid Ali') + ' (Chak 12 · 0300 1234567)' })).toBeTruthy();
     expect(d.getByRole('button', { name: drawn('Save as new') })).toBeTruthy();
     expect(d.getByRole('button', { name: drawn('Cancel') })).toBeTruthy();
     const row = dialog.querySelector('[data-duplicate-row]')!;
@@ -286,7 +286,7 @@ describe('the duplicate warning', () => {
   it('Open existing goes to that customer and saves nothing', async () => {
     const shell = duplicateThenOk();
     const dialog = await trigger(shell);
-    click(within(dialog).getByRole('button', { name: f.dupOpen('Rashid Ali') }));
+    click(within(dialog).getByRole('button', { name: f.dupOpen('Rashid Ali (Chak 12 · 0300 1234567)') }));
     expect(await screen.findByText('the customer page cOld')).toBeTruthy();
     expect(shell.of('customers:create')).toHaveLength(1);
   });
@@ -330,6 +330,38 @@ describe('edit', () => {
     await screen.findByText('the customer page c1');
     expect(shell.of('customers:update')[0]!.input.expected_version).toBe(3);
     expect(shell.of('customers:setTerms')[0]!.input).toEqual({ customer_id: 'c1', credit_limit: 1_250_050, default_price_type: 'retail', expected_version: 4 });
+  });
+
+  it('the credit limit is shown with thousands separators while typing and after leaving the box, and the request is still exact paisa', async () => {
+    const shell = await editForm();
+    const box = screen.getByLabelText(f.creditLimit) as HTMLInputElement;
+    set(box, '20000');
+    expect(box.value).toBe('20,000'); // grouped as it is typed
+    set(box, '20,000'); // typed with the comma: the same amount, the same text
+    expect(box.value).toBe('20,000');
+    set(box, '20000.5');
+    expect(box.value).toBe('20,000.5'); // the half-typed paisa are left alone under the cursor
+    fireEvent.blur(box);
+    expect(box.value).toBe('20,000.50'); // tidied on leaving
+    click(saveBtn());
+    await screen.findByText('the customer page c1');
+    expect(shell.of('customers:setTerms')[0]!.input).toMatchObject({ customer_id: 'c1', credit_limit: 2_000_050 });
+  });
+
+  it('typing 20,000 sends exactly 2,000,000 paisa; text that is not an amount is left as typed and is refused', async () => {
+    const shell = await editForm();
+    const box = screen.getByLabelText(f.creditLimit) as HTMLInputElement;
+    set(box, '20,000');
+    click(saveBtn());
+    await screen.findByText('the customer page c1');
+    expect(shell.of('customers:setTerms')[0]!.input.credit_limit).toBe(2_000_000);
+    cleanup();
+    await editForm();
+    const again = screen.getByLabelText(f.creditLimit) as HTMLInputElement;
+    set(again, '2o,000');
+    expect(again.value).toBe('2o,000');
+    fireEvent.blur(again);
+    expect(again.value).toBe('2o,000');
   });
 
   it('owner: only terms changed sends no update, and no farmer field the shop hides', async () => {
@@ -506,7 +538,7 @@ describe('edit: what is sent, and what happens when only half is saved', () => {
     expect(shell.of('customers:get').length).toBeGreaterThanOrEqual(2); // loaded again
     expect(screen.queryByText('the customer page c1')).toBeNull(); // did not leave the form
     await waitFor(() => expect((screen.getByLabelText(f.village) as HTMLInputElement).value).toBe('Chak 99')); // what was saved
-    expect((screen.getByLabelText(f.creditLimit) as HTMLInputElement).value).toBe('10000'); // the terms were not saved
+    expect((screen.getByLabelText(f.creditLimit) as HTMLInputElement).value).toBe('10,000'); // the terms were not saved
   });
 
   it('a failed update alone (nothing written) is not called partial', async () => {
@@ -696,7 +728,7 @@ describe('one form per customer', () => {
     await screen.findByDisplayValue('Zahid');
     expect((screen.getByLabelText(f.village) as HTMLInputElement).value).toBe('Kot');
     expect((screen.getByLabelText(f.notes) as HTMLTextAreaElement).value).toBe('');
-    expect((screen.getByLabelText(f.creditLimit) as HTMLInputElement).value).toBe('3000');
+    expect((screen.getByLabelText(f.creditLimit) as HTMLInputElement).value).toBe('3,000');
     expect(document.body.textContent).not.toContain('typed');
   });
 
@@ -747,6 +779,19 @@ describe('Settings, Customers section: the edges', () => {
     expect(shell.of('customers:setSettings')).toHaveLength(0);
   });
 
+  it('the default limit is grouped like the rest of the UI (10,000), grouped as it is typed and tidied on blur, and the request is exact paisa', async () => {
+    const shell = fakeShell({ settings: { default_credit_limit: 1_000_000 }, override: printCfg });
+    const limit = await openSection(shell);
+    expect(limit.value).toBe('10,000');
+    set(limit, '20000.5');
+    expect(limit.value).toBe('20,000.5');
+    fireEvent.blur(limit);
+    expect(limit.value).toBe('20,000.50');
+    click(saveButton());
+    await waitFor(() => expect(shell.of('customers:setSettings')).toHaveLength(1));
+    expect(shell.of('customers:setSettings')[0]!.input).toEqual({ default_credit_limit: 2_000_050 });
+  });
+
   it('while saving: Save is off, says Saving…, and a second submit sends nothing', async () => {
     const g = gate();
     const shell = fakeShell({ settings: { default_credit_limit: 500_000 }, override: { ...printCfg, 'customers:setSettings': async (input: object) => (await g.wait, { ok: true, data: { default_credit_limit: 750_000, show_farmer_fields: false, ...input } }) } });
@@ -767,7 +812,7 @@ describe('Settings, Customers section: the edges', () => {
     set(limit, '7500');
     click(saveButton());
     await screen.findByText(s.saved);
-    expect(limit.value).toBe('8000');
+    expect(limit.value).toBe('8,000');
     expect(screen.getByRole('radio', { name: s.on }).getAttribute('aria-checked')).toBe('true');
     expect(saveButton().disabled).toBe(true); // nothing differs from the reply now
   });
@@ -791,7 +836,7 @@ describe('Settings, Customers section: the edges', () => {
     set(limit, '7500');
     click(saveButton());
     await waitFor(() => expect(document.querySelector('[data-section=customers] [data-code=INTERNAL]')).toBeTruthy());
-    expect(limit.value).toBe('7500'); // what was typed stays
+    expect(limit.value).toBe('7,500'); // what was typed stays
     click(saveButton());
     await screen.findByText(s.saved);
     expect(document.querySelector('[data-section=customers] [data-code=INTERNAL]')).toBeNull();
@@ -806,7 +851,7 @@ describe('Settings, Customers section: the edges', () => {
     expect(document.querySelector('[data-section=customers] [data-code=INTERNAL]')).toBeTruthy();
     expect(screen.queryByLabelText(s.defaultLimit)).toBeNull();
     click(retry);
-    expect(((await screen.findByLabelText(s.defaultLimit)) as HTMLInputElement).value).toBe('5000');
+    expect(((await screen.findByLabelText(s.defaultLimit)) as HTMLInputElement).value).toBe('5,000');
     expect(document.querySelector('[data-section=customers] [data-code=INTERNAL]')).toBeNull();
     expect(screen.queryByRole('button', { name: s.retry })).toBeNull();
   });
@@ -883,7 +928,7 @@ describe('Settings, Customers section', () => {
     const shell = await open(fakeShell({ settings: { default_credit_limit: 500_000, show_farmer_fields: false }, override: { 'print:getConfig': () => ({ ok: true, data: { shop_name: 'S', print_format: '80mm', receipt_footer: '', printer_name: null, receipt_language: 'en', invoice_language: 'en', shop_name_ur: null, shop_address: null, shop_phone: null } }), 'printers:list': () => ({ ok: true, data: [] }) } }));
     click(await screen.findByRole('button', { name: s.sectionLabel }));
     const limit = (await screen.findByLabelText(s.defaultLimit)) as HTMLInputElement;
-    expect(limit.value).toBe('5000');
+    expect(limit.value).toBe('5,000');
     const save = screen.getByRole('button', { name: s.save }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     // only the toggle changes
