@@ -7,13 +7,14 @@ import { formatMoney, useI18n } from '../../../i18n/index.js';
 import { cn } from '../../../lib/cn.js';
 import { Actions, DialogInput, FieldLabel } from '../../pos/counter-ui.js';
 import { balanceView } from '../detail/customer-detail-state.js';
-import { buildOpeningRequest, DEFAULT_DIRECTION, openingPaisa, type OpeningDirection } from './customer-opening-requests.js';
+import { OpeningCorrection } from './customer-opening-correction.js';
+import { buildOpeningRequest, DEFAULT_DIRECTION, effectiveOpening, openingPaisa, type OpeningDirection } from './customer-opening-requests.js';
 
 /**
  * Opening balance (docs/design/CustomerForms.dc.html, section 2; OWNER only: the page never offers it to staff, and the shell refuses staff).
  * Direction (They owe us / We owe them), an amount in rupees, then a confirm step. The contract has no note and no date for it, so the
- * design's Note and Date fields are not here. A second one is refused by the shell (OPENING_BALANCE_EXISTS): the box says so calmly;
- * correcting an opening balance is not built yet (the owner has not decided how).
+ * design's Note and Date fields are not here. A second one is refused by the shell (OPENING_BALANCE_EXISTS): the box then becomes the
+ * owner's "Correct opening balance" form (`OpeningCorrection`: current amount, new amount, reason, confirm), which sends `khata:adjustOpening`.
  * After saving the customer is read again and the toast says what the shell now reports.
  */
 export function CustomerOpeningDialog({
@@ -38,6 +39,8 @@ export function CustomerOpeningDialog({
   const [checked, setChecked] = useState(false);
   const [step, setStep] = useState<'form' | 'confirm'>('form');
   const [exists, setExists] = useState(false);
+  // the opening amount now (signed paisa), read from the statement once the shell says one exists
+  const [current, setCurrent] = useState<number | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
@@ -66,8 +69,15 @@ export function CustomerOpeningDialog({
       onSaved(summary);
       onClose();
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'OPENING_BALANCE_EXISTS') setExists(true);
-      else setError(e);
+      if (e instanceof ApiError && e.code === 'OPENING_BALANCE_EXISTS') {
+        setExists(true);
+        try {
+          // the CURRENT opening amount, as the statement's own lines show it (opening line plus earlier corrections)
+          setCurrent(effectiveOpening((await api.khata.statement({ customer_id: customerId })).lines));
+        } catch (e2) {
+          setError(e2);
+        }
+      } else setError(e);
       setStep('form');
     } finally {
       inFlight.current = false;
@@ -75,6 +85,9 @@ export function CustomerOpeningDialog({
     }
   };
 
+  if (exists && current !== null) {
+    return <OpeningCorrection api={api} customerId={customerId} name={name} current={current} onClose={onClose} onSaved={onSaved} />;
+  }
   if (exists) {
     return (
       <Dialog counter open title={t.title} onClose={onClose} className="max-w-[460px]">

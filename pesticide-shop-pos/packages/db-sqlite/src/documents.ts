@@ -13,7 +13,9 @@ import type {
   InvoiceListRow,
   PrintConfig,
 } from '@pos/core';
+import { DEFAULT_SHOP_TIME_ZONE, isTimeZone } from '@pos/core';
 import type { Db } from './connection.js';
+import { LEDGER_BEFORE, LEDGER_POSITION_SQL, positionArgs, type LedgerPosition } from './ledger-order.js';
 
 // Reads for the invoice history and for receipts, and the print settings. Every query NAMES its columns: `invoice_items.cost_price` is
 // never selected here, so no cost can reach a receipt, a history row or a staff screen. (The deep-scan test in apps/desktop checks the replies too.)
@@ -21,7 +23,7 @@ import type { Db } from './connection.js';
 /** The audit-log action written for each printed document. Counting these is how a reprint knows it is a COPY. */
 export const PRINT_AUDIT_ACTION = 'invoice_printed';
 
-export const DEFAULT_TIME_ZONE = 'Asia/Karachi';
+export const DEFAULT_TIME_ZONE = DEFAULT_SHOP_TIME_ZONE;
 
 interface InvoiceRow {
   id: string;
@@ -130,7 +132,7 @@ export function getInvoiceDetail(db: Db, invoiceId: string): InvoiceDetail | und
 
 /**
  * The customer's balance right after this sale: everything in the ledger BEFORE this invoice's own entry, plus what this sale added (total - paid).
- * Later payments, returns and sales have later rows and do not change it. Ledger rows are append-only, and `rowid` is their order.
+ * Later payments, returns and sales have later rows and do not change it. Ledger rows are append-only, and their order is the stable sequence (`ledger-order.ts`: seq, with pre-008 rows first in rowid order), never rowid alone.
  */
 export function balanceAsOfSale(db: Db, invoiceId: string): number | null {
   const inv = db.prepare('SELECT customer_id, total, paid_amount, created_at FROM invoices WHERE id = ?').get(invoiceId) as
@@ -138,10 +140,10 @@ export function balanceAsOfSale(db: Db, invoiceId: string): number | null {
     | undefined;
   if (!inv || inv.customer_id === null) return null;
   const entry = db
-    .prepare("SELECT rowid AS r FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND ref_type = 'invoice' AND ref_id = ?")
-    .get(inv.customer_id, invoiceId) as { r: number } | undefined;
+    .prepare(`${LEDGER_POSITION_SQL} WHERE party_type = 'customer' AND party_id = ? AND ref_type = 'invoice' AND ref_id = ?`)
+    .get(inv.customer_id, invoiceId) as LedgerPosition | undefined;
   const before = entry
-    ? (db.prepare("SELECT COALESCE(SUM(amount_delta), 0) AS s FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND rowid < ?").get(inv.customer_id, entry.r) as { s: number }).s
+    ? (db.prepare(`SELECT COALESCE(SUM(amount_delta), 0) AS s FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND ${LEDGER_BEFORE}`).get(inv.customer_id, ...positionArgs(entry)) as { s: number }).s
     : (db.prepare("SELECT COALESCE(SUM(amount_delta), 0) AS s FROM ledger_entries WHERE party_type = 'customer' AND party_id = ? AND created_at < ?").get(inv.customer_id, inv.created_at) as { s: number }).s;
   return before + inv.total - inv.paid_amount;
 }
@@ -169,6 +171,12 @@ const SETTING_KEYS = {
   shop_phone: 'shop.phone',
 } as const satisfies Record<Exclude<keyof PrintConfig, 'shop_name'>, string>;
 export const TIME_ZONE_KEY = 'shop.time_zone';
+
+/** The shop's time zone for statements and documents: the setting `shop.time_zone`, else Asia/Karachi. */
+export const shopTimeZone = (db: Db): string => {
+  const set = readSetting(db, TIME_ZONE_KEY);
+  return set !== null && isTimeZone(set) ? set : DEFAULT_TIME_ZONE; // a mistyped setting must not break statements
+};
 
 export function readSetting(db: Db, key: string): string | null {
   const row = db.prepare('SELECT value FROM settings WHERE "key" = ? AND deleted_at IS NULL').get(key) as { value: string | null } | undefined;

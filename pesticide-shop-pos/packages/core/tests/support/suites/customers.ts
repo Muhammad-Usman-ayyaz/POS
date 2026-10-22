@@ -49,7 +49,7 @@ export function defineCustomerTests(make: WorldFactory): void {
         const made = staffCreate({ name_en: '  Aslam   Khan ', phone: '0300-1111111', village: 'Kot Addu', notes: 'pays on harvest' });
         expect(made.customer).toMatchObject({
           name_en: 'Aslam Khan', name_ur: null, phone: '0300-1111111', village: 'Kot Addu', notes: 'pays on harvest',
-          credit_limit: 0, default_price_type: 'retail', father_name: null, cnic: null, phone2: null, guarantor: null, version: 1, ...w.deps.scope,
+          credit_limit: 0, default_price_type: 'retail', father_name: null, cnic: null, phone2: null, guarantor: null, land_size: null, crop: null, version: 1, ...w.deps.scope,
         });
         expect(made).toMatchObject({ balance: 0, no_limit: true, credit_left: null, over_limit: false, next_due: null, overdue_amount: 0, overdue_days: 0 });
         expect(row(made.customer.id)).toMatchObject({ name_en: 'Aslam Khan', credit_limit: 0 });
@@ -101,6 +101,8 @@ export function defineCustomerTests(make: WorldFactory): void {
           { name_en: 'X', cnic: '12345-1234567-1' },
           { name_en: 'X', phone2: '0301' },
           { name_en: 'X', guarantor: 'Z' },
+          { name_en: 'X', land_size: '5 acres' },
+          { name_en: 'X', crop: 'Cotton' },
         ];
         const before = w.snapshot();
         for (const fields of attempts) {
@@ -112,8 +114,8 @@ export function defineCustomerTests(make: WorldFactory): void {
       });
 
       it('the owner (privileged) sets the limit, price type and farmer details at creation', () => {
-        const made = ownerCreate({ name_en: 'Big Farmer', credit_limit: 9_000_000, default_price_type: 'wholesale', father_name: 'Haji Bashir', cnic: '35202-1234567-1', phone2: '0321-2222222', guarantor: 'Naeem' });
-        expect(made.customer).toMatchObject({ credit_limit: 9_000_000, default_price_type: 'wholesale', father_name: 'Haji Bashir', cnic: '35202-1234567-1', phone2: '0321-2222222', guarantor: 'Naeem' });
+        const made = ownerCreate({ name_en: 'Big Farmer', credit_limit: 9_000_000, default_price_type: 'wholesale', father_name: 'Haji Bashir', cnic: '35202-1234567-1', phone2: '0321-2222222', guarantor: 'Naeem', land_size: '12 acres', crop: 'Wheat' });
+        expect(made.customer).toMatchObject({ land_size: '12 acres', crop: 'Wheat', credit_limit: 9_000_000, default_price_type: 'wholesale', father_name: 'Haji Bashir', cnic: '35202-1234567-1', phone2: '0321-2222222', guarantor: 'Naeem' });
       });
 
       it('privileged is checked against the real user: a staff member cannot claim it, an inactive user cannot create', () => {
@@ -249,7 +251,7 @@ export function defineCustomerTests(make: WorldFactory): void {
 
       it('credit limit, price type and farmer fields are NOT accepted here: they go through setTerms', () => {
         const made = ownerCreate({ name_en: 'Aslam', credit_limit: 500 });
-        for (const fields of [{ credit_limit: 9_999_999 }, { default_price_type: 'wholesale' }, { father_name: 'X' }, { cnic: '1' }, { phone2: '1' }, { guarantor: 'g' }]) {
+        for (const fields of [{ credit_limit: 9_999_999 }, { default_price_type: 'wholesale' }, { father_name: 'X' }, { cnic: '1' }, { phone2: '1' }, { guarantor: 'g' }, { land_size: '5 acres' }, { crop: 'Cotton' }]) {
           expect(codeOf(() => s.customers.update({ customer_id: made.customer.id, fields: fields as never, expected_version: 1, actor: ID.owner }))).toBe('INVALID_INPUT');
         }
         expect(row(made.customer.id)).toMatchObject({ credit_limit: 500, default_price_type: 'retail', father_name: null, version: 1 });
@@ -314,9 +316,9 @@ export function defineCustomerTests(make: WorldFactory): void {
 
       it('sets the limit, price type and farmer details, and writes ONE audit row with before and after in the same transaction', () => {
         const made = staffCreate({ name_en: 'Aslam' });
-        const done = s.customers.setTerms(terms(made.customer.id, { father_name: 'Haji', cnic: '35202', phone2: '0301', guarantor: 'Naeem' }));
-        expect(done.changed.sort()).toEqual(['cnic', 'credit_limit', 'default_price_type', 'father_name', 'guarantor', 'phone2']);
-        expect(done.customer.customer).toMatchObject({ credit_limit: 500_000, default_price_type: 'wholesale', father_name: 'Haji', cnic: '35202', phone2: '0301', guarantor: 'Naeem', version: 2 });
+        const done = s.customers.setTerms(terms(made.customer.id, { father_name: 'Haji', cnic: '35202', phone2: '0301', guarantor: 'Naeem', land_size: '5 acres', crop: 'Cotton' }));
+        expect(done.changed.sort()).toEqual(['cnic', 'credit_limit', 'crop', 'default_price_type', 'father_name', 'guarantor', 'land_size', 'phone2']);
+        expect(done.customer.customer).toMatchObject({ credit_limit: 500_000, default_price_type: 'wholesale', father_name: 'Haji', cnic: '35202', phone2: '0301', guarantor: 'Naeem', land_size: '5 acres', crop: 'Cotton', version: 2 });
         const audit = w.rows('audit_log').filter((r) => r.action === 'customer_terms_changed');
         expect(audit).toHaveLength(1);
         expect(audit[0]).toMatchObject({ user_id: ID.owner, table_name: 'customers', row_id: made.customer.id });

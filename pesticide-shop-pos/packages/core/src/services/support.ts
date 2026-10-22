@@ -102,7 +102,7 @@ export function rowFactory(deps: ServiceDeps) {
       ref_id?: string;
       entry_date: string;
       created_by: string;
-    }): NewRow<LedgerEntry> {
+    }): Omit<NewRow<LedgerEntry>, 'seq'> {
       return {
         ...base(),
         party_type: a.party_type,

@@ -9,3 +9,4 @@ export * from './statement.js';
 export * from './phone.js';
 export * from './customers.js';
 export * from './khata-documents.js';
+export * from './zone-day.js';

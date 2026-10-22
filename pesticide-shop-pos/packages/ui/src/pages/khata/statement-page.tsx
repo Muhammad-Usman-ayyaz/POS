@@ -11,6 +11,7 @@ import { formatDate, formatMoney, ltr } from '../../i18n/format.js';
 import { useI18n, type Messages } from '../../i18n/index.js';
 import { displayName } from '../customers/list/customer-list-state.js';
 import { SHOP_TIME_ZONE } from '../invoices/time-zone.js';
+import { BalanceOnDate } from './balance-on-date.js';
 import { StatementPrintActions } from './print-actions.js';
 import { uiNow } from '../../lib/clock.js';
 import { buildStatementRequest, last30Range, thisMonthRange, todayIn } from './statement-requests.js';
@@ -170,6 +171,9 @@ export function StatementPage({ api }: { api: Api; user: SessionUser }) {
           </Button>
         </div>
       </section>
+      <div className="mb-4">
+        <BalanceOnDate api={api} customerId={id} />
+      </div>
       {rangeBad && (
         <p role="alert" data-range-error className="mb-4 text-sm font-semibold text-danger-ink">
           {t.rangeInvalid}

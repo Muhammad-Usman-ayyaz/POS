@@ -185,8 +185,8 @@ export function seedDemoData(db: Db, scope: DeviceScope, ownerId: string, today:
       db.prepare('INSERT INTO customers (id, name_en, name_ur, village, credit_limit, shop_id, branch_id, device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(customerId, c.nameEn, c.nameUr, c.village, c.limit, ...s);
       if (c.owes > 0) {
         db.prepare(
-          `INSERT INTO ledger_entries (id, party_type, party_id, entry_type, amount_delta, created_by, shop_id, branch_id, device_id)
-           VALUES (?, 'customer', ?, 'opening', ?, ?, ?, ?, ?)`,
+          `INSERT INTO ledger_entries (id, party_type, party_id, entry_type, amount_delta, created_by, shop_id, branch_id, device_id, seq)
+           VALUES (?, 'customer', ?, 'opening', ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM ledger_entries WHERE seq IS NOT NULL))`,
         ).run(randomUUID(), customerId, c.owes, ownerId, ...s);
       }
     }

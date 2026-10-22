@@ -25,6 +25,8 @@ function ins(table: string, vals: Row): string {
   for (const c of ['shop_id', 'branch_id', 'device_id']) {
     if (cols.includes(c) && row[c] === undefined && ctx[c]) row[c] = ctx[c];
   }
+  // migration 008: the ledger sequence is required on every new ledger row (the repository assigns it; raw test SQL takes the next number here)
+  if (table === 'ledger_entries' && row.seq === undefined) row.seq = ((db.prepare('SELECT COALESCE(MAX(seq), 0) AS m FROM ledger_entries').get() as { m: number }).m) + 1;
   const names = Object.keys(row);
   db.prepare(`INSERT INTO ${table} (${names.map((n) => `"${n}"`).join(', ')}) VALUES (${names.map(() => '?').join(', ')})`).run(
     ...Object.values(row),

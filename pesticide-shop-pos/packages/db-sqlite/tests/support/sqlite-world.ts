@@ -17,6 +17,9 @@ import {
 } from '@pos/core/testing';
 import { createSqliteRepositories, createSqliteUnitOfWork, migrate, openDatabase, type Db } from '../../src/index.js';
 
+const LEDGER_SEQ_TRIGGER = `CREATE TRIGGER trg_ledger_entries_seq_required BEFORE INSERT ON ledger_entries WHEN NEW.seq IS NULL
+BEGIN SELECT RAISE(ABORT, 'ledger_entries.seq is required: insert through the repository, which assigns the next sequence number'); END`;
+
 const TABLES: TableName[] = [
   'categories', 'brands', 'product_groups', 'products', 'batches', 'stock_movements', 'customers', 'suppliers', 'users', 'invoices', 'invoice_items', 'sales_returns',
   'sales_return_items', 'purchases', 'purchase_items', 'payments', 'ledger_entries', 'audit_log', 'number_sequences',
@@ -98,6 +101,19 @@ export async function createSqliteWorld(options: WorldOptions = {}): Promise<Sql
     setSetting: (key, value) => {
       const changed = db.prepare('UPDATE settings SET value = ? WHERE "key" = ?').run(value, key).changes;
       if (changed === 0) insertSeed(db, 'settings', { id: `00000000-0000-4000-8000-0000000009${String(settingNo++).padStart(2, '0')}`, key, value, ...SCOPE });
+    },
+    addLedgerRaw: (row, seq) => {
+      if (seq === null) {
+        // the trigger refuses a NULL seq on purpose; a row "from before 008" is simulated by switching the trigger off for this one insert
+        db.exec('DROP TRIGGER trg_ledger_entries_seq_required');
+        try {
+          insertSeed(db, 'ledger_entries', { entry_date: '2026-01-01T00:00:00.000Z', created_by: null, ...SCOPE, ...row, seq });
+        } finally {
+          db.exec(LEDGER_SEQ_TRIGGER);
+        }
+      } else {
+        insertSeed(db, 'ledger_entries', { entry_date: '2026-01-01T00:00:00.000Z', created_by: null, ...SCOPE, ...row, seq });
+      }
     },
     failOnInsert: (table: InsertTable, nth) => probe.failOnInsert(table, nth),
     clearFailure: () => probe.clearFailure(),

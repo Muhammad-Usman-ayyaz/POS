@@ -53,15 +53,16 @@ describe('migrations', () => {
       [5, 'return_tax_and_name_snapshot'],
       [6, 'sale_request_id_and_held_bills'],
       [7, 'customers_khata'],
+      [8, 'ledger_seq_farmer'],
     ]);
   });
 
   it('applies on a fresh database, records the version, and is a no-op the second time', async () => {
     const db = openDatabase(':memory:');
     const first = await migrate(db);
-    expect(first.applied).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(first.applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(first.backupPath).toBeNull();
-    expect(currentSchemaVersion(db)).toBe(7);
+    expect(currentSchemaVersion(db)).toBe(8);
     const second = await migrate(db);
     expect(second.applied).toEqual([]);
   });
@@ -94,7 +95,7 @@ describe('migrations', () => {
       expect(() => db.prepare('SELECT payment_method FROM invoices').get()).toThrow(/no such column/);
 
       const result = await migrate(db);
-      expect(result.applied).toEqual([2, 3, 4, 5, 6, 7]);
+      expect(result.applied).toEqual([2, 3, 4, 5, 6, 7, 8]);
       expect(result.backupPath).not.toBeNull(); // the existing database was copied first
       expect(db.prepare("SELECT payment_method FROM invoices WHERE id = 'old-1'").get()).toEqual({ payment_method: 'cash' });
     });
