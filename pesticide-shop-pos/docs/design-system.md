@@ -241,3 +241,25 @@ A test scans `packages/ui/src`: the browser date input appears only in `date-fie
 ## The UI clock
 
 `packages/ui/src/lib/clock.ts` is the ONE place the UI reads the wall clock: `uiNow(): Date`. Tests pin it with `setUiClock(() => new Date(...))` (and `setUiClock()` restores it). The statement page uses it for "This month" and "Last 30 days" (`todayIn(timeZone, uiNow())` has no default `new Date()` argument). Older screens still read the clock themselves (`pos-page.tsx` `utcToday`, `pos-state.ts` `newRequestId`, `receive-state.ts` `todayText`) and should move to `uiNow()` when they are next touched.
+
+## Units: kg, L, piece (the only converter is packages/core/src/units.ts)
+
+**Rule (owner's words).** Weight is kg, volume is litre (L), counted things are pieces. The letters or words g, gm, ml and grams must never appear on any screen, receipt, report, CSV or print. Billing is by unit, never a bare quantity number.
+
+**Storage does not change.** The database holds whole numbers in the smallest unit (g, ml, piece); `pack_size` and every quantity stay integers. Only the display and the keyboard use kg and L.
+
+**Display rule.** A quantity is a plain decimal number in the standard unit, then the unit word: 250 g is "0.25 kg", 500 ml is "0.5 L", 1500 g is "1.5 kg", 1 g is "0.001 kg", 1,000,000 g is "1000 kg", 3 pieces is "3 pieces". Up to 3 decimals, trailing zeros dropped, no thousands separator. Never g or ml, even for 1 g.
+
+**Typed quantities** (loose lines, pack sizes, loose receiving) are read STRICTLY by `parseQuantity`: "2", "2.5", "0.25", ".5" are accepted (a leading dot can only mean 0.5); empty, "2..5", "2,5", letters, "1e3", "5.", "+2" are NOT_A_NUMBER; "-2" is NEGATIVE; zero is ZERO; more than 3 decimals for kg and L, or any decimal for pieces, is TOO_MANY_DECIMALS (never rounded); over 100,000 kg / L is TOO_LARGE. The screen shows the sentence for the code (`units.problem.*`).
+
+**Pack sizes** are derived from `pack_size` and the unit ("0.5 L", "50 kg", "10 pieces"; a single piece has none). The stored `pack_label` text is not shown. New sizes store the derived English label; an old size whose pack size did not change keeps the text it has (rows are not rewritten). Old text with "500 ml" or "250 g" in it (sale-time names on old receipts, product names) is shown through `legacyLabelToDisplay` ("0.5 L", "0.25 kg").
+
+**Prices** are per unit: "Rs 450 / kg" (receipts "Rs 450/kg"), worked out in integer paisa with the shared rounding helper. The line total is unchanged: it is still the integer base quantity times the pack price over the pack size, rounded once (tests compare old and new for loose lines).
+
+**Steppers.** A sealed line moves by one pack; a loose line by 0.5 kg, 0.1 L or 1 piece.
+
+**Cart / receipts.** Sealed: "2 packs" with "2 × 0.5 L" beside the name; loose: "1.5 kg"; pieces: "3 pieces". Receipts: "2 packs × Rs 500/pack", "0.25 kg × Rs 200/kg". Urdu words: کلو, لیٹر, عدد, پیک (listed in urdu-review.md); numbers are isolated left to right.
+
+**Product form.** Choose the unit first (kg, L, piece), then type each pack size in it ("0.25", "1", "5"). There is no size-label box. The unit and pack size lock once a size has batches.
+
+**Guard.** `packages/ui/tests/units-source-scan.test.ts` fails if g, ml, grams (or the Urdu words) appear in any string of packages/ui/src, packages/core/src or apps/desktop/src, outside the two allow-listed files (the module and the stored-code schema). Rendered-screen tests in English and Urdu do the same for the POS, products, form, receive stock, invoice detail and the printed documents.

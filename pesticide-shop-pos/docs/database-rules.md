@@ -144,3 +144,7 @@ Triggers write `change_log` on every insert and update. Set `synced_at` after a 
 - `customers.findDuplicates`, `customers.list` and `customers.get`: `credit_left` is the limit minus the balance, never below 0 (`over_limit: true` then); a limit of 0 is `no_limit: true` with `credit_left` NULL (never 0 or negative). List totals: `total_outstanding` is the sum of POSITIVE balances only, `overdue_total` the sum of overdue amounts (both shop-wide, not narrowed by the search or filter), `count` the rows matching the search and filter.
 - `customers.search` also matches a typed phone number by digits only.
 - `customerSettings.get` / `set`: `default_credit_limit` (non-negative whole paisa) and `customers.show_farmer_fields`. `set` is owner only and writes one `customer_setting_changed` audit row (`field`, `from`, `to`) per setting that really changed.
+
+## Storage stays in base units (the units change)
+
+Quantities and pack sizes are still integers in grams, millilitres and pieces; nothing stored changed. kg and L exist only at the display and keyboard edge, converted by `packages/core/src/units.ts` (kg = 1000 g, L = 1000 ml). The unit of a product is its `base_unit`, so there is no new column. `sale:quote`, `sale:create`, `stock:receive` and the held-bill channels keep sending and returning integer base quantities. No migration was added.

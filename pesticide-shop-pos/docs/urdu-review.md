@@ -358,3 +358,24 @@ Written by the developer, not yet checked by a native speaker. The keys are `set
 | Key | English | Urdu | Reviewed? |
 |---|---|---|---|
 | `quickAdd.limitUnknown` | Could not read the shop's credit limit | دکان کی ادھار کی حد پڑھی نہیں جا سکی | |
+
+### Standard units: kg, L, piece (the units change; the developer's Urdu, not reviewed)
+
+The owner's rule: weight in kg, volume in litres, counted things in pieces. Grams and millilitres are never shown. These words are NEW and need a native speaker.
+
+| Key | English | Urdu | Reviewed? |
+|---|---|---|---|
+| `units.words.kg` (also receipts, A4, screens) | kg | کلو | |
+| `units.words.L` | L | لیٹر | |
+| `units.words.piece` (one / many) | piece / pieces | عدد / عدد | |
+| `units.names` (unit chooser on the product form) | Kilograms (kg) / Litres (L) / Pieces | کلو / لیٹر / عدد | |
+| `units.pack` / `units.packs` | pack / packs | پیک / پیک | |
+| `units.and` | and (as in "2 packs and 0.25 kg") | اور | |
+| `units.problem.*` | Type a quantity / Type a number such as 2 or 0.5 / The quantity cannot be negative / The quantity must be more than 0 / Use a whole number, such as 3 / Use at most 3 decimals, such as 0.25 / That quantity is too large | مقدار لکھیں / عدد لکھیں، مثلاً 2 یا 0.5 / مقدار منفی نہیں ہو سکتی / مقدار صفر سے زیادہ ہونی چاہیے / پورا عدد لکھیں، مثلاً 3 / اعشاریہ کے بعد زیادہ سے زیادہ 3 ہندسے لکھیں، مثلاً 0.25 / یہ مقدار بہت زیادہ ہے | |
+| `productForm.baseUnit`, `unitHint`, `packSizeIn`, `problems.packInvalid` | Unit / Choose how this product is measured... / Pack size ({unit}) / Enter the pack size as a number above 0, for example 0.5 | پیمانہ / پہلے پیمانہ چنیں... / پیک سائز ({unit}) / پیک سائز صفر سے زیادہ عدد میں لکھیں، مثلاً 0.5 | |
+| `receive.columns.packs` (now "Quantity"), `receive.problems.amountInvalid` | Quantity / Enter an amount above 0, such as 25 or 12.5 | مقدار / صفر سے زیادہ مقدار لکھیں، مثلاً 25 یا 12.5 | |
+| `pos.looseBadge`, `pos.left`, `pos.leftLoose` | Loose · per kg / 3 packs left / 0.25 L left | کھلی · فی کلو / 3 پیک باقی / 0.25 لیٹر باقی | |
+| errors `DUPLICATE_PACK_LABEL`, `MIXED_UNITS`, `PACK_LABEL_REQUIRED` (reworded without ml / g) | This product already has a size of 0.5 L / ... measured the same way (kg) / Every size needs a pack size | اس پروڈکٹ میں ... کا سائز پہلے سے موجود ہے / ... ایک ہی پیمانے میں ... / ہر سائز کا پیک سائز ضروری ہے | |
+| printed receipts: quantity and rate | 2 packs × Rs 500/pack, 0.25 kg × Rs 200/kg, 3 pieces × Rs 120/piece | 2 پیک × Rs 500/پیک، 0.25 کلو × Rs 200/کلو، 3 عدد × Rs 120/عدد | |
+
+Numbers inside Urdu text are wrapped in left-to-right isolates, so "0.25 کلو" keeps its digits in order.
