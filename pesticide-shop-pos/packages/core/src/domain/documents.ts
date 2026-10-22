@@ -1,11 +1,13 @@
 // What a printed receipt or invoice is made from, and what the invoice history shows. Plain data only.
 //
+import type { BaseUnitCode } from '../units.js';
+
 // RULE: no cost, margin or profit lives in any of these types. `invoice_items.cost_price` is never selected for them (the queries in
 // packages/db-sqlite/src/documents.ts name their columns), and the deep-scan test in apps/desktop/tests fails if one ever appears.
 
 export type DocumentKind = 'receipt' | 'invoice';
 export type DocumentLanguage = 'en' | 'ur';
-export type DocumentUnit = 'ml' | 'g' | 'piece';
+export type DocumentUnit = BaseUnitCode;
 
 /** One invoice line as it was SOLD: the name at sale time (`invoice_items.name_en/name_ur`, group name plus pack label), not today's product name. */
 export interface DocumentLine {

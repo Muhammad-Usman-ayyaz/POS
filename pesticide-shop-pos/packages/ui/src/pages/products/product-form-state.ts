@@ -141,7 +141,7 @@ export function draftFromSaved(saved: SavedGroup): ProductDraft {
     nameUr: saved.group.name_ur ?? '',
     categoryId: saved.group.category_id ?? '',
     brandId: saved.group.brand_id ?? '',
-    unit: displayUnitOf(saved.sizes[0]?.base_unit ?? 'ml'),
+    unit: saved.sizes[0] ? displayUnitOf(saved.sizes[0].base_unit) : 'L',
     sizes: saved.sizes.map(sizeFromSaved),
   };
 }

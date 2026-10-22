@@ -7,10 +7,14 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BrowserWindow } from 'electron';
-import type { InvoiceDocumentData, PaymentReceiptData, StatementDocumentData, StatementDocumentLine } from '@pos/core';
+import { baseUnitOf, type InvoiceDocumentData, type PaymentReceiptData, type StatementDocumentData, type StatementDocumentLine } from '@pos/core';
 import { findCostLeaks, PAGE, renderDocumentHtml, renderPaymentReceiptHtml, renderStatementHtml } from '@pos/ui/print';
 import { createElectronPrintDriver } from './printing/electron-driver.js';
 import { documentFonts } from './printing/fonts.js';
+
+// The stored unit codes come from the units module (the only place that names them).
+const VOLUME = baseUnitOf('L');
+const WEIGHT = baseUnitOf('kg');
 
 /** Urdu is real text on purpose: a customer, three products whose Urdu names end in a Latin size ("1 L"), and amounts with a thousands comma. */
 export function urduSale(kind: 'receipt' | 'invoice'): InvoiceDocumentData {
@@ -24,9 +28,9 @@ export function urduSale(kind: 'receipt' | 'invoice'): InvoiceDocumentData {
     customer_id: '22222222-2222-4222-8222-222222222222',
     sold_by: 'Owner',
     lines: [
-      { position: 1, name_en: 'Insecticide X 1 L', name_ur: 'کیڑے مار دوا ایکس 1 L', batch_no: 'B-001', qty: 1000, base_unit: 'ml', pack_size: 1000, unit_price: 120_000, line_discount: 0, tax_rate_bp: 1000, tax_amount: 10_900, line_total: 120_000 },
+      { position: 1, name_en: 'Insecticide X 1 L', name_ur: 'کیڑے مار دوا ایکس 1 L', batch_no: 'B-001', qty: 1000, base_unit: VOLUME, pack_size: 1000, unit_price: 120_000, line_discount: 0, tax_rate_bp: 1000, tax_amount: 10_900, line_total: 120_000 },
       { position: 2, name_en: 'DAP Fertilizer 50 kg', name_ur: 'کھاد ڈی اے پی 50 kg', batch_no: 'F-001', qty: 1, base_unit: 'piece', pack_size: 1, unit_price: 200_000, line_discount: 0, tax_rate_bp: 0, tax_amount: 0, line_total: 200_000 },
-      { position: 3, name_en: 'Fungicide 250 ml', name_ur: 'پھپھوندی کش 250 ml', batch_no: 'FG-014', qty: 250, base_unit: 'ml', pack_size: 250, unit_price: 40_000, line_discount: 0, tax_rate_bp: 1000, tax_amount: 3_600, line_total: 40_000 },
+      { position: 3, name_en: 'Fungicide 0.25 L', name_ur: 'پھپھوندی کش 0.25 L', batch_no: 'FG-014', qty: 250, base_unit: VOLUME, pack_size: 250, unit_price: 40_000, line_discount: 0, tax_rate_bp: 1000, tax_amount: 3_600, line_total: 40_000 },
     ],
     shop: { name: 'Pesticide Club Shop', name_ur: 'پیسٹیسائیڈ کلب شاپ', address: null, phone: null },
     balance_as_of_sale: 160_000,
@@ -53,8 +57,8 @@ export function designSale(kind: 'receipt' | 'invoice', language: 'en' | 'ur', o
     sold_by: 'Owner',
     lines: [
       { position: 1, name_en: 'Insecticide 1 L', name_ur: 'کیڑے مار دوا 1 لیٹر', batch_no: 'B-001', qty: 2, base_unit: 'piece', pack_size: 1, unit_price: 50_000, line_discount: 0, tax_rate_bp: 500, tax_amount: 4_800, line_total: 100_000 },
-      { position: 2, name_en: 'Fertilizer', name_ur: 'کھاد', batch_no: 'F-001', qty: 250, base_unit: 'g', pack_size: 1000, unit_price: 20_000, line_discount: 0, tax_rate_bp: 0, tax_amount: 0, line_total: 5_000 },
-      { position: 3, name_en: 'Fungicide 250 ml', name_ur: 'پھپھوندی کش 250 ملی لیٹر', batch_no: 'FG-014', qty: 3, base_unit: 'piece', pack_size: 1, unit_price: 35_000, line_discount: 5_000, tax_rate_bp: 500, tax_amount: 4_300, line_total: 100_000 },
+      { position: 2, name_en: 'Fertilizer', name_ur: 'کھاد', batch_no: 'F-001', qty: 250, base_unit: WEIGHT, pack_size: 1000, unit_price: 20_000, line_discount: 0, tax_rate_bp: 0, tax_amount: 0, line_total: 5_000 },
+      { position: 3, name_en: 'Fungicide 0.25 L', name_ur: 'پھپھوندی کش 0.25 لیٹر', batch_no: 'FG-014', qty: 3, base_unit: 'piece', pack_size: 1, unit_price: 35_000, line_discount: 5_000, tax_rate_bp: 500, tax_amount: 4_300, line_total: 100_000 },
     ],
     shop: { name: 'Pesticide Club Shop', name_ur: 'پیسٹیسائیڈ کلب شاپ', address: null, phone: null },
     balance_as_of_sale: 305_000,
@@ -170,7 +174,7 @@ export function checkPdfJsText(label: string, report: PdfReport, expected: Expec
   checks.push({ name: `${label}: Urdu letters are SHAPED (contextual forms in the text layer)`, ok: forms >= 50 && forms > plainLetters, detail: `${forms} contextual-form letters, ${plainLetters} unshaped` });
   const joined = report.text.replace(/\s+/g, ' ');
   for (const run of expected.latin) checks.push({ name: `${label}: Latin run "${run}" is whole and in order`, ok: joined.includes(run), detail: joined.includes(run) ? undefined : 'not found' });
-  checks.push({ name: `${label}: no flipped Latin runs ("L 1", "ml 250", "kg 50")`, ok: !/\bL 1\b|\bml 250\b|\bkg 50\b/.test(joined) });
+  checks.push({ name: `${label}: no flipped Latin runs ("L 1", "L 0.25", "kg 50")`, ok: !/\bL 1\b|\bL 0\.25\b|\bkg 50\b/.test(joined) });
   // Where things sit on the line: in a right-to-left line, a Latin run that ends the name stands to the LEFT of the Urdu words (they run from the right edge).
   for (const [latin, urduWord] of latinAfterUrdu) {
     const latinItem = report.items.find((i) => i.str.trim() === latin);
@@ -345,7 +349,7 @@ export async function runPdfCheck(outDir: string, pdfjsBuildDir: string): Promis
   const checks: Check[] = [];
   const expected: Expected = {
     urdu: ['محمد راشد', 'کیڑے مار دوا ایکس', 'کھاد ڈی اے پی', 'پھپھوندی کش', 'پیسٹیسائیڈ کلب شاپ', 'رسید', 'گاہک', 'کل رقم'],
-    latin: ['1 L', '50 kg', '250 ml', 'Rs 1,200', 'Rs 2,000', 'Rs 400', 'Rs 3,600', 'INV-A-000007', '12 Oct 2026, 10:42'],
+    latin: ['1 L', '50 kg', '0.25 L', 'Rs 1,200', 'Rs 2,000', 'Rs 400', 'Rs 3,600', 'INV-A-000007', '12 Oct 2026, 10:42'],
   };
   const papers = [
     { kind: 'receipt' as const, page: { widthMm: PAGE.receipt.widthMm, heightMm: PAGE.receipt.heightMm }, png: 'Built 80 mm receipt (Urdu PDF).png', pdf: 'receipt-ur.pdf' },
@@ -366,7 +370,7 @@ export async function runPdfCheck(outDir: string, pdfjsBuildDir: string): Promis
     checks.push({ name: `${label}: embedded Urdu font is Noto Naskh Arabic, Latin is IBM Plex Sans`, ok: fonts.some((f) => /Naskh/i.test(f)) && fonts.some((f) => /Plex/i.test(f)), detail: fonts.join(', ') });
     checks.push({ name: `${label}: no other font is embedded (no fallback font drew a letter)`, ok: fonts.every((f) => /Naskh|Plex/i.test(f)) });
 
-    checks.push(...checkPdfJsText(label, report, expected, [['1 L', 'کیڑے مار دوا ایکس'], ['50 kg', 'کھاد ڈی اے پی'], ['250 ml', 'پھپھوندی کش']]));
+    checks.push(...checkPdfJsText(label, report, expected, [['1 L', 'کیڑے مار دوا ایکس'], ['50 kg', 'کھاد ڈی اے پی'], ['0.25 L', 'پھپھوندی کش']]));
     const text = pdftotext(pdfPath);
     if (text === null) console.log(`SKIP ${label}: the Urdu strings read back in logical order (pdftotext is not installed; the picture and the shaping checks above still ran)`);
     else {
