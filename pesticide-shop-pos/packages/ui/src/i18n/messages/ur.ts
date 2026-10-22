@@ -446,6 +446,7 @@ export const ur: Messages = {
     khataReduceHint: (who: string) => `${who} کے ذمے کم`,
     methodRule: 'فروخت کے مطابق طے ہوتا ہے: جو گاہک نے دیا وہ نقد واپس، جو کھاتے میں باقی ہے وہ کھاتے سے کم۔',
     methodRuleKhata: 'دکان کی سیٹنگ کے مطابق گاہک کی ہر فروخت پر کھاتے میں کریڈٹ ملتا ہے۔',
+    advanceAmount: (amount: string) => `ایڈوانس ${amount}`,
     khataBefore: 'پہلے کھاتہ',
     khataAfter: 'بعد میں کھاتہ',
     stock: 'اسٹاک',

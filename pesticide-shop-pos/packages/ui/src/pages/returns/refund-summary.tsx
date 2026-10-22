@@ -18,6 +18,15 @@ function goods(view: InvoiceForReturnView, preview: ReturnPreviewView, restock: 
     .join(', ');
 }
 
+/** The round mark of a refund-method row (the design draws radios; the method is decided by the sale, so nothing here can be pressed). */
+function MethodDot({ on }: { on: boolean }) {
+  return (
+    <span aria-hidden className={`mt-1 grid size-4 shrink-0 place-items-center rounded-full border-2 ${on ? 'border-accent' : 'border-field-line'}`}>
+      {on && <span className="size-2 rounded-full bg-accent" />}
+    </span>
+  );
+}
+
 /**
  * The right-hand card: the refund as the core worked it out (`returns:preview`), how it is paid, the Khata before and after, what happens to the
  * stock, and the button. Everything shown comes from the preview; this file does no money arithmetic.
@@ -48,6 +57,8 @@ export function RefundSummary({
   const { m, language } = useI18n();
   const t = m.returns;
   const money = (n: number) => formatMoney(n, language);
+  /** A balance below zero is an advance, said in words: never "Rs -470". */
+  const balance = (n: number) => (n < 0 ? t.advanceAmount(money(-n)) : money(n));
   const customerName = view.customer ? lineName(view.customer, language) || t.walkIn : t.walkIn;
   const chosen = view.lines.filter((l) => (draft[l.invoice_item_id]?.qty ?? 0) > 0);
   const target = preview ? refundTarget(preview) : null;
@@ -68,7 +79,7 @@ export function RefundSummary({
               return (
                 <li key={l.invoice_item_id} className="flex justify-between gap-3">
                   <span>
-                    {lineName(line, language)} <span className="num">{quantityShown(m, language, line.base_unit, line.pack_size, l.qty)}</span>
+                    {lineName(line, language)} × <span className="num">{quantityShown(m, language, line.base_unit, line.pack_size, l.qty)}</span>
                   </span>
                   <span className="num">{money(l.refund_amount)}</span>
                 </li>
@@ -92,24 +103,24 @@ export function RefundSummary({
           <div className="mt-4">
             <div className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">{t.methodLabel}</div>
             <div className="flex flex-col gap-2">
-              <label className={`flex items-start gap-3 rounded-md border p-3 ${target === 'cash' || target === 'both' ? 'border-accent bg-tint' : 'border-line opacity-70'}`}>
-                <input type="radio" name="method" readOnly disabled checked={target === 'cash' || target === 'both'} className="mt-1" />
+              <div data-method="cash" aria-current={target === 'cash' || target === 'both' ? 'true' : undefined} className={`flex items-start gap-3 rounded-md border p-3 ${target === 'cash' || target === 'both' ? 'border-accent bg-tint' : 'border-line opacity-70'}`}>
+                <MethodDot on={target === 'cash' || target === 'both'} />
                 <span>
                   <span className="block font-semibold">{t.cashBack}</span>
                   <span data-cash className="block text-sm text-muted">
                     {preview.cash_amount > 0 ? t.cashBackHint(money(preview.cash_amount)) : money(0)}
                   </span>
                 </span>
-              </label>
-              <label className={`flex items-start gap-3 rounded-md border p-3 ${target === 'khata' || target === 'both' ? 'border-accent bg-tint' : 'border-line opacity-70'}`}>
-                <input type="radio" name="method" readOnly disabled checked={target === 'khata' || target === 'both'} className="mt-1" />
+              </div>
+              <div data-method="khata" aria-current={target === 'khata' || target === 'both' ? 'true' : undefined} className={`flex items-start gap-3 rounded-md border p-3 ${target === 'khata' || target === 'both' ? 'border-accent bg-tint' : 'border-line opacity-70'}`}>
+                <MethodDot on={target === 'khata' || target === 'both'} />
                 <span>
                   <span className="block font-semibold">{t.khataReduce}</span>
                   <span data-khata className="block text-sm text-muted">
                     {preview.khata_amount > 0 ? `${t.khataReduceHint(customerName)} · ${money(preview.khata_amount)}` : money(0)}
                   </span>
                 </span>
-              </label>
+              </div>
             </div>
             <p className="mt-2 text-xs text-muted">{view.refund_paid_part_to_khata ? t.methodRuleKhata : t.methodRule}</p>
           </div>
@@ -118,11 +129,11 @@ export function RefundSummary({
             <dl className="mt-4 flex flex-col gap-1 rounded-md bg-tint-soft p-3 text-sm">
               <div className="flex justify-between">
                 <dt className="text-muted">{t.khataBefore}</dt>
-                <dd data-khata-before className="num">{money(preview.khata_before)}</dd>
+                <dd data-khata-before className="num">{balance(preview.khata_before)}</dd>
               </div>
               <div className="flex justify-between font-semibold">
                 <dt>{t.khataAfter}</dt>
-                <dd data-khata-after className="num">{money(preview.khata_after)}</dd>
+                <dd data-khata-after className="num">{balance(preview.khata_after)}</dd>
               </div>
             </dl>
           )}

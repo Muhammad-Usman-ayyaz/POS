@@ -446,6 +446,7 @@ export const en = {
     khataReduceHint: (who: string) => `${who} owes less`,
     methodRule: 'Decided by the sale: what the customer paid comes back in cash, what is still on Khata is taken off it.',
     methodRuleKhata: 'The shop setting gives Khata credit for everything on a customer sale.',
+    advanceAmount: (amount: string) => `Advance ${amount}`,
     khataBefore: 'Khata before',
     khataAfter: 'Khata after',
     stock: 'Stock',

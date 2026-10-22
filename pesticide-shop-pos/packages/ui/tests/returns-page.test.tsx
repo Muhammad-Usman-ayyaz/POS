@@ -182,6 +182,18 @@ describe('Returns: the refund is the core\'s', () => {
     expect(shell.of('returns:preview').at(-1)!.input).toEqual({ invoice_id: 'inv-2', items: [{ invoice_item_id: 'ii-1', qty: 1000, condition: 'resellable', reason: 'changed_mind' }] });
   });
 
+  it('a Khata balance below zero is an advance in words, never "Rs -"', async () => {
+    const shell = fakeShell({ 'returns:preview': () => ok({ ...PREVIEW, khata_before: 3000, khata_after: -46_999 }) });
+    show(shell);
+    await open();
+    await more(0);
+    reason(0, 'other');
+    await waitFor(() => expect(document.querySelector('[data-khata-after]')).toBeTruthy());
+    expect(document.querySelector('[data-khata-before]')!.textContent).toBe('Rs 30');
+    expect(document.querySelector('[data-khata-after]')!.textContent).toBe('Advance Rs 469.99');
+    expect(document.body.textContent).not.toMatch(/Rs\s*-/);
+  });
+
   it('a wrong word from the preview (an issue) keeps Complete off and says what to fix', async () => {
     const shell = fakeShell({ 'returns:preview': () => ok({ ...PREVIEW, issues: [{ code: 'EXPIRED_NOT_RESELLABLE', invoice_item_id: 'ii-1' }] }) });
     show(shell);

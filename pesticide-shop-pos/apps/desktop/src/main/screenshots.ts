@@ -886,6 +886,7 @@ export async function runScreenshots(window: BrowserWindow, outDir: string, size
   }
   async function openInvoiceForReturn(invoiceNo: string): Promise<void> {
     await go('/returns');
+    await js(`document.querySelector('[data-page=returns] [role=tab]')?.click()`); // the New return tab (the page may still be on Past returns)
     await waitFor('[data-find-invoice]');
     await fill('#return-search', invoiceNo); // the list shows the 5 newest invoices: search for the one wanted
     await waitFor(`[data-find-row="${invoiceNo}"]`);

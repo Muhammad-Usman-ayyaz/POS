@@ -20,7 +20,7 @@ async function setup(who: 'owner' | 'staff', defaultLimitRupees?: string) {
   shop = await makeShop();
   await shop.signInAs('owner');
   if (defaultLimitRupees !== undefined) {
-    await call('customers:setSettings', customerFormRules.buildCustomerSettingsRequest(await call('customers:getSettings'), { defaultLimit: defaultLimitRupees, showFarmer: false }));
+    await call('customers:setSettings', customerFormRules.buildCustomerSettingsRequest(await call('customers:getSettings'), { defaultLimit: defaultLimitRupees, showFarmer: false, refundToKhata: false }));
   }
   if (who === 'staff') {
     await shop.signOut();
