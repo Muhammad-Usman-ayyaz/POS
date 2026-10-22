@@ -304,6 +304,9 @@ const FarmerFields = {
   cnic: PhoneText.nullable().optional(),
   phone2: PhoneText.nullable().optional(),
   guarantor: PersonName.nullable().optional(),
+  /** Free text such as '5 acres' and 'Cotton'. Owner only, like the rest of the farmer details. */
+  land_size: VillageText.nullable().optional(),
+  crop: VillageText.nullable().optional(),
 };
 
 export const CustomerListInput = z.strictObject({

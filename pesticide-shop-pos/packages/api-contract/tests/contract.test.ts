@@ -341,7 +341,7 @@ describe('Phase 6 M2: customers, payments, statement', () => {
   });
 
   it('update takes contact fields only: a credit limit, price type or farmer field goes through setTerms', () => {
-    for (const key of ['credit_limit', 'default_price_type', 'father_name', 'cnic', 'phone2', 'guarantor']) {
+    for (const key of ['credit_limit', 'default_price_type', 'father_name', 'cnic', 'phone2', 'guarantor', 'land_size', 'crop']) {
       expect(update.safeParse({ customer_id: id(), fields: { [key]: 'x' }, expected_version: 1 }).success, key).toBe(false);
     }
     expect(update.safeParse({ customer_id: id(), fields: { name_en: 'A' } }).success).toBe(false); // expected_version is required
@@ -433,10 +433,10 @@ describe('Phase 6 M2: customers, payments, statement', () => {
     }
   });
 
-  it('farmer fields: father_name and guarantor 120, cnic and phone2 30; null is fine (create and setTerms)', () => {
+  it('farmer fields: father_name and guarantor 120, cnic and phone2 30, land_size and crop 80; null is fine (create and setTerms)', () => {
     const farmer = (fields: Record<string, unknown>) => create.safeParse({ fields: { name_en: 'A', ...fields } }).success;
     const farmerTerms = (extra: Record<string, unknown>) => terms.safeParse({ customer_id: id(), credit_limit: 0, default_price_type: 'retail', expected_version: 1, ...extra }).success;
-    for (const [key, max] of [['father_name', 120], ['guarantor', 120], ['cnic', 30], ['phone2', 30]] as const) {
+    for (const [key, max] of [['father_name', 120], ['guarantor', 120], ['cnic', 30], ['phone2', 30], ['land_size', 80], ['crop', 80]] as const) {
       expect(farmer({ [key]: 'x'.repeat(max) }), `create ${key} ${max}`).toBe(true);
       expect(farmer({ [key]: 'x'.repeat(max + 1) }), `create ${key} ${max + 1}`).toBe(false);
       expect(farmer({ [key]: null }), `create ${key} null`).toBe(true);

@@ -53,6 +53,7 @@ Positive `amount_delta` means the customer owes more (or we owe the supplier mor
 4. Take the receipt number with `numbers.next('payment')` INSIDE the unit of work (`RCP-<branch>-000001`), insert `payments` (`in`, with `receipt_no` and `note`) and `ledger_entries` (`payment`, minus amount). If anything fails, the payment, the ledger row and the receipt number all go back; a refused payment never uses a number.
 5. The result is `{ payment, receipt_no, balance_after, advance }` (`advance` is true when `balance_after` is below zero). Payments reduce the overall balance, not one invoice.
 6. No audit row: `payments` (append-only, with who and when) is the record of a payment. A payment taken at the counter together with a sale is part of the sale: it has no payment receipt number (its `receipt_no` stays NULL).
+- Migration 008 adds nullable `customers.land_size` and `customers.crop` (free text such as '5 acres' and 'Cotton': never an ml/g/kg unit). They follow the same rules as father_name, cnic, phone2 and guarantor: owner only (a staff `customers:create` that carries one gets `FIELD_NOT_ALLOWED`; `customers:update` rejects them; the owner sets them through `customers:setTerms`, audited with before and after), hidden behind the shop setting `customers.show_farmer_fields` (off by default), and the data stays when the setting is turned off. The customer page shows land size and crop only to the owner, only while the setting is on, and only when set.
 Supplier payments (`payToSupplier`) are unchanged.
 
 ## Customer statement

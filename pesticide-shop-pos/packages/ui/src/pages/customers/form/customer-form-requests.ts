@@ -29,6 +29,8 @@ export interface CustomerDraft {
   cnic: string;
   phone2: string;
   guarantor: string;
+  landSize: string;
+  crop: string;
 }
 
 /** A new customer starts with the shop's default limit (the owner sees it in the box; staff never send it). */
@@ -44,6 +46,8 @@ export const newDraft = (defaultLimitPaisa = 0): CustomerDraft => ({
   cnic: '',
   phone2: '',
   guarantor: '',
+  landSize: '',
+  crop: '',
 });
 
 export const draftFromCustomer = (c: SavedCustomer): CustomerDraft => ({
@@ -58,6 +62,8 @@ export const draftFromCustomer = (c: SavedCustomer): CustomerDraft => ({
   cnic: c.cnic ?? '',
   phone2: c.phone2 ?? '',
   guarantor: c.guarantor ?? '',
+  landSize: c.land_size ?? '',
+  crop: c.crop ?? '',
 });
 
 /** Nothing but spaces, tabs, line breaks or invisible marks (zero-width space, direction marks): no name. */
@@ -102,6 +108,8 @@ export function buildCreateRequest(draft: CustomerDraft, opts: { owner: boolean;
       if (draft.cnic.trim()) fields.cnic = draft.cnic.trim();
       if (draft.phone2.trim()) fields.phone2 = draft.phone2.trim();
       if (draft.guarantor.trim()) fields.guarantor = draft.guarantor.trim();
+      if (draft.landSize.trim()) fields.land_size = draft.landSize.trim();
+      if (draft.crop.trim()) fields.crop = draft.crop.trim();
     }
   }
   return { fields, ...(opts.confirmDuplicate ? { confirm_duplicate: true } : {}) };
@@ -137,19 +145,21 @@ export function buildUpdateRequest(saved: SavedCustomer, draft: CustomerDraft, e
  */
 export function buildTermsRequest(saved: SavedCustomer, draft: CustomerDraft, opts: { expectedVersion: number; showFarmer: boolean }): TermsInput | null {
   const limit = parseRupees(draft.creditLimit) as number;
-  const farmer: Partial<Pick<TermsInput, 'father_name' | 'cnic' | 'phone2' | 'guarantor'>> = {};
+  const farmer: Partial<Pick<TermsInput, 'father_name' | 'cnic' | 'phone2' | 'guarantor' | 'land_size' | 'crop'>> = {};
   if (opts.showFarmer) {
     if (!same(draft.fatherName, saved.father_name)) farmer.father_name = orNull(draft.fatherName);
     if (!same(draft.cnic, saved.cnic)) farmer.cnic = orNull(draft.cnic);
     if (!same(draft.phone2, saved.phone2)) farmer.phone2 = orNull(draft.phone2);
     if (!same(draft.guarantor, saved.guarantor)) farmer.guarantor = orNull(draft.guarantor);
+    if (!same(draft.landSize, saved.land_size)) farmer.land_size = orNull(draft.landSize);
+    if (!same(draft.crop, saved.crop)) farmer.crop = orNull(draft.crop);
   }
   if (limit === saved.credit_limit && draft.priceType === saved.default_price_type && Object.keys(farmer).length === 0) return null;
   return { customer_id: saved.id, credit_limit: limit, default_price_type: draft.priceType, ...farmer, expected_version: opts.expectedVersion };
 }
 
 /** Is any farmer detail on the customer? (The block opens by itself then, so saved data is never hidden from the owner.) */
-export const hasFarmerDetails = (c: SavedCustomer): boolean => [c.father_name, c.cnic, c.phone2, c.guarantor].some((v) => (v ?? '').trim() !== '');
+export const hasFarmerDetails = (c: SavedCustomer): boolean => [c.father_name, c.cnic, c.phone2, c.guarantor, c.land_size, c.crop].some((v) => (v ?? '').trim() !== '');
 
 /** What a duplicate row shows about the balance. Never a negative amount: an advance has its own word. */
 export function balanceKind(match: Pick<DuplicateMatchView, 'balance'>): 'owes' | 'advance' {

@@ -47,6 +47,8 @@ const customer = (over: Record<string, unknown> = {}) => ({
   cnic: null,
   phone2: null,
   guarantor: null,
+  land_size: null,
+  crop: null,
   version: 3,
   ...over,
 });
@@ -209,6 +211,8 @@ describe('farmer details', () => {
     await newForm(fakeShell({ settings: { show_farmer_fields: false } }));
     expect(screen.queryByRole('button', { name: f.addFarmer })).toBeNull();
     expect(screen.queryByLabelText(f.fatherName)).toBeNull();
+    expect(screen.queryByLabelText(f.landSize)).toBeNull();
+    expect(screen.queryByLabelText(f.crop)).toBeNull();
   });
 
   it('are collapsed behind "Add farmer details" while the setting is on, and sent with the create', async () => {
@@ -217,15 +221,18 @@ describe('farmer details', () => {
     click(screen.getByRole('button', { name: f.addFarmer }));
     set(screen.getByLabelText(f.fatherName), 'Muhammad Ali');
     set(screen.getByLabelText(f.guarantor), 'Imran');
+    set(screen.getByLabelText(f.landSize), '5 acres');
+    set(screen.getByLabelText(f.crop), 'Cotton');
     set(nameEn(), 'Ali');
     click(saveBtn());
     await screen.findByText('the customer page cNew');
-    expect(shell.of('customers:create')[0]!.input.fields).toMatchObject({ father_name: 'Muhammad Ali', guarantor: 'Imran' });
+    expect(shell.of('customers:create')[0]!.input.fields).toMatchObject({ father_name: 'Muhammad Ali', guarantor: 'Imran', land_size: '5 acres', crop: 'Cotton' });
   });
 
   it('staff never see them, even with the setting on', async () => {
     await newForm(fakeShell({ settings: { show_farmer_fields: true } }), STAFF);
     expect(screen.queryByRole('button', { name: f.addFarmer })).toBeNull();
+    expect(screen.queryByLabelText(f.landSize)).toBeNull();
   });
 
   it('an edit opens the block by itself when the customer has details saved', async () => {

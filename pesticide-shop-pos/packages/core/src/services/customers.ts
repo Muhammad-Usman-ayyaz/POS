@@ -97,9 +97,12 @@ const Farmer = {
   cnic: Text(30).optional(),
   phone2: Text(30).optional(),
   guarantor: Text(200).optional(),
+  /** Free text such as '5 acres' (no ml/g/kg units). */
+  land_size: Text(100).optional(),
+  crop: Text(100).optional(),
 };
 /** Fields that are the owner's to choose. A staff create that carries any of them is refused (FIELD_NOT_ALLOWED), never quietly ignored. */
-const OWNER_FIELDS = ['credit_limit', 'default_price_type', 'father_name', 'cnic', 'phone2', 'guarantor'] as const;
+const OWNER_FIELDS = ['credit_limit', 'default_price_type', 'father_name', 'cnic', 'phone2', 'guarantor', 'land_size', 'crop'] as const;
 
 const CreateInput = z.strictObject({
   fields: z.strictObject({ ...Contact, ...Farmer, credit_limit: NonNegPaisa.safe().optional(), default_price_type: PriceType.optional() }),
@@ -357,8 +360,8 @@ export function createCustomerDirectoryService(deps: ServiceDeps) {
           cnic: clean(f.cnic),
           phone2: clean(f.phone2),
           guarantor: clean(f.guarantor),
-          land_size: null,
-          crop: null,
+          land_size: clean(f.land_size),
+          crop: clean(f.crop),
           ...deps.scope,
         });
         return summaryOf(tx, id);
@@ -404,7 +407,7 @@ export function createCustomerDirectoryService(deps: ServiceDeps) {
         checkVersion(current, input.expected_version);
 
         const next: Record<string, string | number | null> = { credit_limit: input.credit_limit, default_price_type: input.default_price_type };
-        for (const key of ['father_name', 'cnic', 'phone2', 'guarantor'] as const) {
+        for (const key of ['father_name', 'cnic', 'phone2', 'guarantor', 'land_size', 'crop'] as const) {
           if (input[key] !== undefined) next[key] = clean(input[key]);
         }
         const before: Record<string, string | number | null> = {};

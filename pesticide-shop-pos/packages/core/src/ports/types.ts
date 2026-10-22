@@ -89,7 +89,7 @@ export interface DocumentNumbers {
 
 /** Columns of a customer a service may change. The database owns version and updated_at. */
 export type CustomerPatch = Partial<
-  Pick<Customer, 'name_en' | 'name_ur' | 'phone' | 'village' | 'notes' | 'credit_limit' | 'default_price_type' | 'father_name' | 'cnic' | 'phone2' | 'guarantor'>
+  Pick<Customer, 'name_en' | 'name_ur' | 'phone' | 'village' | 'notes' | 'credit_limit' | 'default_price_type' | 'father_name' | 'cnic' | 'phone2' | 'guarantor' | 'land_size' | 'crop'>
 >;
 
 /**

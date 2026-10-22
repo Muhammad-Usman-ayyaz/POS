@@ -33,7 +33,7 @@ const drawn = (start: string): string => {
 // ---- fixtures ----
 const customer = (over: Record<string, unknown> = {}) => ({
   id: 'c1', name_en: 'Rashid', name_ur: 'راشد', phone: '0300 1234567', village: 'Chak 12', credit_limit: 1_000_000, default_price_type: 'retail',
-  notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, version: 1, ...over,
+  notes: null, father_name: null, cnic: null, phone2: null, guarantor: null, land_size: null, crop: null, version: 1, ...over,
 });
 const summary = (over: Record<string, unknown> = {}, c = customer()) => ({ customer: c, balance: 900_000, credit_left: 100_000, no_limit: false, over_limit: false, next_due: '2026-10-31', overdue_amount: 0, overdue_days: 0, ...over });
 let n = 0;
@@ -777,6 +777,46 @@ describe('Urdu and right to left', () => {
 });
 
 // ---------- source ----------
+
+
+describe('farmer details on the customer page (land size and crop)', () => {
+  const farmer = () => summary({}, customer({ land_size: '5 acres', crop: 'Cotton' }));
+  const shellWith = (showFarmer: boolean) =>
+    fakeShell({ 'customers:getSettings': () => ok({ default_credit_limit: 0, show_farmer_fields: showFarmer }) }, { summary: farmer() });
+
+  it('the owner sees them when the shop setting is on and they are set', async () => {
+    show(shellWith(true), OWNER);
+    await loaded();
+    const block = await screen.findByText(t.farmerDetails);
+    expect(block).toBeTruthy();
+    expect(document.querySelector('[data-farmer-field="land_size"]')!.textContent).toContain('5 acres');
+    expect(document.querySelector('[data-farmer-field="crop"]')!.textContent).toContain('Cotton');
+  });
+
+  it('are hidden while the setting is off, even for the owner', async () => {
+    const shell = shellWith(false);
+    show(shell, OWNER);
+    await loaded();
+    await waitFor(() => expect(shell.of('customers:getSettings')).toHaveLength(1));
+    expect(document.querySelector('[data-farmer-details]')).toBeNull();
+    expect(screen.queryByText('5 acres')).toBeNull();
+  });
+
+  it('staff never see them and the page does not even ask for the setting', async () => {
+    const shell = shellWith(true);
+    show(shell, STAFF);
+    await loaded();
+    expect(document.querySelector('[data-farmer-details]')).toBeNull();
+    expect(screen.queryByText('5 acres')).toBeNull();
+    expect(shell.of('customers:getSettings')).toHaveLength(0);
+  });
+
+  it('nothing is drawn when the setting is on but nothing is set', async () => {
+    show(fakeShell({ 'customers:getSettings': () => ok({ default_credit_limit: 0, show_farmer_fields: true }) }), OWNER);
+    await loaded();
+    expect(document.querySelector('[data-farmer-details]')).toBeNull();
+  });
+});
 
 describe('source of the customer page files', () => {
   const dirs = ['detail', 'payment', 'opening'].map((d) => join(__dirname, '../src/pages/customers', d));

@@ -42,6 +42,8 @@ function Detail({ api, owner, customerId, receiptActions, statementActions }: { 
   const [summary, setSummary] = useState<CustomerSummaryView | null>(null);
   const [statement, setStatement] = useState<StatementView | null>(null);
   const [error, setError] = useState<unknown>(null);
+  // Farmer details show on this page only for the OWNER and only while the shop setting is on (they are never fetched or shown for staff).
+  const [showFarmer, setShowFarmer] = useState(false);
   const [dialog, setDialog] = useState<'payment' | 'opening' | null>(null);
 
   const load = useCallback(async () => {
@@ -50,10 +52,17 @@ function Detail({ api, owner, customerId, receiptActions, statementActions }: { 
       const [s, st] = await Promise.all([api.customers.get({ customer_id: customerId }), api.khata.statement({ customer_id: customerId })]);
       setSummary(s);
       setStatement(st);
+      if (owner) {
+        try {
+          setShowFarmer((await api.customers.getSettings({})).show_farmer_fields === true);
+        } catch {
+          setShowFarmer(false);
+        }
+      }
     } catch (e) {
       setError(e);
     }
-  }, [api, customerId]);
+  }, [api, customerId, owner]);
   useEffect(() => void load(), [load]);
 
   const Back = dir === 'rtl' ? ArrowRight : ArrowLeft;
@@ -99,6 +108,10 @@ function Detail({ api, owner, customerId, receiptActions, statementActions }: { 
   const days = language === 'ur' ? ltr(String(summary.overdue_days)) : String(summary.overdue_days);
   const balanceText = bal.kind === 'owes' ? t.owes(money(bal.amount)) : bal.kind === 'advance' ? t.advance(money(bal.amount)) : t.clear;
   const lines = statement ? lastLines(statement.lines) : [];
+  const farmerRows = [
+    { key: 'land_size', label: t.landSize, value: c.land_size },
+    { key: 'crop', label: t.crop, value: c.crop },
+  ].filter((r) => (r.value ?? '').trim() !== '');
 
   return (
     <div data-page="customer-detail">
@@ -135,6 +148,22 @@ function Detail({ api, owner, customerId, receiptActions, statementActions }: { 
       </header>
 
       {error != null && <ErrorNotice error={error} className="mb-4 max-w-3xl" />}
+
+      {owner && showFarmer && farmerRows.length > 0 && (
+        <section data-farmer-details aria-label={t.farmerDetails} className="stagger mb-5 rounded-lg border border-line bg-card px-5 py-4 shadow-card">
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">{t.farmerDetails}</h2>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+            {farmerRows.map((r) => (
+              <div key={r.key} data-farmer-field={r.key}>
+                <dt className="text-sm text-muted">{r.label}</dt>
+                <dd className="text-base font-semibold" dir="auto">
+                  {r.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
 
       <div className="stagger mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" style={{ '--i': 1 } as React.CSSProperties}>
         <Card label={t.owesNow} card="balance">
